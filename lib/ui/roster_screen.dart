@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/shift.dart';
+import 'new_roster_sheet.dart';
 import 'roster/calendar_view.dart';
 import 'roster/shift_filter.dart';
 import 'roster/timeline_view.dart';
 import 'roster/view_mode.dart';
 import 'settings_screen.dart';
 import 'shift_editor_modal.dart';
-import 'template_screen.dart';
 
 /// Home screen — Calendar Room orchestrator. Owns two pieces of local UI
 /// state ([ViewMode], [ShiftFilter]) and routes the filtered shift stream
@@ -47,10 +47,8 @@ class _RosterScreenState extends State<RosterScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_month),
-            tooltip: 'Generate roster block',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const TemplateScreen()),
-            ),
+            tooltip: 'New roster',
+            onPressed: () => showNewRosterSheet(context),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),

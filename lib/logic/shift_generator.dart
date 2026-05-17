@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 
 import '../data/models/shift.dart';
+import '../data/models/shift_pattern.dart';
 import '../data/models/shift_type.dart';
 import '../data/repositories/shift_repository.dart';
 
@@ -61,6 +62,59 @@ class ShiftGenerator {
       ));
     }
     return shifts;
+  }
+
+  /// Generates and persists all shifts for one full cycle of [pattern],
+  /// starting on [startDate].
+  ///
+  /// [dayStartMinutes] / [dayEndMinutes] apply to every Day/Afternoon segment.
+  /// [nightStartMinutes] / [nightEndMinutes] apply to every Night segment.
+  /// Off segments are stored with startMinutes=0, endMinutes=0, matching how
+  /// the shift editor stores manually created off days.
+  Future<List<Shift>> generatePattern({
+    required DateTime startDate,
+    required ShiftPattern pattern,
+    required int dayStartMinutes,
+    required int dayEndMinutes,
+    int nightStartMinutes = 22 * 60,
+    int nightEndMinutes = 6 * 60,
+  }) async {
+    final allShifts = <Shift>[];
+    var cursor = startDate;
+
+    for (final segment in pattern.segments) {
+      if (segment.type == ShiftType.off) {
+        for (var i = 0; i < segment.days; i++) {
+          allShifts.add(Shift(
+            id: _uuid.v4(),
+            date: cursor.add(Duration(days: i)),
+            type: ShiftType.off,
+            startMinutes: 0,
+            endMinutes: 0,
+          ));
+        }
+      } else {
+        final startMins = segment.type == ShiftType.night
+            ? nightStartMinutes
+            : dayStartMinutes;
+        final endMins = segment.type == ShiftType.night
+            ? nightEndMinutes
+            : dayEndMinutes;
+        allShifts.addAll(generateBlock(
+          startDate: cursor,
+          startMinutes: startMins,
+          endMinutes: endMins,
+          consecutiveDays: segment.days,
+          shiftType: segment.type,
+        ));
+      }
+      cursor = cursor.add(Duration(days: segment.days));
+    }
+
+    for (final shift in allShifts) {
+      await _repository.upsert(shift);
+    }
+    return allShifts;
   }
 
   /// Generates the block and persists each shift via the repository's
