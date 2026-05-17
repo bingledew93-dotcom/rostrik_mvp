@@ -14,6 +14,9 @@ class Shift {
     required this.endMinutes,
     this.note,
     this.isMuted = false,
+    this.isAcknowledged = false,
+    this.snoozedUntil,
+    this.cycleId,
   })  : date = DateTime(date.year, date.month, date.day),
         assert(
           startMinutes >= 0 && startMinutes < 1440,
@@ -50,18 +53,81 @@ class Shift {
   @HiveField(6, defaultValue: false)
   final bool isMuted;
 
+  // Set by the Dismiss notification action (foreground or background isolate)
+  // once the user has handled this occurrence's alarm. The AlarmEngine treats
+  // an acknowledged shift as "not desired" so the alarm is not re-scheduled
+  // for the same occurrence on the next reconcile / cold start. Per-occurrence
+  // and persistent: once dismissed, the alarm does not come back for that
+  // date. `defaultValue: false` keeps legacy records readable.
+  @HiveField(7, defaultValue: false)
+  final bool isAcknowledged;
+
+  // Set by the Snooze notification action. When non-null and still in the
+  // future, the AlarmEngine pins this shift's desired fireAt to this instant
+  // instead of `startDateTime - leadTime`, so a background-isolate reschedule
+  // survives a cold start (the engine reconciles to the same time). Nullable
+  // (no `defaultValue` needed); cleared implicitly when the snoozed alarm
+  // fires and is dismissed.
+  @HiveField(8)
+  final DateTime? snoozedUntil;
+
+  // Parent ShiftCycle id. Stamped by `ShiftGenerator` on every shift it
+  // emits so `CycleService.deleteCycle` can find a cycle's children
+  // without the cycle having to maintain its own child list. Null for
+  // shifts that pre-date this feature (legacy records read back as
+  // `null`) and for shifts added manually via the editor modal — those
+  // shifts are independent of any cycle and are never touched by
+  // cascade-delete. Once stamped, the value never changes: cycleId is
+  // not exposed in any edit flow.
+  @HiveField(9)
+  final String? cycleId;
+
   bool get isOvernight => endMinutes <= startMinutes;
 
   int get durationMinutes => isOvernight
       ? endMinutes + 1440 - startMinutes
       : endMinutes - startMinutes;
 
-  DateTime get startDateTime => date.add(Duration(minutes: startMinutes));
+  // Calendar-math constructors instead of `date.add(Duration(...))`.
+  // `Duration` is wall-clock-time arithmetic — adding `Duration(days: 1)`
+  // to local midnight on a spring-forward day lands at 01:00 the next
+  // day, not midnight, because that 24-hour interval crosses the lost
+  // hour. `DateTime(y, m, d + n, h, mm)` resolves to the local time on
+  // the target calendar day, which is what every caller actually wants
+  // (the alarm engine derives `fireAt` from `startDateTime`; a 1-hour
+  // DST drift here means alarms fire at the wrong wall-clock time).
+  DateTime get startDateTime => DateTime(
+        date.year,
+        date.month,
+        date.day,
+        startMinutes ~/ 60,
+        startMinutes % 60,
+      );
 
   DateTime get endDateTime => isOvernight
-      ? date.add(Duration(days: 1, minutes: endMinutes))
-      : date.add(Duration(minutes: endMinutes));
+      ? DateTime(
+          date.year,
+          date.month,
+          date.day + 1,
+          endMinutes ~/ 60,
+          endMinutes % 60,
+        )
+      : DateTime(
+          date.year,
+          date.month,
+          date.day,
+          endMinutes ~/ 60,
+          endMinutes % 60,
+        );
 
+  // `clearSnoozedUntil: true` lets a caller (e.g. an alarm-fired handler or
+  // a shift-edit flow) wipe a pending snooze. Without it, `snoozedUntil: null`
+  // in copyWith would be indistinguishable from "leave unchanged".
+  //
+  // `cycleId` deliberately has no `clear` flag — the generator stamps it
+  // once and nothing else should ever wipe it. A copyWith that wants to
+  // re-stamp the parent (rare; only the generator does this) can pass the
+  // new value explicitly.
   Shift copyWith({
     String? id,
     DateTime? date,
@@ -70,6 +136,10 @@ class Shift {
     int? endMinutes,
     String? note,
     bool? isMuted,
+    bool? isAcknowledged,
+    DateTime? snoozedUntil,
+    bool clearSnoozedUntil = false,
+    String? cycleId,
   }) =>
       Shift(
         id: id ?? this.id,
@@ -79,6 +149,10 @@ class Shift {
         endMinutes: endMinutes ?? this.endMinutes,
         note: note ?? this.note,
         isMuted: isMuted ?? this.isMuted,
+        isAcknowledged: isAcknowledged ?? this.isAcknowledged,
+        snoozedUntil:
+            clearSnoozedUntil ? null : (snoozedUntil ?? this.snoozedUntil),
+        cycleId: cycleId ?? this.cycleId,
       );
 
   @override
@@ -92,15 +166,29 @@ class Shift {
           startMinutes == other.startMinutes &&
           endMinutes == other.endMinutes &&
           note == other.note &&
-          isMuted == other.isMuted;
+          isMuted == other.isMuted &&
+          isAcknowledged == other.isAcknowledged &&
+          snoozedUntil == other.snoozedUntil &&
+          cycleId == other.cycleId;
 
   @override
-  int get hashCode =>
-      Object.hash(id, date, type, startMinutes, endMinutes, note, isMuted);
+  int get hashCode => Object.hash(
+        id,
+        date,
+        type,
+        startMinutes,
+        endMinutes,
+        note,
+        isMuted,
+        isAcknowledged,
+        snoozedUntil,
+        cycleId,
+      );
 
   @override
   String toString() =>
       'Shift(id: $id, date: $date, type: $type, '
       'start: $startMinutes, end: $endMinutes, note: $note, '
-      'isMuted: $isMuted)';
+      'isMuted: $isMuted, isAcknowledged: $isAcknowledged, '
+      'snoozedUntil: $snoozedUntil, cycleId: $cycleId)';
 }

@@ -63,6 +63,18 @@
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false" />
 
+        <!-- Receiver the OS dispatches to when the user taps a notification
+             ACTION BUTTON (Snooze / Dismiss). Required because our actions
+             use showsUserInterface:false — Android delivers the tap as a
+             silent broadcast Intent rather than as an Activity launch. If
+             this receiver is not registered, the broadcast is dropped on
+             the floor and our onDidReceiveBackgroundNotificationResponse
+             callback never fires. Without it, action button taps look
+             completely dead from the Flutter side. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

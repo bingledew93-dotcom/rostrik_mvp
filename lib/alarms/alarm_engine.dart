@@ -16,6 +16,15 @@ import 'notification_id_map.dart';
 ///   - Skip muted entries (`Shift.isMuted == true`). The shift stays in the
 ///     roster; the alarm is suppressed. Unmuting is symmetric — the shift
 ///     reappears in the desired set on the next reconcile and is rescheduled.
+///   - Skip acknowledged entries (`Shift.isAcknowledged == true`). The user
+///     has already handled this occurrence's alarm via the Dismiss action;
+///     do not re-schedule it across cold starts or settings changes.
+///   - If `snoozedUntil` is set and still in the future, pin the desired
+///     `fireAt` to that instant instead of the default `start - leadTime`.
+///     This lets a background-isolate snooze (which writes the field and
+///     schedules a one-shot notification) survive a cold start: the engine
+///     reconciles to the same time the background isolate already scheduled,
+///     and `scheduleAt` is contracted to replace the existing id idempotently.
 ///   - Skip shifts whose computed `fireAt` is already in the past.
 ///   - Cap to [maxScheduled] entries within a [horizon] window
 ///     (iOS allows 64 pending notifications; we leave headroom).
@@ -103,7 +112,16 @@ class AlarmEngine {
     for (final s in allShifts) {
       if (s.type == ShiftType.off) continue;
       if (s.isMuted) continue;
-      final fireAt = s.startDateTime.subtract(settings.leadTime);
+      if (s.isAcknowledged) continue;
+      // A live snooze overrides the default lead-time computation. Once
+      // snoozedUntil is in the past (e.g. the snoozed alarm has fired and
+      // been handled), fall back to the standard fireAt so re-acknowledge /
+      // un-acknowledge flows behave correctly.
+      final defaultFireAt = s.startDateTime.subtract(settings.leadTime);
+      final snoozed = s.snoozedUntil;
+      final fireAt = (snoozed != null && snoozed.isAfter(now))
+          ? snoozed
+          : defaultFireAt;
       if (!fireAt.isAfter(now)) continue;
       entries.add(_Entry(shift: s, fireAt: fireAt));
     }

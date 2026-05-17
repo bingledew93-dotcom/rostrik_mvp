@@ -31,4 +31,17 @@ abstract class ShiftRepository {
     DateTime fromInclusive,
     DateTime toExclusive,
   );
+
+  /// Returns every shift whose `cycleId` equals [cycleId]. Used by
+  /// `CycleService.deleteCycle` to fan out the cascade-delete. Order
+  /// is unspecified — callers that care should sort. Implementations
+  /// can scan the full box (linear at app scale; if growth ever bites,
+  /// add a secondary index on the cycleId field).
+  Future<List<Shift>> getByCycleId(String cycleId);
+
+  /// Returns the shift with the latest `date` for [cycleId], or null
+  /// if the cycle has no materialised shifts. Used by the Invisible
+  /// Extender to decide whether the rolling horizon needs topping up
+  /// and to compute the next materialise window's `from` date.
+  Future<Shift?> getLatestForCycle(String cycleId);
 }

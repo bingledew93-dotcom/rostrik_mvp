@@ -57,13 +57,6 @@ dependencies:
   # surface for the two-stream + two-write-handle scope we actually have.
   provider: ^6.1.0
 
-  # Plays the device's system alarm tone (Android RingtoneManager → alarm
-  # audio stream) on the WakeUpScreen. Picked over audioplayers/just_audio
-  # because it ships zero bundled audio, respects the user's existing
-  # alarm volume, and uses the alarm tone they already configured in
-  # system Settings — the same tone their stock clock app would play.
-  flutter_ringtone_player: ^4.0.0
-
   # Calendar grid for the Roster's Calendar view. Picked over a custom
   # GridView because table_calendar already handles month math (first
   # DOW, leading/trailing days, leap years), page-swipe between months,

@@ -88,5 +88,24 @@ class HiveShiftRepository implements ShiftRepository {
     return controller.stream;
   }
 
+  @override
+  Future<List<Shift>> getByCycleId(String cycleId) async {
+    final out = <Shift>[];
+    for (final s in _box.values) {
+      if (s.cycleId == cycleId) out.add(s);
+    }
+    return out;
+  }
+
+  @override
+  Future<Shift?> getLatestForCycle(String cycleId) async {
+    Shift? best;
+    for (final s in _box.values) {
+      if (s.cycleId != cycleId) continue;
+      if (best == null || s.date.isAfter(best.date)) best = s;
+    }
+    return best;
+  }
+
   static DateTime _normalize(DateTime d) => DateTime(d.year, d.month, d.day);
 }

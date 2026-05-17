@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/shift_type.dart';
+import '../logic/rotation_pattern_validator.dart';
 import '../logic/shift_generator.dart';
 import 'shift_format.dart';
 
@@ -92,6 +93,12 @@ class _TemplateScreenState extends State<TemplateScreen> {
         SnackBar(content: Text('Generated ${shifts.length} shifts')),
       );
       navigator.pop();
+    } on RosterGenerationException catch (e) {
+      // Same-date time-overlap rejection — the generator threw before
+      // any write, so the screen stays open with its inputs intact.
+      if (!mounted) return;
+      setState(() => _generating = false);
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
       setState(() => _generating = false);
@@ -106,7 +113,11 @@ class _TemplateScreenState extends State<TemplateScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Generate Roster Block')),
-      body: ListView(
+      // SafeArea(bottom) keeps the Generate button above the Android
+      // gesture-pill / 3-button bar on edge-to-edge displays.
+      body: SafeArea(
+        top: false,
+        child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         children: [
           Text('Pattern', style: theme.textTheme.titleMedium),
@@ -193,6 +204,7 @@ class _TemplateScreenState extends State<TemplateScreen> {
                 : const Text('Generate Roster Block'),
           ),
         ],
+      ),
       ),
     );
   }

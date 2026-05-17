@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:rostrik_mvp/alarms/alarm_scheduler.dart';
 import 'package:rostrik_mvp/alarms/notification_id_map.dart';
 import 'package:rostrik_mvp/data/models/alarm_settings.dart';
+import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
+import 'package:rostrik_mvp/data/models/shift_cycle.dart';
 import 'package:rostrik_mvp/data/repositories/alarm_settings_repository.dart';
+import 'package:rostrik_mvp/data/repositories/app_alarm_repository.dart';
+import 'package:rostrik_mvp/data/repositories/shift_cycle_repository.dart';
 import 'package:rostrik_mvp/data/repositories/shift_repository.dart';
 import 'package:rostrik_mvp/util/clock.dart';
 
@@ -125,6 +129,25 @@ class FakeShiftRepository implements ShiftRepository {
       throw UnimplementedError('not used by AlarmEngine.reconcile');
 
   @override
+  Future<List<Shift>> getByCycleId(String cycleId) async {
+    final out = <Shift>[];
+    for (final s in _shifts.values) {
+      if (s.cycleId == cycleId) out.add(s);
+    }
+    return out;
+  }
+
+  @override
+  Future<Shift?> getLatestForCycle(String cycleId) async {
+    Shift? best;
+    for (final s in _shifts.values) {
+      if (s.cycleId != cycleId) continue;
+      if (best == null || s.date.isAfter(best.date)) best = s;
+    }
+    return best;
+  }
+
+  @override
   Stream<List<Shift>> watchInRange(
     DateTime fromInclusive,
     DateTime toExclusive,
@@ -209,6 +232,120 @@ class InMemoryNotificationIdMap implements NotificationIdMap {
 
   @override
   bool has(String shiftId) => _map.containsKey(shiftId);
+}
+
+/// In-memory ShiftCycleRepository for service/widget tests. Mirrors the
+/// Hive impl's contract: `create` throws on duplicate id, `delete` is
+/// idempotent, `watch` emits on every change.
+class FakeShiftCycleRepository implements ShiftCycleRepository {
+  final Map<String, ShiftCycle> _cycles = {};
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+
+  Future<void> dispose() => _changes.close();
+
+  @override
+  Future<void> create(ShiftCycle cycle) async {
+    if (_cycles.containsKey(cycle.id)) {
+      throw StateError('cycle id ${cycle.id} already exists');
+    }
+    _cycles[cycle.id] = cycle;
+    if (_changes.hasListener) _changes.add(null);
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    if (_cycles.remove(id) != null && _changes.hasListener) {
+      _changes.add(null);
+    }
+  }
+
+  @override
+  Future<ShiftCycle?> getById(String id) async => _cycles[id];
+
+  @override
+  Future<List<ShiftCycle>> getAll() async {
+    final list = _cycles.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  @override
+  Stream<List<ShiftCycle>> watch() {
+    late StreamController<List<ShiftCycle>> controller;
+    StreamSubscription<void>? sub;
+
+    Future<void> emit() async {
+      if (controller.isClosed) return;
+      controller.add(await getAll());
+    }
+
+    controller = StreamController<List<ShiftCycle>>(
+      onListen: () {
+        sub = _changes.stream.listen((_) => emit());
+        emit();
+      },
+      onCancel: () async {
+        await sub?.cancel();
+      },
+    );
+
+    return controller.stream;
+  }
+}
+
+/// In-memory AppAlarmRepository for AlarmsScreen widget tests.
+/// Mirrors the Hive impl's contract: idempotent delete, `watch` emits
+/// the current snapshot on subscribe and on every subsequent change.
+class FakeAppAlarmRepository implements AppAlarmRepository {
+  final Map<String, AppAlarm> _alarms = {};
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+  final List<String> callLog = [];
+
+  Future<void> dispose() => _changes.close();
+
+  @override
+  Future<void> upsert(AppAlarm alarm) async {
+    _alarms[alarm.id] = alarm;
+    callLog.add('upsert:${alarm.id}:enabled=${alarm.enabled}');
+    if (_changes.hasListener) _changes.add(null);
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    if (_alarms.remove(id) != null) {
+      callLog.add('delete:$id');
+      if (_changes.hasListener) _changes.add(null);
+    }
+  }
+
+  @override
+  Future<AppAlarm?> getById(String id) async => _alarms[id];
+
+  @override
+  Future<List<AppAlarm>> getAll() async => _alarms.values.toList();
+
+  @override
+  Stream<List<AppAlarm>> watch() {
+    late StreamController<List<AppAlarm>> controller;
+    StreamSubscription<void>? sub;
+
+    Future<void> emit() async {
+      if (controller.isClosed) return;
+      controller.add(await getAll());
+    }
+
+    controller = StreamController<List<AppAlarm>>(
+      onListen: () {
+        sub = _changes.stream.listen((_) => emit());
+        emit();
+      },
+      onCancel: () async {
+        await sub?.cancel();
+      },
+    );
+
+    return controller.stream;
+  }
 }
 
 class FrozenClock implements Clock {
