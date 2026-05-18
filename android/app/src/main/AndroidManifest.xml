@@ -6,8 +6,12 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- Android 13+ runtime permission for displaying notifications at all. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Needed by the plugin's BootReceiver to re-arm pending alarms after reboot.
-         Without it, every scheduled alarm is silently dropped on power-cycle. -->
+    <!-- Needed by both BootReceivers (the plugin's AND Rostrik's own) to
+         re-arm pending alarms after reboot. Without it, every scheduled
+         alarm is silently dropped on power-cycle.
+         RECEIVE_BOOT_COMPLETED is sufficient for ACTION_BOOT_COMPLETED
+         and ACTION_LOCKED_BOOT_COMPLETED on all supported Android
+         versions — there is no separate "locked boot" permission. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Required so the alarm can fire while the device is dozing/asleep. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -46,12 +50,52 @@
         <!-- Re-schedules pending alarms after a device reboot. The plugin's
              merged manifest already declares this, but we list it explicitly
              so the manifest is self-documenting and survives plugin upgrades
-             that might change the merge behavior. -->
+             that might change the merge behavior.
+
+             Note: this receiver restores from FLN's OWN internal store. It
+             is NOT authoritative for Rostrik's alarm state — that role
+             belongs to BootReceiver below, which re-derives the alarm set
+             from Hive via AlarmSyncService. Both receivers run on boot;
+             AlarmSyncService's reconcile is idempotent so any overlap
+             between FLN's restore and our re-derive converges cleanly. -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Rostrik's own boot-recovery receiver, INTENTIONALLY independent
+             of the FLN one above. Enqueues AlarmSyncWorker, which spins up
+             a headless Flutter engine and runs syncAlarms() against the
+             Hive source of truth — so a Hive-vs-FLN-state divergence
+             (manual app data clear, OEM deep-sleep purge, partial-write
+             from a previous crash) is reconciled automatically.
+
+             android:exported="true" because BOOT_COMPLETED is a system
+             broadcast and Android requires the receiver to be exported to
+             receive it. The receiver itself whitelists the actions it
+             reacts to before doing any work, so a malicious app cannot
+             trigger arbitrary work by faking other actions.
+
+             android:directBootAware="true" lets the receiver run before
+             the user has unlocked their device on FBE (file-based-encryption)
+             devices, which is what makes ACTION_LOCKED_BOOT_COMPLETED
+             useful. The Worker itself stays out of direct-boot mode —
+             WorkManager queues the request, executes it once the
+             credential-encrypted storage is available, so Hive (which
+             lives in CE storage) is reachable when sync actually runs. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />

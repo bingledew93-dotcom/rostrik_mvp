@@ -66,5 +66,25 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Background execution wiring for the 14-day rolling alarm window.
+	     `fetch` is the legacy background fetch mode and lets BGAppRefreshTask
+	     fire on iOS 13+. `processing` covers BGProcessingTaskRequest if a
+	     future longer-running task is added (not used today but cheap to
+	     declare; iOS ignores modes the app never schedules against). -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<!-- Identifiers iOS will accept BGTaskScheduler.register calls for.
+	     Must match the constant in AppDelegate.swift exactly — a typo
+	     here causes a hard assertion at app launch, not a silent
+	     skip. If a second background task is added later, append its
+	     identifier to this array; the registration call site in
+	     AppDelegate.swift is the authoritative list. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.example.rostrikMvp.alarmSyncRefresh</string>
+	</array>
 </dict>
 </plist>

@@ -116,7 +116,7 @@ void main() {
   });
 
   group('follows-rotation alarms', () {
-    test('one OS alarm per matching shift in the 365-day window', () async {
+    test('one OS alarm per matching shift in the 14-day window', () async {
       // Three shifts: 2 Day, 1 Night. The Day-linked alarm should
       // emit two OS alarms — one per Day shift — and skip the Night.
       await shifts.upsert(
@@ -168,9 +168,9 @@ void main() {
       expect(scheduler.scheduled, isEmpty);
     });
 
-    test('shifts outside the 365-day horizon are not picked up', () async {
-      // ~14 months from the frozen "now" (2026-06-01) — beyond the
-      // 365-day default horizon.
+    test('shifts outside the 14-day horizon are not picked up', () async {
+      // ~14 months from the frozen "now" (2026-06-01) — well beyond
+      // the 14-day default horizon and the 50-alarm cap.
       await shifts.upsert(
         mkShift(
           id: 'far',
@@ -179,6 +179,121 @@ void main() {
         ),
       );
       await alarms.upsert(followsRotation());
+      await service.syncAlarms();
+      expect(scheduler.scheduled, isEmpty);
+    });
+  });
+
+  group('shift-level state filtering', () {
+    test('isMuted shift produces no OS schedule', () async {
+      // Phase-3 emergency-mute UX. The shift remains in the roster
+      // (so the user still sees their day in Calendar/Roster) but
+      // every alarm linked to it is suppressed.
+      await shifts.upsert(
+        mkShift(id: 'd1', date: DateTime(2026, 6, 2), type: ShiftType.day)
+            .copyWith(isMuted: true),
+      );
+      await alarms.upsert(followsRotation());
+      await service.syncAlarms();
+      expect(scheduler.scheduled, isEmpty,
+          reason: 'muted shifts must never schedule alarms');
+    });
+
+    test('isAcknowledged shift produces no OS schedule', () async {
+      // The user has handled this occurrence's alarm via the Dismiss
+      // notification action. A subsequent reconcile (cold start,
+      // alarm-toggle, anything) must not resurrect the alarm.
+      await shifts.upsert(
+        mkShift(id: 'd1', date: DateTime(2026, 6, 2), type: ShiftType.day)
+            .copyWith(isAcknowledged: true),
+      );
+      await alarms.upsert(followsRotation());
+      await service.syncAlarms();
+      expect(scheduler.scheduled, isEmpty,
+          reason: 'acknowledged shifts must never re-schedule alarms');
+    });
+
+    test('snoozed POST-fire alarm is pinned to snoozedUntil', () async {
+      // Setup: a Day shift today at 07:00, alarm at 06:00. "Now" is
+      // 06:05 — the alarm has already fired. The user snoozed at
+      // 06:00, so the dispatcher wrote snoozedUntil=06:09 to the
+      // shift and rescheduled the same notification id to 06:09.
+      // Reconcile must converge to the snooze instant, not the
+      // (now-past) original 06:00.
+      clock.set(DateTime(2026, 6, 1, 6, 5));
+      await shifts.upsert(
+        mkShift(
+          id: 'today',
+          date: DateTime(2026, 6, 1),
+          type: ShiftType.day,
+          startMin: 7 * 60,
+          endMin: 15 * 60,
+        ).copyWith(snoozedUntil: DateTime(2026, 6, 1, 6, 9)),
+      );
+      await alarms.upsert(followsRotation(minutesOfDay: 6 * 60));
+      await service.syncAlarms();
+
+      final entry = scheduler.scheduled.values.single;
+      expect(entry.fireAt, DateTime(2026, 6, 1, 6, 9),
+          reason: 'post-fire alarm with active snooze must pin to '
+              'snoozedUntil so the dispatcher reschedule survives '
+              'reconcile');
+    });
+
+    test('snoozed PRE-fire sibling alarm keeps its original fireAt',
+        () async {
+      // Multi-alarm case: same shift has TWO alarms — wake-up at
+      // 06:00 (linked to Day) and leave-for-work at 06:30 (also
+      // Day-linked). "Now" is 06:05; wake-up has fired and been
+      // snoozed (snoozedUntil=06:09). Leave-for-work has NOT fired
+      // yet — its original 06:30 must NOT be dragged forward to
+      // 06:09, or two alarms would ring simultaneously.
+      clock.set(DateTime(2026, 6, 1, 6, 5));
+      await shifts.upsert(
+        mkShift(
+          id: 'today',
+          date: DateTime(2026, 6, 1),
+          type: ShiftType.day,
+          startMin: 7 * 60,
+          endMin: 15 * 60,
+        ).copyWith(snoozedUntil: DateTime(2026, 6, 1, 6, 9)),
+      );
+      await alarms.upsert(
+        followsRotation(id: 'wake', minutesOfDay: 6 * 60),
+      );
+      await alarms.upsert(
+        followsRotation(id: 'leave', minutesOfDay: 6 * 60 + 30),
+      );
+      await service.syncAlarms();
+
+      final fireAts =
+          scheduler.scheduled.values.map((e) => e.fireAt).toSet();
+      expect(fireAts, hasLength(2));
+      expect(fireAts, contains(DateTime(2026, 6, 1, 6, 9)),
+          reason: 'snoozed wake-up resurrected at snoozedUntil');
+      expect(fireAts, contains(DateTime(2026, 6, 1, 6, 30)),
+          reason: 'sibling leave-for-work alarm must keep its own '
+              'schedule — snoozedUntil only resurrects post-fire '
+              'alarms, not pre-fire siblings');
+    });
+
+    test('snoozedUntil in the past is ignored (no resurrection)',
+        () async {
+      // The shift carries a stale snoozedUntil (e.g. an old snooze
+      // that already elapsed and was dismissed). The flag wasn't
+      // cleared, but the alarm should NOT be re-scheduled — past
+      // snoozedUntil + past normal fireAt = nothing to fire.
+      clock.set(DateTime(2026, 6, 1, 6, 30));
+      await shifts.upsert(
+        mkShift(
+          id: 'today',
+          date: DateTime(2026, 6, 1),
+          type: ShiftType.day,
+          startMin: 7 * 60,
+          endMin: 15 * 60,
+        ).copyWith(snoozedUntil: DateTime(2026, 6, 1, 6, 9)),
+      );
+      await alarms.upsert(followsRotation(minutesOfDay: 6 * 60));
       await service.syncAlarms();
       expect(scheduler.scheduled, isEmpty);
     });

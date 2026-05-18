@@ -51,4 +51,13 @@ dependencies {
     // Required by flutter_local_notifications via the core-library-desugaring
     // flag above. Version pinned per the plugin's README (>= 2.1.4).
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // WorkManager — used by BootReceiver → AlarmSyncWorker to run a
+    // headless Flutter engine on the boot path. The BroadcastReceiver
+    // itself has a ~10s ANR budget which isn't enough to start an
+    // engine, open Hive, and reconcile, so the receiver enqueues a
+    // OneTimeWorkRequest and the Worker (off the main thread, no time
+    // budget) does the real work. -ktx pulls in the suspend
+    // CoroutineWorker API that AlarmSyncWorker extends.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }
