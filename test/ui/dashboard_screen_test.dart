@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:rostrik_mvp/data/models/alarm_settings.dart';
+import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_cycle.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
+import 'package:rostrik_mvp/data/repositories/shift_repository.dart';
 import 'package:rostrik_mvp/ui/dashboard_screen.dart';
 
+import '../alarms/fakes.dart';
+
 void main() {
-  Future<void> pumpDashboard(
+  Future<FakeShiftRepository> pumpDashboard(
     WidgetTester tester, {
     required List<Shift> shifts,
     List<ShiftCycle> cycles = const [],
+    List<AppAlarm> alarms = const [],
   }) async {
+    // Backing repo for the early-skip "Dismiss Upcoming Alarm" write. Most
+    // tests never touch it (no alarm in window → no control), but it must be
+    // in the tree because the control reads it on confirm.
+    final shiftRepo = FakeShiftRepository();
+    addTearDown(shiftRepo.dispose);
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -27,11 +38,18 @@ void main() {
           // Tests asserting on rotation copy can override via the
           // `cycles:` parameter.
           Provider<List<ShiftCycle>>.value(value: cycles),
+          // The early-skip control reads the alarms + global lead time to find
+          // the next automated alarm within 12h, and the shift repo to write
+          // the skip.
+          Provider<List<AppAlarm>>.value(value: alarms),
+          Provider<AlarmSettings>.value(value: AlarmSettings.defaults),
+          Provider<ShiftRepository>.value(value: shiftRepo),
         ],
         child: const MaterialApp(home: DashboardScreen()),
       ),
     );
     await tester.pump();
+    return shiftRepo;
   }
 
   Shift mk({
@@ -127,14 +145,16 @@ void main() {
 
       expect(find.text('Day shift'), findsOneWidget);
       // The exact "Xh Ym" is wall-clock-dependent; just assert the
-      // verb + "Tomorrow at 06:00" subtitle which IS deterministic.
+      // verb + "Tomorrow at 06:00 AM" subtitle which IS deterministic. The
+      // test pumps DashboardScreen without an AppPreferences provider, so the
+      // 24h preference falls back to its default (false → 12-hour AM/PM).
       expect(
         find.byWidgetPredicate(
           (w) => w is Text && (w.data?.startsWith('Starts in ') ?? false),
         ),
         findsOneWidget,
       );
-      expect(find.text('Starts tomorrow at 06:00'), findsOneWidget);
+      expect(find.text('Starts tomorrow at 06:00 AM'), findsOneWidget);
     });
 
     testWidgets('picks the earliest non-OFF future shift across the list',
@@ -254,5 +274,88 @@ void main() {
         expect(find.text('No upcoming shifts'), findsOneWidget);
       },
     );
+  });
+
+  group('Dismiss Upcoming Alarm (early-bird skip)', () {
+    AppAlarm dayAlarm() => AppAlarm(
+          id: 'wake',
+          minutesOfDay: 7 * 60,
+          label: 'Wake Up',
+          repeatType: AppAlarmRepeatType.followsRotation,
+          linkedShiftType: ShiftType.day,
+        );
+
+    // A Day shift whose alarm (global 60-min lead) fires ~2h from now —
+    // reliably inside the 12h window regardless of wall-clock, with correct
+    // midnight rollover via calendar fields.
+    Shift soonShift() {
+      final start = DateTime.now().add(const Duration(hours: 3));
+      final date = DateTime(start.year, start.month, start.day);
+      final startMin = start.hour * 60 + start.minute;
+      return Shift(
+        id: 'soon',
+        date: date,
+        type: ShiftType.day,
+        startMinutes: startMin,
+        endMinutes: (startMin + 8 * 60) % 1440,
+      );
+    }
+
+    testWidgets('button is hidden when no alarm is within 12h', (tester) async {
+      // A shift exists but no alarm rule → nothing to skip.
+      await pumpDashboard(tester, shifts: [soonShift()]);
+      expect(
+        find.byKey(const ValueKey('dismiss-upcoming-button')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('button appears when an automated alarm fires within 12h',
+        (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: [soonShift()],
+        alarms: [dayAlarm()],
+      );
+      expect(
+        find.byKey(const ValueKey('dismiss-upcoming-button')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('tap reveals the slide-to-confirm bar (no bare-tap skip)',
+        (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: [soonShift()],
+        alarms: [dayAlarm()],
+      );
+      await tester.tap(find.byKey(const ValueKey('dismiss-upcoming-button')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('dismiss-upcoming-slide')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sliding to confirm marks ONLY that shift isAlarmSkipped',
+        (tester) async {
+      final repo = await pumpDashboard(
+        tester,
+        shifts: [soonShift()],
+        alarms: [dayAlarm()],
+      );
+      await tester.tap(find.byKey(const ValueKey('dismiss-upcoming-button')));
+      await tester.pumpAndSettle();
+
+      // Drag the handle (the only alarm_off icon once the bar is revealed) well
+      // past the 60% commit threshold.
+      await tester.drag(find.byIcon(Icons.alarm_off), const Offset(600, 0));
+      await tester.pumpAndSettle();
+
+      final stored = await repo.getById('soon');
+      expect(stored, isNotNull);
+      expect(stored!.isAlarmSkipped, isTrue);
+    });
   });
 }

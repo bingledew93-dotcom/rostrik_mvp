@@ -1,0 +1,131 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:provider/provider.dart';
+
+/// Hive key for the 12/24-hour clock preference. Default false = 12-hour.
+const String use24HourTimeKey = 'use24HourTime';
+
+/// Hive key for the calendar week-start preference. Default true = Monday.
+const String startWeekOnMondayKey = 'startWeekOnMonday';
+
+/// Hive key for the nightly sleep target, in whole hours. Default 8.
+const String sleepGoalHoursKey = 'sleepGoalHours';
+
+/// Hive key for the wind-down lead, in minutes. Default 30.
+const String windDownMinutesKey = 'windDownMinutes';
+
+/// Hive key for the (UI-only, not-yet-wired) bedtime reminder toggle.
+const String bedtimeReminderEnabledKey = 'bedtimeReminderEnabled';
+
+/// Hive key for the (UI-only, not-yet-wired) wind-down reminder toggle.
+const String windDownReminderEnabledKey = 'windDownReminderEnabled';
+
+/// Default nightly sleep target (hours) when the user hasn't changed it.
+const int kDefaultSleepGoalHours = 8;
+
+/// Default wind-down lead (minutes) when the user hasn't changed it.
+const int kDefaultWindDownMinutes = 30;
+
+/// Hive key for Holiday Mode. When true the alarm engine schedules nothing and
+/// the Sleep plan goes dormant — roster/alarm data is left fully intact, only
+/// the triggers are silenced. Default false. The alarm engine reads this same
+/// key off the `settings` box, so the string MUST stay in lock-step with
+/// `AlarmSyncService`'s pause read.
+const String isSchedulePausedKey = 'isSchedulePaused';
+
+/// UI-only display preferences, backed by the generic `'settings'` Hive box
+/// (the same untyped box that already holds `snooze_duration` /
+/// `onboarding_complete` — NOT the typed `AlarmSettings` engine store).
+///
+/// Pure presentation: these change how existing roster/alarm data is *rendered*
+/// (clock format, calendar first column), never the data itself, so they live
+/// outside the alarm engine entirely.
+///
+/// Bridges the box's [ValueListenable] to [ChangeNotifier] so `context.watch`
+/// consumers rebuild the instant a toggle writes — the box is the source of
+/// truth, this is just the reactive, typed façade over it.
+class AppPreferences extends ChangeNotifier {
+  AppPreferences(this._box) {
+    _listenable = _box.listenable(
+      keys: const <String>[
+        use24HourTimeKey,
+        startWeekOnMondayKey,
+        sleepGoalHoursKey,
+        windDownMinutesKey,
+        bedtimeReminderEnabledKey,
+        windDownReminderEnabledKey,
+        isSchedulePausedKey,
+      ],
+    )..addListener(notifyListeners);
+  }
+
+  final Box _box;
+  late final ValueListenable<Box> _listenable;
+
+  bool get use24HourTime =>
+      _box.get(use24HourTimeKey, defaultValue: false) as bool;
+
+  bool get startWeekOnMonday =>
+      _box.get(startWeekOnMondayKey, defaultValue: true) as bool;
+
+  // ── Sleep MVP preferences ────────────────────────────────────────────────
+  // Pure UI/planning settings (no engine or notification wiring yet). Stored
+  // in the same generic box alongside the display prefs above.
+
+  int get sleepGoalHours =>
+      _box.get(sleepGoalHoursKey, defaultValue: kDefaultSleepGoalHours) as int;
+
+  int get windDownMinutes =>
+      _box.get(windDownMinutesKey, defaultValue: kDefaultWindDownMinutes)
+          as int;
+
+  bool get bedtimeReminderEnabled =>
+      _box.get(bedtimeReminderEnabledKey, defaultValue: false) as bool;
+
+  bool get windDownReminderEnabled =>
+      _box.get(windDownReminderEnabledKey, defaultValue: false) as bool;
+
+  bool get isSchedulePaused =>
+      _box.get(isSchedulePausedKey, defaultValue: false) as bool;
+
+  void setUse24HourTime(bool value) => _box.put(use24HourTimeKey, value);
+
+  void setStartWeekOnMonday(bool value) =>
+      _box.put(startWeekOnMondayKey, value);
+
+  void setSleepGoalHours(int value) => _box.put(sleepGoalHoursKey, value);
+
+  void setWindDownMinutes(int value) => _box.put(windDownMinutesKey, value);
+
+  void setBedtimeReminderEnabled(bool value) =>
+      _box.put(bedtimeReminderEnabledKey, value);
+
+  void setWindDownReminderEnabled(bool value) =>
+      _box.put(windDownReminderEnabledKey, value);
+
+  void setIsSchedulePaused(bool value) => _box.put(isSchedulePausedKey, value);
+
+  @override
+  void dispose() {
+    _listenable.removeListener(notifyListeners);
+    super.dispose();
+  }
+
+  /// Tolerant reader for the 12/24-hour preference: returns the live value when
+  /// an [AppPreferences] is in the tree, else the default (12-hour). The
+  /// nullable lookup means widget tests that pump a screen without this
+  /// provider degrade to the default rather than throwing.
+  static bool use24HourOf(BuildContext context) =>
+      context.watch<AppPreferences?>()?.use24HourTime ?? false;
+
+  /// Tolerant reader for the week-start preference (default Monday). Same
+  /// provider-absent fallback contract as [use24HourOf].
+  static bool startWeekOnMondayOf(BuildContext context) =>
+      context.watch<AppPreferences?>()?.startWeekOnMonday ?? true;
+
+  /// Tolerant reader for Holiday Mode (default false = armed). Same
+  /// provider-absent fallback contract as [use24HourOf].
+  static bool isSchedulePausedOf(BuildContext context) =>
+      context.watch<AppPreferences?>()?.isSchedulePaused ?? false;
+}

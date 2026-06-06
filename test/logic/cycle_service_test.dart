@@ -82,12 +82,14 @@ void main() {
       fireAt: DateTime(2026, 5, 1, 6),
       title: 't',
       body: 'b',
+      soundKey: 'classic',
     );
     await scheduler.scheduleAt(
       id: id2,
       fireAt: DateTime(2026, 5, 2, 6),
       title: 't',
       body: 'b',
+      soundKey: 'classic',
     );
 
     await service.deleteCycle('c1');
@@ -149,6 +151,7 @@ class _ThrowingScheduler implements AlarmScheduler {
     required DateTime fireAt,
     required String title,
     required String body,
+    required String soundKey,
     String? payload,
   }) async {}
 

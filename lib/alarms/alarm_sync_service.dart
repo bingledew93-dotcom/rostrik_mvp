@@ -2,14 +2,18 @@ import 'dart:async';
 
 import 'package:hive_ce_flutter/hive_flutter.dart';
 
+import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/models/shift_type.dart';
+import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_cycle_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../util/clock.dart';
+import '../util/weekday_mask.dart';
+import 'alarm_payload.dart';
 import 'alarm_scheduler.dart';
 import 'notification_id_map.dart';
 
@@ -27,19 +31,37 @@ const String noShiftPayloadSentinel = 'NONE';
 /// platform-channel burst on budget Android).
 const String _scheduledFireAtSettingsKey = 'alarm_sync.scheduled_fire_at';
 
-/// Drives OS alarm scheduling from [AppAlarm] rules.
-///
-/// Where the legacy `AlarmEngine` was shift-centric (one OS alarm per
-/// upcoming non-OFF shift, fired at `startDateTime - leadTime`), this
-/// service is alarm-centric:
+/// Holiday-Mode flag key in the (always-open) `settings` box. MUST match
+/// `AppPreferences.isSchedulePausedKey` — both isolates read the same box, so a
+/// pause toggled in the UI is honoured by the headless background re-sync too.
+const String _isSchedulePausedSettingsKey = 'isSchedulePaused';
+
+/// Default pause source: reads the Holiday-Mode flag straight off the `settings`
+/// box. Best-effort + guarded exactly like [_hydrateScheduledFireAt] so the
+/// test harness (which never opens the box) simply reads "not paused".
+bool _readSchedulePausedFromSettings() {
+  try {
+    if (!Hive.isBoxOpen('settings')) return false;
+    return Hive.box('settings')
+        .get(_isSchedulePausedSettingsKey, defaultValue: false) as bool;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Drives OS alarm scheduling from [AppAlarm] rules. Alarm-centric: it
+/// reconciles the desired OS pending set from the enabled alarms + the shift
+/// roster + the global [AlarmSettings].
 ///
 ///   * One-time alarms ([AppAlarmRepeatType.oneTime]) → one OS alarm
 ///     at the next future occurrence of `minutesOfDay` (today if still
 ///     in the future, else tomorrow).
 ///   * Follows-rotation alarms ([AppAlarmRepeatType.followsRotation]) →
-///     one OS alarm per matching shift in the rolling [horizon] at
-///     `shift.date + minutesOfDay` (exact mode) or
-///     `shift.startDateTime - relativeOffsetMinutes` (relative mode).
+///     one OS alarm per matching shift in the rolling [horizon], fired at
+///     `shiftStart − leadTime`. The lead time is the alarm's
+///     `relativeOffsetMinutes` when set (a per-alarm OVERRIDE), else the
+///     global `AlarmSettings.leadTime` (the default). There is no
+///     absolute-clock-time mode — a fixed time can't track a moving shift.
 ///     "Matching" means the shift's type equals the alarm's
 ///     `linkedShiftType`; alarms with `null` `linkedShiftType` are
 ///     skipped as invalid configuration.
@@ -50,10 +72,10 @@ const String _scheduledFireAtSettingsKey = 'alarm_sync.scheduled_fire_at';
 ///     Phase 2 background-refresh path. Keeping the window small also
 ///     keeps the iOS pending-notification ceiling (64) out of reach.
 ///   * [maxScheduled] — 50. Dense rosters (4-on/4-off + multiple
-///     alarms per shift + relative-time entries) can produce more
-///     than 50 entries inside 14 days. Sorted by fireAt and trimmed
-///     to the earliest 50; the dropped tail is re-considered on the
-///     next reconcile as the window rolls forward.
+///     alarms per shift) can produce more than 50 entries inside 14
+///     days. Sorted by fireAt and trimmed to the earliest 50; the
+///     dropped tail is re-considered on the next reconcile as the
+///     window rolls forward.
 ///
 /// Trigger contract: [syncAlarms] runs on every `AppAlarm` change,
 /// every `ShiftCycle` change, AND every `Shift` change inside the
@@ -64,25 +86,32 @@ class AlarmSyncService {
     required AppAlarmRepository alarms,
     required ShiftRepository shifts,
     required ShiftCycleRepository cycles,
+    required AlarmSettingsRepository alarmSettings,
     required AlarmScheduler scheduler,
     required NotificationIdMap idMap,
     required Clock clock,
     Duration horizon = const Duration(days: 14),
     int maxScheduled = 50,
     Duration debounceWindow = const Duration(milliseconds: 250),
+    bool Function()? isPaused,
   })  : _alarms = alarms,
         _shifts = shifts,
         _cycles = cycles,
+        _alarmSettings = alarmSettings,
         _scheduler = scheduler,
         _idMap = idMap,
         _clock = clock,
         _horizon = horizon,
         _maxScheduled = maxScheduled,
-        _debounceWindow = debounceWindow;
+        _debounceWindow = debounceWindow,
+        // Default reads the `settings` box (covers foreground AND the headless
+        // background isolate); tests inject a closure to exercise the branch.
+        _isPaused = isPaused ?? _readSchedulePausedFromSettings;
 
   final AppAlarmRepository _alarms;
   final ShiftRepository _shifts;
   final ShiftCycleRepository _cycles;
+  final AlarmSettingsRepository _alarmSettings;
   final AlarmScheduler _scheduler;
   final NotificationIdMap _idMap;
   final Clock _clock;
@@ -90,9 +119,14 @@ class AlarmSyncService {
   final int _maxScheduled;
   final Duration _debounceWindow;
 
+  /// Holiday-Mode gate, read fresh on every sync. When it returns true the
+  /// desired OS alarm set is forced empty (see [_doSync]).
+  final bool Function() _isPaused;
+
   StreamSubscription<List<AppAlarm>>? _alarmsSub;
   StreamSubscription<List<ShiftCycle>>? _cyclesSub;
   StreamSubscription<List<Shift>>? _shiftsSub;
+  StreamSubscription<AlarmSettings>? _settingsSub;
   Timer? _debounceTimer;
 
   /// In-flight sync queue. New calls chain onto the tail of the
@@ -131,6 +165,12 @@ class AlarmSyncService {
         .watchInRange(now, now.add(_horizon))
         .skip(1)
         .listen((_) => _scheduleDebouncedSync());
+    // The global lead time is the default fireAt offset for every
+    // followsRotation alarm, so changing it must re-arm the pending set —
+    // this is the wiring whose absence orphaned the Settings slider before.
+    _settingsSub = _alarmSettings.watch().skip(1).listen(
+          (_) => _scheduleDebouncedSync(),
+        );
   }
 
   Future<void> stop() async {
@@ -139,9 +179,11 @@ class AlarmSyncService {
     await _alarmsSub?.cancel();
     await _cyclesSub?.cancel();
     await _shiftsSub?.cancel();
+    await _settingsSub?.cancel();
     _alarmsSub = null;
     _cyclesSub = null;
     _shiftsSub = null;
+    _settingsSub = null;
   }
 
   /// Re-arms the debounce timer; after [_debounceWindow] of quiet,
@@ -165,12 +207,37 @@ class AlarmSyncService {
     return next;
   }
 
+  /// Primes the in-memory `_scheduledFireAt` map from the persisted
+  /// `settings` snapshot WITHOUT starting any stream subscriptions or
+  /// running a sync. [start] already does this internally; the native
+  /// background re-sync entrypoint calls [syncAlarms] directly (never
+  /// [start]), so it needs this public hook to prime the map before its
+  /// one-shot reconcile — otherwise every background run treats every id
+  /// as new and re-issues `scheduleAt` for the entire desired set,
+  /// defeating the platform-channel-burst avoidance the persistence layer
+  /// exists for. Best-effort + idempotent: a no-op when the `settings`
+  /// box isn't open (e.g. under the test harness).
+  void hydrate() => _hydrateScheduledFireAt();
+
   Future<void> _doSync() async {
     final now = _clock.now();
     final until = now.add(_horizon);
 
     final allAlarms = await _alarms.getAll();
-    final enabledAlarms = allAlarms.where((a) => a.enabled).toList();
+    // Holiday Mode (global pause): disarm everything WITHOUT mutating the
+    // roster or alarm rules. Forcing the enabled set empty makes `desired`
+    // empty, so the cancel-orphans pass below tears down every pending OS
+    // alarm and nothing is re-scheduled. Flip the flag back off and the next
+    // reconcile rebuilds the whole set from the untouched Hive data.
+    final enabledAlarms = _isPaused()
+        ? const <AppAlarm>[]
+        : allAlarms.where((a) => a.enabled).toList();
+
+    // Global alarm settings, read once per sync. Supplies the DEFAULT lead-time
+    // offset for every followsRotation alarm without a per-alarm override, plus
+    // the custom-ringtone path that rides the payload as forward-plumbing.
+    final settings = await _alarmSettings.read();
+    final globalLeadMinutes = settings.leadTime.inMinutes;
 
     // Materialise shifts ONCE for the whole sync — every
     // followsRotation alarm walks the same date window, so reading
@@ -192,16 +259,48 @@ class AlarmSyncService {
           entries.add(
             _Entry(alarm: alarm, fireAt: fireAt, dateKey: _dateKey(fireAt)),
           );
+        case AppAlarmRepeatType.weekly:
+          // Standard day-of-week recurring alarm, independent of the roster.
+          // Materialise one concrete OS alarm per selected weekday that lands
+          // inside the horizon — the same per-occurrence model as
+          // followsRotation, so it inherits the idempotent reconcile, the
+          // earliest-50 cap, and the native background re-sync that rolls the
+          // window forward (no FLN native-repeat path to keep in sync). With a
+          // 14-day horizon a full 7-day mask yields ≤14 entries.
+          final mask = alarm.weekdaysBitmask;
+          if (mask == 0) continue; // no day selected — nothing to schedule
+          // Walk calendar days with DST-safe `+1` increments (Duration math
+          // would drift across a spring-forward boundary). `now` itself is
+          // included so today's still-future occurrence is caught.
+          for (var d = DateTime(now.year, now.month, now.day);
+              d.isBefore(until);
+              d = DateTime(d.year, d.month, d.day + 1)) {
+            if (!maskHasWeekday(mask, d.weekday)) continue;
+            final fireAt = DateTime(
+              d.year,
+              d.month,
+              d.day,
+              alarm.minutesOfDay ~/ 60,
+              alarm.minutesOfDay % 60,
+            );
+            if (!fireAt.isAfter(now)) continue;
+            if (!fireAt.isBefore(until)) continue;
+            entries.add(
+              _Entry(
+                alarm: alarm,
+                fireAt: fireAt,
+                dateKey: _dateKey(fireAt),
+              ),
+            );
+          }
         case AppAlarmRepeatType.followsRotation:
           final type = alarm.linkedShiftType;
           if (type == null) continue; // invalid config — skip
           for (final s in shiftsInWindow) {
             if (s.type != type) continue;
 
-            // Shift-level alarm suppression — ports the legacy
-            // AlarmEngine's filters into the alarm-rule-centric world.
-            // Both flags survive cold start because they're persisted
-            // on the Shift record:
+            // Shift-level alarm suppression. Both flags survive cold start
+            // because they're persisted on the Shift record:
             //   * isMuted: user swiped "mute this occurrence" in the
             //     roster. Phase-3 emergency-mute UX. Every alarm
             //     linked to this shift is dropped; the orphan-cancel
@@ -209,42 +308,45 @@ class AlarmSyncService {
             //   * isAcknowledged: the user already handled this
             //     occurrence's alarm via Dismiss (foreground or
             //     background dispatcher). Re-scheduling would
-            //     resurrect a dismissed alarm — never desired, and
-            //     the reason this filter existed in the legacy engine.
+            //     resurrect a dismissed alarm — never desired.
+            //   * isAlarmSkipped: the user tapped "Dismiss Upcoming
+            //     Alarm" on the Dashboard to skip THIS occurrence
+            //     ahead of time (they woke before the alarm). Same
+            //     suppress-and-cancel treatment as the two above, but a
+            //     distinct flag so the Dashboard's next-shift card
+            //     still shows the shift (see Shift.isAlarmSkipped).
             if (s.isMuted) continue;
             if (s.isAcknowledged) continue;
+            if (s.isAlarmSkipped) continue;
 
-            // Two fireAt computations based on the alarm's time mode:
-            //   * Exact:    shift.date + minutesOfDay
-            //   * Relative: shift.startDateTime - relativeOffsetMinutes
-            // Both routes use calendar-math reconstruction of the
-            // shift's date components (DST-safe).
-            final DateTime normalFireAt;
-            if (alarm.isRelativeTime) {
-              final shiftStart = DateTime(
-                s.date.year,
-                s.date.month,
-                s.date.day,
-                s.startMinutes ~/ 60,
-                s.startMinutes % 60,
-              );
-              normalFireAt = shiftStart.subtract(
-                Duration(minutes: alarm.relativeOffsetMinutes),
-              );
-            } else {
-              normalFireAt = _fireAtFor(s, alarm.minutesOfDay);
-            }
+            // followsRotation alarms ALWAYS fire relative to the shift start —
+            // an absolute clock time can't track a shift that moves, which is
+            // the whole point of the app. The lead time is the per-alarm
+            // override when set, else the global default.
+            //
+            // DST-safe by construction: the offset is folded into the minute
+            // field and the DateTime constructor normalises the (possibly
+            // negative) result in LOCAL time. Unlike `Duration` subtraction,
+            // an offset that crosses midnight or a DST boundary lands on the
+            // correct local wall-clock time.
+            final leadMinutes =
+                alarm.relativeOffsetMinutes ?? globalLeadMinutes;
+            final normalFireAt = DateTime(
+              s.date.year,
+              s.date.month,
+              s.date.day,
+              s.startMinutes ~/ 60,
+              s.startMinutes % 60 - leadMinutes,
+            );
 
             // Snoozed-alarm resurrection. When the user taps Snooze,
             // the dispatcher writes `shift.snoozedUntil` AND reschedules
             // the SAME notification id to that instant. On the next
             // reconcile we MUST converge to the dispatcher's schedule
             // or the cancel-orphans pass below would tear down the
-            // snooze. The legacy AlarmEngine handled this by pinning
-            // unconditionally to snoozedUntil — fine in its 1:1
-            // alarm:shift world.
-            //
-            // In AlarmSyncService's 1:N world (multiple alarms per
+            // snooze. A naive 1:1 alarm:shift model could pin
+            // unconditionally to snoozedUntil; we can't, because this is a
+            // 1:N world (multiple alarms per
             // shift), pinning unconditionally would drag sibling
             // alarms forward too — snoozing the 06:00 wake-up would
             // also reschedule the 06:30 leave-for-work alarm to 06:09,
@@ -345,10 +447,23 @@ class AlarmSyncService {
         fireAt: desiredFireAt,
         title: _titleFor(entry.value.alarm),
         body: _bodyFor(entry.value.alarm, entry.value.fireAt),
-        // Payload contract: `<shiftId-or-'NONE'>|<notificationId>`.
-        // Parsed by `_parseWakeUpRoute` in main.dart and
-        // `_ShiftSummary` in wake_up_screen.dart.
-        payload: '${entry.value.shift?.id ?? noShiftPayloadSentinel}|$id',
+        soundKey: entry.value.alarm.soundKey,
+        // Canonical 4-field payload — see [AlarmPayload]. Carries the shift id
+        // (or 'NONE' sentinel), the OS notification id, the dismiss code
+        // (critical vs normal wake mechanics), and the bundled-tone key so the
+        // killed-app snooze reschedule keeps the user's chosen sound.
+        payload: AlarmPayload.encode(
+          shiftId: entry.value.shift?.id ?? noShiftPayloadSentinel,
+          notificationId: id,
+          isCritical: entry.value.alarm.isCriticalShift,
+          soundKey: entry.value.alarm.soundKey,
+          // Owning rule id so a dismiss can auto-delete a fired one-time alarm
+          // — even from a killed state where the notification id alone can't be
+          // reversed to a rule. Harmless for non-auto-delete alarms.
+          appAlarmId: entry.value.alarm.id,
+          // Global custom ringtone (forward-plumbing; no native consumer yet).
+          customRingtoneUri: settings.customRingtoneUri,
+        ),
       );
       _scheduledFireAt[id] = desiredFireAt;
     }
@@ -418,18 +533,6 @@ class AlarmSyncService {
     );
   }
 
-  /// Compose a fire instant from a shift's calendar date and an
-  /// alarm's `minutesOfDay`. Calendar math throughout for DST safety.
-  DateTime _fireAtFor(Shift shift, int minutesOfDay) {
-    return DateTime(
-      shift.date.year,
-      shift.date.month,
-      shift.date.day,
-      minutesOfDay ~/ 60,
-      minutesOfDay % 60,
-    );
-  }
-
   /// `2026-05-22` — the date-only ISO portion. Used as part of the
   /// composite id-map key so a per-day alarm gets a stable id within
   /// a day and a fresh id on the next day.
@@ -441,25 +544,15 @@ class AlarmSyncService {
   String _titleFor(AppAlarm a) => a.label.isEmpty ? 'Alarm' : a.label;
 
   String _bodyFor(AppAlarm a, DateTime fireAt) {
-    final hh = (fireAt.hour).toString().padLeft(2, '0');
-    final mm = (fireAt.minute).toString().padLeft(2, '0');
+    final hh = fireAt.hour.toString().padLeft(2, '0');
+    final mm = fireAt.minute.toString().padLeft(2, '0');
     final type = a.linkedShiftType;
     if (a.repeatType == AppAlarmRepeatType.followsRotation && type != null) {
-      if (a.isRelativeTime) {
-        return '${_offsetLabel(a.relativeOffsetMinutes)} before your '
-            '${_typeLabel(type)} shift';
-      }
+      // followsRotation is always relative now; the fireAt already encodes the
+      // (global or overridden) lead time, so just surface when it rings.
       return 'Before your ${_typeLabel(type)} shift · $hh:$mm';
     }
     return 'Rings at $hh:$mm';
-  }
-
-  static String _offsetLabel(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    if (h == 0) return '${m}m';
-    if (m == 0) return '${h}h';
-    return '${h}h ${m}m';
   }
 
   static String _typeLabel(ShiftType t) {

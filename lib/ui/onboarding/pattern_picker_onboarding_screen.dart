@@ -3,7 +3,9 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 
 import '../main_layout.dart';
 import '../pattern_picker_body.dart';
+import 'arm_engine_screen.dart';
 import 'onboarding_flow.dart';
+import 'onboarding_progress.dart';
 import 'onboarding_state.dart';
 
 /// Step 4 of onboarding.
@@ -28,16 +30,31 @@ class PatternPickerOnboardingScreen extends StatelessWidget {
   final RosterType rosterType;
   final VoidCallback onBack;
 
+  /// The roster is now in Hive. Hand off to the final "Arm your alarms"
+  /// step rather than completing here — that screen seeds the default
+  /// alarms and only THEN marks onboarding complete (see [_complete]).
   Future<void> _onGenerated(BuildContext context) async {
-    // Mark complete only after a successful generate (handled by the
-    // body before this callback fires). If the user kills the app
-    // between the cycle write and this flag write, they re-do
-    // onboarding next launch — benign degraded mode, recoverable
-    // via the cycles list.
-    //
-    // `onboardingCompleteKey` lives in `onboarding_flow.dart` so
-    // main.dart's first-launch gate reads the same constant we write
-    // here. Don't duplicate it.
+    final navigator = Navigator.of(context);
+    await navigator.push(
+      MaterialPageRoute(
+        builder: (_) => ArmEngineScreen(
+          onArmComplete: () => _complete(context),
+          onBack: navigator.pop,
+        ),
+      ),
+    );
+  }
+
+  /// Final completion, invoked by the Arm Engine screen AFTER alarms are
+  /// seeded. Flips the first-launch flag and replaces the whole stack with
+  /// the Dashboard.
+  ///
+  /// `onboardingCompleteKey` lives in `onboarding_flow.dart` so main.dart's
+  /// first-launch gate reads the same constant we write here — don't
+  /// duplicate it. If the user kills the app between the cycle write and this
+  /// flag write they re-do onboarding next launch — benign, recoverable via
+  /// the cycles list.
+  Future<void> _complete(BuildContext context) async {
     final navigator = Navigator.of(context);
     await Hive.box('settings').put(onboardingCompleteKey, true);
     navigator.pushAndRemoveUntil(
@@ -55,6 +72,7 @@ class PatternPickerOnboardingScreen extends StatelessWidget {
           onPressed: onBack,
         ),
         title: const Text('Pick your rotation'),
+        bottom: const OnboardingProgressBar(step: 2),
       ),
       body: PatternPickerBody(
         restrictToType: rosterType,

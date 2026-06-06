@@ -5,6 +5,10 @@ import '../data/models/shift_type.dart';
 import '../logic/rotation_pattern_validator.dart';
 import '../logic/shift_block.dart';
 import '../logic/shift_generator.dart';
+import '../ocr/ocr_scanner_service.dart';
+import '../ocr/roster_injection.dart';
+import 'draft_roster_review_screen.dart';
+import '../state/app_preferences.dart';
 import 'shift_format.dart';
 
 /// Draft-and-review custom roster builder.
@@ -20,7 +24,13 @@ import 'shift_format.dart';
 /// [PatternPickerScreen]. Persists nothing until the user taps Generate;
 /// the entire draft lives in this State.
 class CustomBuilderScreen extends StatefulWidget {
-  const CustomBuilderScreen({super.key});
+  const CustomBuilderScreen({super.key, this.scanner});
+
+  /// Injectable for tests. Null in production, where the screen lazily owns a
+  /// real [OcrScannerService] and disposes it. The real one is never
+  /// constructed unless the user actually triggers a scan, so widget tests
+  /// that only render the builder never touch ML Kit / the camera.
+  final OcrScannerService? scanner;
 
   @override
   State<CustomBuilderScreen> createState() => _CustomBuilderScreenState();
@@ -38,7 +48,15 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
   int _repeatCount = 4;
   DateTime? _startDate;
   bool _generating = false;
+  bool _scanning = false;
   String? _validationError;
+
+  // Lazily created only on first scan so rendering the builder (incl. in
+  // tests) never spins up ML Kit. Disposed in [dispose] iff we own it;
+  // an injected `widget.scanner` belongs to the caller.
+  OcrScannerService? _ownedScanner;
+  OcrScannerService get _scanner =>
+      widget.scanner ?? (_ownedScanner ??= OcrScannerService());
 
   // Default first block at 07:00–15:00, day 0 of a single-day span.
   // Mirrors the picker's "first time-edit" defaults so the user can tap
@@ -57,13 +75,19 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _ownedScanner?.dispose();
     super.dispose();
   }
 
   bool get _canGenerate {
     if (_generating) return false;
+    if (_scanning) return false;
     if (_blocks.isEmpty) return false;
     if (_startDate == null) return false;
+    // Block generation while any scanned shift is still missing its end time
+    // (a non-Off zero-duration placeholder) — validateCustomRoster would
+    // reject it anyway; flagging up front is clearer than an error on submit.
+    if (_blocks.any(ScannedRosterInjection.needsEndTime)) return false;
     return true;
   }
 
@@ -154,6 +178,142 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     );
   }
 
+  // ---- OCR roster scanner (Phase 6) -------------------------------------
+
+  /// Mandatory anchor pick for the camera flow. Returns the chosen date, or
+  /// null if the user backed out — in which case the camera must NOT open.
+  Future<DateTime?> _pickAnchorDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return showDatePicker(
+      context: context,
+      initialDate: _startDate ?? today,
+      firstDate: today,
+      lastDate: DateTime(today.year + 10, today.month, today.day),
+      helpText: 'Pick the start date for the scanned roster',
+    );
+  }
+
+  /// Entry shared by "Add Roster via Camera" and "Import Screenshot": the
+  /// anchor date is chosen BEFORE the picker opens (cancelling it aborts), then
+  /// a successful scan hands off to [DraftRosterReviewScreen] — the
+  /// Human-in-the-Loop surface where the user prunes phantom rows and fixes
+  /// types/times before anything is persisted. [fromGallery] selects the camera
+  /// vs the photo-gallery source; everything downstream is identical.
+  ///
+  /// If the review screen commits (pops `true`), this screen pops `true` too so
+  /// the pattern picker fires its `onGenerated`, exactly like a manual Generate.
+  Future<void> _scanEntry({required bool fromGallery}) async {
+    final anchor = await _pickAnchorDate();
+    if (!mounted || anchor == null) return;
+
+    setState(() => _scanning = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final ScanResult result;
+    try {
+      result = fromGallery
+          ? await _scanner.scanFromGalleryForReview()
+          : await _scanner.scanRosterForReview();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _scanning = false);
+      messenger.showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _scanning = false);
+
+    if (result.blocks.isEmpty) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('No shift times recognised. Try cropping tighter '
+            'around the grid.'),
+      ));
+      return;
+    }
+
+    final name = _nameController.text.trim();
+    final saved = await navigator.push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DraftRosterReviewScreen(
+          anchorDate: anchor,
+          blocks: ScannedRosterInjection.map(result.blocks),
+          sourceImage: result.croppedImage,
+          label: name.isEmpty ? 'Scanned roster' : name,
+        ),
+      ),
+    );
+    if (saved == true && mounted) navigator.pop(true);
+  }
+
+  /// Loop — "Scan & Append Next Block". Appends the new shifts to the end of
+  /// the existing draft. Falls back to an anchor pick if none is set yet (the
+  /// user could reach here via the manual flow).
+  Future<void> _scanAndAppend() async {
+    if (_startDate == null) {
+      final anchor = await _pickAnchorDate();
+      if (!mounted || anchor == null) return;
+      setState(() => _startDate = anchor);
+    }
+    await _runScan(append: true);
+  }
+
+  /// Shared capture → inject step. Each scanned block lands on its own
+  /// sequential cycle day (one block per day) starting at day 0 (replace) or
+  /// at the current block count (append), so the generator lays them onto
+  /// consecutive calendar dates from the anchor. `repeatCount` is pinned to 1
+  /// — a scanned roster is a literal sequence, not a repeating cycle.
+  Future<void> _runScan({
+    required bool append,
+    bool fromGallery = false,
+  }) async {
+    setState(() {
+      _scanning = true;
+      _validationError = null;
+    });
+    // Capture before the awaits — BuildContext is unsafe across suspensions.
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final scanned = fromGallery
+          ? await _scanner.scanFromGallery()
+          : await _scanner.scanRoster();
+      if (!mounted) return;
+      if (scanned.isEmpty) {
+        setState(() => _scanning = false);
+        messenger.showSnackBar(const SnackBar(
+          content: Text('No shift times recognised. Try cropping tighter '
+              'around the grid.'),
+        ));
+        return;
+      }
+
+      final mapped = ScannedRosterInjection.map(
+        scanned,
+        fromDayIndex: append ? _blocks.length : 0,
+      );
+      setState(() {
+        _scanning = false;
+        if (!append) _blocks.clear();
+        _blocks.addAll(mapped);
+        _cycleLengthDays = _blocks.length.clamp(_minCycleDays, _maxCycleDays);
+        _repeatCount = 1;
+        _validationError = null;
+      });
+
+      final n = mapped.length;
+      messenger.showSnackBar(SnackBar(
+        content: Text('${append ? 'Appended' : 'Added'} $n '
+            'shift${n == 1 ? '' : 's'} from the scan'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _scanning = false);
+      messenger.showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+    }
+  }
+
   Future<void> _generate() async {
     if (!_canGenerate) return;
     setState(() {
@@ -231,6 +391,43 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                 hintText: 'e.g. Split-shift trial',
               ),
             ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              key: const ValueKey('custom-scan-camera'),
+              onPressed:
+                  _scanning ? null : () => _scanEntry(fromGallery: false),
+              icon: _scanning
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.photo_camera_outlined),
+              label: const Text('Add Roster via Camera'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const ValueKey('custom-import-gallery'),
+              onPressed:
+                  _scanning ? null : () => _scanEntry(fromGallery: true),
+              icon: _scanning
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.image_outlined),
+              label: const Text('Import Screenshot'),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Scan a printed roster or import a digital screenshot: pick a '
+              'start date, then crop to YOUR row only — not the whole team. '
+              'Each cell becomes one day from that date.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 24),
             _IntStepperRow(
               key: const ValueKey('custom-cycle-length'),
@@ -289,6 +486,26 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
               ),
             ),
             const SizedBox(height: 24),
+            if (_blocks.any(ScannedRosterInjection.needsEndTime)) ...[
+              _IncompleteBlocksBanner(
+                count:
+                    _blocks.where(ScannedRosterInjection.needsEndTime).length,
+              ),
+              const SizedBox(height: 12),
+            ],
+            FilledButton.tonalIcon(
+              key: const ValueKey('custom-scan-append'),
+              onPressed: _scanning ? null : _scanAndAppend,
+              icon: _scanning
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_a_photo_outlined),
+              label: const Text('Scan & Append Next Block'),
+            ),
+            const SizedBox(height: 12),
             if (_validationError != null) ...[
               _ValidationBanner(message: _validationError!),
               const SizedBox(height: 12),
@@ -338,6 +555,9 @@ class _BlockCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // A scanned single-time block lands as a zero-duration placeholder; flag
+    // it so the user completes the end time before Generate unlocks.
+    final needsEnd = ScannedRosterInjection.needsEndTime(block);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -427,7 +647,12 @@ class _BlockCard extends StatelessWidget {
                   OutlinedButton(
                     key: ValueKey('custom-block-$index-start-time'),
                     onPressed: onPickStartTime,
-                    child: Text(formatHhmm(block.startMinutes)),
+                    child: Text(
+                      formatClock(
+                        block.startMinutes,
+                        use24Hour: AppPreferences.use24HourOf(context),
+                      ),
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -440,10 +665,45 @@ class _BlockCard extends StatelessWidget {
                   OutlinedButton(
                     key: ValueKey('custom-block-$index-end-time'),
                     onPressed: onPickEndTime,
-                    child: Text(formatHhmm(block.endMinutes)),
+                    style: needsEnd
+                        ? OutlinedButton.styleFrom(
+                            foregroundColor: theme.colorScheme.error,
+                            side: BorderSide(color: theme.colorScheme.error),
+                          )
+                        : null,
+                    child: Text(
+                      needsEnd
+                          ? 'Set end'
+                          : formatClock(
+                              block.endMinutes,
+                              use24Hour: AppPreferences.use24HourOf(context),
+                            ),
+                    ),
                   ),
                 ],
               ),
+              if (needsEnd) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Scanned without an end time — set it to enable '
+                        'Generate.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ],
         ),
@@ -571,6 +831,51 @@ class _ValidationBanner extends StatelessWidget {
               message,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Non-blocking attention banner shown above the Scan/Generate buttons when
+/// the draft still contains scanned blocks missing their end time. Distinct
+/// (tertiary) styling from the red [_ValidationBanner] so "finish this" reads
+/// differently from "this is wrong".
+class _IncompleteBlocksBanner extends StatelessWidget {
+  const _IncompleteBlocksBanner({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('custom-incomplete-banner'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.schedule_outlined,
+            color: theme.colorScheme.onTertiaryContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              count == 1
+                  ? '1 scanned shift is missing an end time. Tap its '
+                      'highlighted "Set end" button to finish.'
+                  : '$count scanned shifts are missing an end time. Tap each '
+                      'highlighted "Set end" button to finish.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onTertiaryContainer,
               ),
             ),
           ),

@@ -4,6 +4,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../data/models/shift_cycle.dart';
 import '../../data/models/shift_type.dart';
 import '../../logic/cycle_resolver.dart';
+import '../../state/app_preferences.dart';
 import '../roster/shift_visuals.dart';
 import '../shift_format.dart';
 
@@ -25,9 +26,16 @@ class InfiniteCalendarView extends StatefulWidget {
     super.key,
     required this.cycle,
     this.onDayTapped,
+    this.startWeekOnMonday = true,
   });
 
   final ShiftCycle cycle;
+
+  /// First column of the month grid: Monday when true, Sunday when false.
+  /// Defaults to Monday so a direct caller that omits the preference matches
+  /// the app's default. `table_calendar` owns all the weekday-header / leading-
+  /// offset math off this single flag.
+  final bool startWeekOnMonday;
 
   /// Called when the user taps a cell. Receives the date and the
   /// [CycleResolution] for that date (which carries the block, the
@@ -75,6 +83,9 @@ class _InfiniteCalendarViewState extends State<InfiniteCalendarView> {
       lastDay: DateTime(2100, 12, 31),
       calendarFormat: CalendarFormat.month,
       rowHeight: 60,
+      startingDayOfWeek: widget.startWeekOnMonday
+          ? StartingDayOfWeek.monday
+          : StartingDayOfWeek.sunday,
       availableGestures: AvailableGestures.horizontalSwipe,
       // eventLoader feeds the marker-builder hook. We suppress markers
       // (custom bar at the cell bottom is the visual signal), so this
@@ -304,6 +315,7 @@ class CycleResolutionSheet extends StatelessWidget {
     final typeLabel = _typeLabel(resolution.block.type);
     final block = resolution.block;
     final dayOfBlock = resolution.dayWithinBlock + 1;
+    final use24Hour = AppPreferences.use24HourOf(context);
     final isProjected =
         materialisedActions == null || materialisedActions!.isEmpty;
 
@@ -365,8 +377,9 @@ class CycleResolutionSheet extends StatelessWidget {
               const SizedBox(height: 8),
               _InfoRow(
                 label: 'Time',
-                value: '${formatHhmm(block.startMinutes)} → '
-                    '${formatHhmm(block.endMinutes)}',
+                value: '${formatClock(block.startMinutes, use24Hour: use24Hour)}'
+                    ' → '
+                    '${formatClock(block.endMinutes, use24Hour: use24Hour)}',
               ),
             ],
             if (materialisedActions != null && materialisedActions!.isNotEmpty)

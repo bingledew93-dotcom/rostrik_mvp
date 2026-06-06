@@ -19,6 +19,7 @@ class FakeScheduledAlarm {
     required this.fireAt,
     required this.title,
     required this.body,
+    required this.soundKey,
     this.payload,
   });
 
@@ -26,11 +27,13 @@ class FakeScheduledAlarm {
   final DateTime fireAt;
   final String title;
   final String body;
+  final String soundKey;
   final String? payload;
 
   @override
   String toString() =>
-      'FakeScheduledAlarm(id: $id, fireAt: $fireAt, title: "$title")';
+      'FakeScheduledAlarm(id: $id, fireAt: $fireAt, title: "$title", '
+      'sound: "$soundKey")';
 }
 
 class FakeAlarmScheduler implements AlarmScheduler {
@@ -47,6 +50,7 @@ class FakeAlarmScheduler implements AlarmScheduler {
     required DateTime fireAt,
     required String title,
     required String body,
+    required String soundKey,
     String? payload,
   }) async {
     _scheduled[id] = FakeScheduledAlarm(
@@ -54,6 +58,7 @@ class FakeAlarmScheduler implements AlarmScheduler {
       fireAt: fireAt,
       title: title,
       body: body,
+      soundKey: soundKey,
       payload: payload,
     );
     callLog.add('schedule:$id');

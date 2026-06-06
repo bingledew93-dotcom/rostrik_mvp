@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:rostrik_mvp/data/models/alarm_settings.dart';
 import 'package:rostrik_mvp/data/models/app_alarm.dart';
+import 'package:rostrik_mvp/data/models/shift.dart';
+import 'package:rostrik_mvp/data/models/shift_type.dart';
 import 'package:rostrik_mvp/data/repositories/app_alarm_repository.dart';
 import 'package:rostrik_mvp/ui/alarms_screen.dart';
 
@@ -11,6 +14,7 @@ void main() {
   Future<FakeAppAlarmRepository> pumpAlarms(
     WidgetTester tester, {
     required List<AppAlarm> seed,
+    List<Shift> shifts = const [],
   }) async {
     final repo = FakeAppAlarmRepository();
     for (final a in seed) {
@@ -26,6 +30,12 @@ void main() {
       MultiProvider(
         providers: [
           Provider<AppAlarmRepository>.value(value: repo),
+          // The create-alarm sheet (opened from the FAB) reads the global
+          // lead time; the cards use it to compute the fire clock too.
+          Provider<AlarmSettings>.value(value: AlarmSettings.defaults),
+          // Each card reads the roster to resolve its linked shift's start
+          // time; empty → per-type default (Day 07:00, Night 22:00, etc.).
+          Provider<List<Shift>>.value(value: shifts),
           StreamProvider<List<AppAlarm>>(
             create: (_) => repo.watch(),
             initialData: seed,
@@ -45,6 +55,10 @@ void main() {
     required String label,
     AppAlarmRepeatType repeatType = AppAlarmRepeatType.followsRotation,
     bool enabled = true,
+    ShiftType? linkedShiftType,
+    int? relativeOffsetMinutes,
+    int weekdaysBitmask = 0,
+    bool autoDeleteAfterFiring = false,
   }) =>
       AppAlarm(
         id: id,
@@ -52,6 +66,10 @@ void main() {
         label: label,
         repeatType: repeatType,
         enabled: enabled,
+        linkedShiftType: linkedShiftType,
+        relativeOffsetMinutes: relativeOffsetMinutes,
+        weekdaysBitmask: weekdaysBitmask,
+        autoDeleteAfterFiring: autoDeleteAfterFiring,
       );
 
   group('empty state', () {
@@ -70,16 +88,19 @@ void main() {
 
   group('alarm card rendering', () {
     testWidgets(
-      'renders one card per alarm with time, label, repeat-type subtitle',
+      'hero is the calculated fire clock; offset moves to the subtitle',
       (tester) async {
         await pumpAlarms(
           tester,
           seed: [
+            // Follows-rotation Day on the global 60-min lead. Empty roster →
+            // Day default 07:00; 07:00 − 1h = 06:00 → hero "06:00 AM".
             mk(
               id: 'a',
               minutesOfDay: 6 * 60,
               label: 'Wake Up - Day Shift',
               repeatType: AppAlarmRepeatType.followsRotation,
+              linkedShiftType: ShiftType.day,
             ),
             mk(
               id: 'b',
@@ -90,30 +111,131 @@ void main() {
           ],
         );
 
-        expect(find.text('06:00'), findsOneWidget);
-        expect(find.text('22:30'), findsOneWidget);
+        // Follows-rotation hero is the CALCULATED clock, not the offset.
+        expect(find.text('06:00 AM'), findsOneWidget);
+        // The offset is demoted to the subtitle.
+        expect(find.textContaining('1h before Day shifts'), findsOneWidget);
+        expect(find.text('Default'), findsNothing);
+        // One-time keeps its absolute clock time (AM/PM) + simple descriptor.
+        expect(find.text('10:30 PM'), findsOneWidget);
+        expect(find.text('Rings one time only'), findsOneWidget);
         expect(find.text('Wake Up - Day Shift'), findsOneWidget);
         expect(find.text('Bed time'), findsOneWidget);
-        expect(find.text('Follows your rotation'), findsOneWidget);
-        expect(find.text('Rings one time only'), findsOneWidget);
       },
     );
 
-    testWidgets('alarms are sorted by minutesOfDay ascending', (tester) async {
-      // Insertion order is intentionally reversed; the UI must render
-      // 06:00 above 14:00 above 22:00 regardless.
+    testWidgets('an override card computes the clock from its own offset',
+        (tester) async {
       await pumpAlarms(
         tester,
         seed: [
-          mk(id: 'late', minutesOfDay: 22 * 60, label: 'Night'),
-          mk(id: 'early', minutesOfDay: 6 * 60, label: 'Morning'),
-          mk(id: 'mid', minutesOfDay: 14 * 60, label: 'Afternoon'),
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Early wake',
+            linkedShiftType: ShiftType.night,
+            relativeOffsetMinutes: 90,
+          ),
+        ],
+      );
+      // Night default 22:00 − 1h30 = 20:30 → "08:30 PM".
+      expect(find.text('08:30 PM'), findsOneWidget);
+      // Offset (with its shift) in the subtitle, no "default" marker.
+      expect(find.textContaining('1h 30m before Night shifts'), findsOneWidget);
+      expect(find.textContaining('default'), findsNothing);
+    });
+
+    testWidgets('the hero reflects the linked shift\'s ACTUAL roster start',
+        (tester) async {
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Wake Up',
+            linkedShiftType: ShiftType.day,
+            relativeOffsetMinutes: 60,
+          ),
+        ],
+        // A real Day shift at 06:00 (not the 07:00 default) → 06:00 − 1h = 05:00.
+        shifts: [
+          Shift(
+            id: 'd1',
+            date: DateTime(2030, 1, 1),
+            type: ShiftType.day,
+            startMinutes: 6 * 60,
+            endMinutes: 14 * 60,
+          ),
+        ],
+      );
+      expect(find.text('05:00 AM'), findsOneWidget);
+    });
+
+    testWidgets('a weekly card shows its clock + the weekday summary',
+        (tester) async {
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'w',
+            minutesOfDay: 6 * 60 + 30,
+            label: 'Gym',
+            repeatType: AppAlarmRepeatType.weekly,
+            weekdaysBitmask: 1 | 1 << 2 | 1 << 4, // Mon, Wed, Fri
+          ),
+        ],
+      );
+      expect(find.text('06:30 AM'), findsOneWidget);
+      expect(find.text('Mon, Wed, Fri'), findsOneWidget);
+    });
+
+    testWidgets('a one-time auto-delete card notes the auto-delete',
+        (tester) async {
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'o',
+            minutesOfDay: 7 * 60,
+            label: 'Appointment',
+            repeatType: AppAlarmRepeatType.oneTime,
+            autoDeleteAfterFiring: true,
+          ),
+        ],
+      );
+      expect(find.text('Rings once · auto-deletes'), findsOneWidget);
+    });
+
+    testWidgets('alarms are sorted by minutesOfDay ascending', (tester) async {
+      // One-time alarms so the clock-time headline is stable to assert order.
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'late',
+            minutesOfDay: 22 * 60,
+            label: 'Night',
+            repeatType: AppAlarmRepeatType.oneTime,
+          ),
+          mk(
+            id: 'early',
+            minutesOfDay: 6 * 60,
+            label: 'Morning',
+            repeatType: AppAlarmRepeatType.oneTime,
+          ),
+          mk(
+            id: 'mid',
+            minutesOfDay: 14 * 60,
+            label: 'Afternoon',
+            repeatType: AppAlarmRepeatType.oneTime,
+          ),
         ],
       );
 
-      final earlyY = tester.getCenter(find.text('06:00')).dy;
-      final midY = tester.getCenter(find.text('14:00')).dy;
-      final lateY = tester.getCenter(find.text('22:00')).dy;
+      final earlyY = tester.getCenter(find.text('06:00 AM')).dy;
+      final midY = tester.getCenter(find.text('02:00 PM')).dy;
+      final lateY = tester.getCenter(find.text('10:00 PM')).dy;
       expect(earlyY, lessThan(midY));
       expect(midY, lessThan(lateY));
     });
@@ -176,6 +298,33 @@ void main() {
       expect(find.text('New alarm'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('create-alarm-save')),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('tap-to-edit', () {
+    testWidgets('tapping a card opens the edit sheet pre-populated',
+        (tester) async {
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Wake Up - Day Shift',
+            linkedShiftType: ShiftType.day,
+          ),
+        ],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('alarm-card-tap-a')));
+      await tester.pumpAndSettle();
+
+      // Edit (not create) header, and the label field carries the alarm's label.
+      expect(find.text('Edit alarm'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextField, 'Wake Up - Day Shift'),
         findsOneWidget,
       );
     });

@@ -17,6 +17,7 @@ class Shift {
     this.isAcknowledged = false,
     this.snoozedUntil,
     this.cycleId,
+    this.isAlarmSkipped = false,
   })  : date = DateTime(date.year, date.month, date.day),
         assert(
           startMinutes >= 0 && startMinutes < 1440,
@@ -82,6 +83,19 @@ class Shift {
   @HiveField(9)
   final String? cycleId;
 
+  // Per-occurrence "skip the next alarm" flag, set by the Dashboard's
+  // "Dismiss Upcoming Alarm" early-skip affordance. Deliberately DISTINCT from
+  // `isAcknowledged`: the AlarmEngine treats both as "alarm not desired for
+  // this occurrence" (so the orphan-cancel pass tears down the pending OS
+  // notification), but `_findNext` on the Dashboard filters out acknowledged
+  // shifts — reusing ack here would wrongly drop the shift from the next-shift
+  // card the moment the user skipped its alarm. A skipped shift still shows in
+  // the schedule; only its alarm is suppressed. The master AppAlarm rule stays
+  // enabled, so subsequent shifts re-arm normally. `defaultValue: false` keeps
+  // legacy records readable.
+  @HiveField(10, defaultValue: false)
+  final bool isAlarmSkipped;
+
   bool get isOvernight => endMinutes <= startMinutes;
 
   int get durationMinutes => isOvernight
@@ -140,6 +154,7 @@ class Shift {
     DateTime? snoozedUntil,
     bool clearSnoozedUntil = false,
     String? cycleId,
+    bool? isAlarmSkipped,
   }) =>
       Shift(
         id: id ?? this.id,
@@ -153,6 +168,7 @@ class Shift {
         snoozedUntil:
             clearSnoozedUntil ? null : (snoozedUntil ?? this.snoozedUntil),
         cycleId: cycleId ?? this.cycleId,
+        isAlarmSkipped: isAlarmSkipped ?? this.isAlarmSkipped,
       );
 
   @override
@@ -169,7 +185,8 @@ class Shift {
           isMuted == other.isMuted &&
           isAcknowledged == other.isAcknowledged &&
           snoozedUntil == other.snoozedUntil &&
-          cycleId == other.cycleId;
+          cycleId == other.cycleId &&
+          isAlarmSkipped == other.isAlarmSkipped;
 
   @override
   int get hashCode => Object.hash(
@@ -183,6 +200,7 @@ class Shift {
         isAcknowledged,
         snoozedUntil,
         cycleId,
+        isAlarmSkipped,
       );
 
   @override
@@ -190,5 +208,6 @@ class Shift {
       'Shift(id: $id, date: $date, type: $type, '
       'start: $startMinutes, end: $endMinutes, note: $note, '
       'isMuted: $isMuted, isAcknowledged: $isAcknowledged, '
-      'snoozedUntil: $snoozedUntil, cycleId: $cycleId)';
+      'snoozedUntil: $snoozedUntil, cycleId: $cycleId, '
+      'isAlarmSkipped: $isAlarmSkipped)';
 }

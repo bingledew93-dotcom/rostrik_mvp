@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'alarms/alarm_payload.dart';
 import 'alarms/alarm_sync_service.dart';
 import 'alarms/local_notifications_alarm_scheduler.dart';
 import 'alarms/notification_action_dispatcher.dart';
 import 'data/storage/local_storage.dart';
+import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
+import 'ui/app_theme.dart';
 import 'ui/main_layout.dart';
 import 'ui/onboarding/onboarding_flow.dart';
 import 'ui/wake_up_screen.dart';
@@ -53,6 +56,14 @@ const _alarmRoutingChannel = MethodChannel('rostrik/alarm_routing');
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Strict portrait lock. The roster/alarm/review UIs are laid out portrait-
+  // only and overflow (the yellow/black hazard tape) in landscape. Setting
+  // this before runApp means the app never renders rotated. portraitUp only —
+  // not portraitDown — so it can't flip upside-down either.
+  await SystemChrome.setPreferredOrientations(
+    const [DeviceOrientation.portraitUp],
+  );
+
   final storage = await LocalStorage.init();
   // Generic key-value Hive box for app-wide preferences that don't warrant
   // their own typed repository (currently: `snooze_duration` minutes).
@@ -66,23 +77,30 @@ void main() async {
 
   await _requestAlarmPermissions(scheduler);
 
-  // Phase 5 pivot: the shift-driven `AlarmEngine` is replaced by the
-  // alarm-rule-driven `AlarmSyncService`. The service watches the
-  // AppAlarmRepository AND the ShiftCycleRepository, recomputes the
+  // Alarm-rule-driven scheduling. AlarmSyncService watches the AppAlarm,
+  // ShiftCycle, in-horizon Shift, AND AlarmSettings streams, recomputes the
   // desired set of OS alarms on every change (debounced), and lets the
-  // scheduler replace/cancel idempotently. The engine class is kept in
-  // the codebase for now so existing tests (and its concurrency /
-  // debounce harnesses) still pass as documentation; nothing here
-  // constructs it.
+  // scheduler replace/cancel idempotently. (The shift-centric AlarmEngine that
+  // preceded it was deleted once this fully subsumed it.)
   final syncService = AlarmSyncService(
     alarms: storage.alarms,
     shifts: storage.shifts,
     cycles: storage.cycles,
+    alarmSettings: storage.alarmSettings,
     scheduler: scheduler,
     idMap: storage.notificationIds,
     clock: const SystemClock(),
   );
   await syncService.start();
+
+  // Holiday Mode wiring: the engine reads the pause flag fresh on each sync,
+  // but a toggle must IMMEDIATELY re-reconcile — disarm (cancel every pending
+  // OS alarm) when switched on, restore from the untouched roster when off.
+  // Scoped to the pause key so the engine's own scheduled-fire-at writes to
+  // this box don't feed back into a sync loop.
+  Hive.box('settings')
+      .listenable(keys: const <String>[isSchedulePausedKey])
+      .addListener(syncService.syncAlarms);
 
   // Install the dispatcher BEFORE the cold-launch handler runs. The
   // dispatcher captures process-global references (shift repo, scheduler,
@@ -91,6 +109,7 @@ void main() async {
   // and the cold-launch path below find a live dispatcher.
   NotificationActionDispatcher.setup(
     shifts: storage.shifts,
+    alarms: storage.alarms,
     scheduler: scheduler,
     navigatorKey: navigatorKey,
   );
@@ -131,6 +150,8 @@ void main() async {
   runApp(AppProviders(
     storage: storage,
     scheduler: scheduler,
+    // UI display preferences ride the already-opened generic 'settings' box.
+    preferences: AppPreferences(Hive.box('settings')),
     child: const RostrikApp(),
   ));
 
@@ -243,18 +264,14 @@ class RostrikApp extends StatelessWidget {
       // already calibrated for low-light. The `theme:` fallback below
       // is defensive — `themeMode: ThemeMode.dark` always picks
       // `darkTheme:` so the light theme is effectively unreachable.
+      //
+      // The premium pitch-black + high-vis-orange "industrial tool"
+      // identity lives in `rostrikDarkTheme()` — every accent (selection
+      // states, progress, primary buttons) reads from its single orange
+      // seed, so the whole app adopts the look without per-screen edits.
       themeMode: ThemeMode.dark,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: rostrikDarkTheme(),
+      darkTheme: rostrikDarkTheme(),
       // First-launch gate: read the `onboarding_complete` flag from
       // the already-opened `settings` box. On a fresh install the key
       // is absent → default false → render OnboardingFlow. After the
@@ -287,24 +304,20 @@ class RostrikApp extends StatelessWidget {
 /// payload is missing/malformed (in which case we just open the normal
 /// roster).
 ///
-/// Payload contract: `<shiftId-or-'NONE'>|<notificationId>`.
-///   * `shiftId` — a real Shift UUID for followsRotation alarms.
-///   * `'NONE'`  — the sentinel for alarms with no linked shift
-///                 (oneTime today; custom-repeat / bundles later).
-///                 WakeUpScreen renders a generic "Alarm" title in
-///                 this case without querying the ShiftRepository.
-///   * `notificationId` — the OS notification id; parsed as int and
-///                        used by WakeUpScreen to cancel the alarm on
-///                        slide-to-dismiss / snooze.
+/// Decoding is delegated to the shared [AlarmPayload] codec (the single source
+/// of truth for the `<shiftId>|<notificationId>|<dismissCode>|<soundKey>`
+/// contract). A null result (missing / empty shiftId / non-int notificationId)
+/// falls through to the normal roster. `shiftId` may be the `'NONE'` sentinel
+/// for an alarm with no linked shift — WakeUpScreen renders a generic title in
+/// that case without hitting the ShiftRepository. The tone field is irrelevant
+/// to the wake screen (the OS owns the audio) and is ignored here.
 Widget? _parseWakeUpRoute(String? payload) {
-  if (payload == null || payload.isEmpty) return null;
-  final parts = payload.split('|');
-  if (parts.isEmpty || parts[0].isEmpty) return null;
-  // `shiftId` is either a real UUID or the 'NONE' sentinel — both
-  // satisfy the non-empty check above. Validation of the shift's
-  // existence is deferred to WakeUpScreen, which has the repository.
-  final shiftId = parts[0];
-  final notificationId =
-      parts.length > 1 ? int.tryParse(parts[1]) : null;
-  return WakeUpScreen(shiftId: shiftId, notificationId: notificationId);
+  final parsed = AlarmPayload.decode(payload);
+  if (parsed == null) return null;
+  return WakeUpScreen(
+    shiftId: parsed.shiftId,
+    notificationId: parsed.notificationId,
+    isCritical: parsed.isCritical,
+    appAlarmId: parsed.appAlarmId,
+  );
 }

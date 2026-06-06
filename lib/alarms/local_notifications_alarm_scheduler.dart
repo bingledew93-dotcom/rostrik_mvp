@@ -1,11 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'alarm_scheduler.dart';
+import 'alarm_sound.dart';
 import 'notification_action_dispatcher.dart';
 import 'notification_response_handler.dart';
 
@@ -20,45 +25,31 @@ const String alarmNotificationCategoryId = 'rostrik_alarm_category';
 const String actionIdSnooze = 'action_snooze';
 const String actionIdDismiss = 'action_dismiss';
 
-// Channel constants are file-private (leading underscore = library-private
-// in Dart) so both the class and the top-level [buildAlarmNotificationDetails]
-// can reference them without duplication.
+// Channel-per-sound: Android binds a channel's sound IMMUTABLY at creation on
+// API 26+ (`createNotificationChannel` is silently ignored once the ID exists),
+// so a user-selectable tone is impossible to express on a single channel. We
+// instead register ONE channel per bundled tone (`AlarmSound.androidChannelId`)
+// and pick the matching channel at schedule time — see [buildAlarmNotificationDetails].
+// All per-tone channels are nested under one [kAlarmChannelGroupId] group so
+// system Settings shows a single tidy "Shift alarms" header instead of N rows.
 //
-// Channel-ID lineage (each rename was forced by Android's hard cache of
-// channel settings — `createNotificationChannel` is silently ignored when
-// the ID already exists, so any change to importance/sound/vibration/
-// lockscreen-visibility requires a new ID):
+// Legacy channel-ID lineage (each rename was forced by the same immutability —
+// changing importance/sound/vibration/lockscreen-visibility required a fresh
+// ID). All are deleted in `init()` so they don't linger in system Settings:
 //   1. `rostrik_shift_alarms`         — initial channel, default OS sound
-//   2. `rostrik_shift_alarms_silent`  — `playSound: false`, audio handled
-//                                       by FlutterRingtonePlayer in the UI
-//   3. `rostrik_alarms_insistent`     — native OS sound via raw resource
-//                                       + FLAG_INSISTENT so audio loops
-//                                       continuously even when UI can't
-//                                       open (locked, killed). Ringtone
-//                                       player removed.
-//   4. `rostrik_alarms_public`        — CURRENT. Adds public lockscreen
-//                                       visibility so Snooze/Dismiss
-//                                       action buttons render on the
-//                                       lockscreen and the user can
-//                                       dismiss without unlocking.
-//
-// The orphan IDs above are deleted in `init()` so system Settings only
-// shows one "Shift alarms" row. The user-facing NAME stays constant
-// across renames so settings UX is unaffected.
-const String _channelId = 'rostrik_alarms_public';
-const String _channelName = 'Shift alarms';
-const String _channelDescription =
-    'Pre-shift wake-up alarms scheduled by Rostrik.';
-
-/// Raw-resource sound file used by both the channel registration and the
-/// per-notification details. Pointed at `android/app/src/main/res/raw/
-/// classic_alarm.mp3` (Android resolves by name, no extension or path).
-/// Centralised as a single const so the channel and the per-notification
-/// details can't drift — Android resolves sound at the CHANNEL layer on
-/// API 26+, but FLN serialises both, and they MUST match or the snoozed
-/// reschedule path silently degrades to the system default tone.
-const RawResourceAndroidNotificationSound _alarmTrack =
-    RawResourceAndroidNotificationSound('classic_alarm');
+//   2. `rostrik_shift_alarms_silent`  — silent; audio handled in-UI (removed)
+//   3. `rostrik_alarms_insistent`     — raw-resource sound + FLAG_INSISTENT
+//   4. `rostrik_alarms_public`        — single channel, public lockscreen
+//                                       visibility (the pre-tone design this
+//                                       feature replaces — now RETIRED into the
+//                                       cleanup list; its `classic_alarm` sound
+//                                       lives on as the 'classic' tone channel).
+const List<String> _legacyChannelIds = <String>[
+  'rostrik_shift_alarms',
+  'rostrik_shift_alarms_silent',
+  'rostrik_alarms_insistent',
+  'rostrik_alarms_public',
+];
 
 /// Android `Notification.FLAG_INSISTENT` = 4. Setting this on the
 /// notification's flags causes the OS to loop the channel sound and
@@ -69,13 +60,15 @@ const RawResourceAndroidNotificationSound _alarmTrack =
 /// the alarm" case where the previous in-UI ringtone strategy failed.
 const int _flagInsistent = 4;
 
-/// Constructs the [NotificationDetails] used for every Rostrik alarm.
+/// Constructs the [NotificationDetails] for a Rostrik alarm ringing the tone
+/// identified by [soundKey] (an `AlarmSound.key`; unknown keys fall back to the
+/// default via [resolveAlarmSound]).
 ///
 /// Extracted to a top-level function so the main-isolate scheduler AND the
-/// background-isolate snooze handler (Step 5) produce byte-identical
-/// notifications: same channel, same FullScreenIntent, same action buttons,
-/// same iOS category. Without this single source of truth a snoozed alarm
-/// could silently lose its action buttons or full-screen behaviour, which
+/// background-isolate snooze handler produce byte-identical notifications:
+/// same channel selection, same FullScreenIntent, same action buttons, same
+/// iOS category. Without this single source of truth a snoozed alarm could
+/// silently lose its action buttons, full-screen behaviour, or its TONE — which
 /// would only show up in the field.
 ///
 /// Action buttons are configured with:
@@ -87,14 +80,15 @@ const int _flagInsistent = 4;
 ///     `cancelNotification:true` the OS would keep looping the sound
 ///     even after the action handler ran.
 ///
-/// Audio model: the OS is the single source of alarm audio. `playSound:
-/// true` + `sound: _alarmTrack` + `FLAG_INSISTENT` (via `additionalFlags`)
-/// tells Android to loop `res/raw/alarm_track.mp3` on the notification's
-/// audio attributes (alarm category, max importance) until the user
-/// dismisses the notification or `AlarmScheduler.cancel(id)` is called.
-/// This works even when the screen is unlocked but the app is in the
-/// background — the failure mode that motivated this refactor.
-NotificationDetails buildAlarmNotificationDetails() {
+/// Audio model: the OS is the single source of alarm audio. The per-tone
+/// Android channel ([AlarmSound.androidChannelId]) carries the looped sound
+/// (API 26+ resolves sound at the channel layer); `playSound: true` +
+/// `sound:` + `FLAG_INSISTENT` are mirrored on the details for pre-O fallback
+/// and serialisation symmetry. On iOS the tone is the per-notification
+/// `sound:` filename, resolved from `Library/Sounds/` (see
+/// [installIosNotificationSounds]).
+NotificationDetails buildAlarmNotificationDetails(String soundKey) {
+  final sound = resolveAlarmSound(soundKey);
   // The Snooze action button title reflects the user's current snooze
   // duration so the lock-screen affordance matches what'll actually
   // happen. Read at SCHEDULE time (this function runs once per scheduled
@@ -106,15 +100,16 @@ NotificationDetails buildAlarmNotificationDetails() {
   final int snoozeMins =
       Hive.box('settings').get('snooze_duration', defaultValue: 1) as int;
   final androidDetails = AndroidNotificationDetails(
-    _channelId,
-    _channelName,
-    channelDescription: _channelDescription,
+    // Per-tone channel — the sound is bound here, immutably, by `init()`.
+    sound.androidChannelId,
+    sound.label,
+    channelDescription: kAlarmChannelGroupDescription,
     importance: Importance.max,
     priority: Priority.max,
     category: AndroidNotificationCategory.alarm,
     fullScreenIntent: true,
     playSound: true,
-    sound: _alarmTrack,
+    sound: RawResourceAndroidNotificationSound(sound.androidResource),
     // FLAG_INSISTENT (4) makes the channel sound and vibration LOOP
     // until the notification is dismissed. `Int32List.fromList` is the
     // wire type FLN's platform channel expects; the bare `<int>[4]`
@@ -145,14 +140,55 @@ NotificationDetails buildAlarmNotificationDetails() {
     ],
   );
 
-  const iosDetails = DarwinNotificationDetails(
+  final iosDetails = DarwinNotificationDetails(
     presentAlert: true,
     presentSound: true,
+    // iOS resolves this filename in the app bundle AND Library/Sounds/ — the
+    // latter is populated at startup by [installIosNotificationSounds], so no
+    // Xcode bundle membership is required.
+    sound: sound.iosSoundName,
     interruptionLevel: InterruptionLevel.timeSensitive,
     categoryIdentifier: alarmNotificationCategoryId,
   );
 
   return NotificationDetails(android: androidDetails, iOS: iosDetails);
+}
+
+/// Copies each bundled tone WAV from Flutter assets into the iOS app
+/// container's `Library/Sounds/` directory, where `UNNotificationSound(named:)`
+/// resolves notification sounds by filename. This is what lets
+/// `DarwinNotificationDetails(sound: '<key>.wav')` work WITHOUT adding the
+/// files to the Xcode/Runner bundle — critical for a Windows-only dev box.
+///
+/// No-op on every non-iOS platform (Android plays from `res/raw`). Idempotent:
+/// each file is copied only if absent, so the cost after first launch is a few
+/// `existsSync` checks. (A bundled-audio change in a future release would need
+/// a forced refresh — e.g. keyed on app version — but the tone set is fixed for
+/// the beta.) Best-effort per file: a missing/unreadable asset is logged and
+/// skipped so one bad tone can't abort startup or the other tones.
+Future<void> installIosNotificationSounds() async {
+  if (!Platform.isIOS) return;
+
+  final libraryDir = await getLibraryDirectory();
+  final soundsDir = Directory('${libraryDir.path}/Sounds');
+  if (!soundsDir.existsSync()) {
+    soundsDir.createSync(recursive: true);
+  }
+
+  for (final sound in kAlarmSounds) {
+    final dest = File('${soundsDir.path}/${sound.iosSoundName}');
+    if (dest.existsSync()) continue;
+    try {
+      final data = await rootBundle.load(sound.assetPath);
+      await dest.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        flush: true,
+      );
+      debugPrint('[ios-sounds] installed ${sound.iosSoundName}');
+    } catch (e) {
+      debugPrint('[ios-sounds] skipped ${sound.assetPath}: $e');
+    }
+  }
 }
 
 /// Foreground notification-response callback. Runs in the main Dart isolate
@@ -279,49 +315,66 @@ class LocalNotificationsAlarmScheduler implements AlarmScheduler {
     final androidImpl = plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     if (androidImpl != null) {
-      // Clean up orphan channels from the lineage documented at the top
-      // of this file. `deleteNotificationChannel` is idempotent — no-op
-      // if the legacy channel never existed (fresh installs) — and a
-      // one-shot delete on upgraded installs. Without this the user
-      // would see multiple identical "Shift alarms" rows in system
-      // Settings, each backed by a different (now-stale) sound config.
-      await androidImpl
-          .deleteNotificationChannel(channelId: 'rostrik_shift_alarms');
-      await androidImpl
-          .deleteNotificationChannel(channelId: 'rostrik_shift_alarms_silent');
-      await androidImpl
-          .deleteNotificationChannel(channelId: 'rostrik_alarms_insistent');
+      await _registerAndroidChannels(androidImpl);
+    }
 
-      // Channel-level sound + lockscreen visibility are the actual
-      // switches — Android resolves sound, importance, vibration, AND
-      // lockscreen content gating at the channel layer on API 26+ and
-      // ignores per-notification overrides that disagree. The matching
-      // values in [buildAlarmNotificationDetails] are kept for symmetry
-      // (pre-O fallback + serialisation safety).
-      // NOTE: FLN v21's `AndroidNotificationChannel` does NOT expose a
-      // lockscreen-visibility constructor parameter (verified against
-      // package source — the param set is limited to importance, sound,
-      // vibration, lights, badge, audioAttributesUsage). The channel
-      // therefore inherits the OS default, and the per-notification
-      // `visibility: NotificationVisibility.public` flag in
-      // [buildAlarmNotificationDetails] is what actually surfaces the
-      // Snooze/Dismiss action buttons on the lockscreen. If a future
-      // FLN release adds a channel-level visibility setter, mirror it
-      // here for consistency.
+    // iOS only: copy the bundled WAV assets into Library/Sounds so
+    // DarwinNotificationDetails(sound:) can resolve them. No-op elsewhere.
+    await installIosNotificationSounds();
+
+    return LocalNotificationsAlarmScheduler._(plugin);
+  }
+
+  /// Registers the channel-per-sound topology and prunes the legacy single
+  /// channels. `deleteNotificationChannel` / `createNotificationChannel` /
+  /// `createNotificationChannelGroup` are all idempotent — a no-op on a fresh
+  /// install and a one-shot reconcile on upgraded installs.
+  static Future<void> _registerAndroidChannels(
+    AndroidFlutterLocalNotificationsPlugin androidImpl,
+  ) async {
+    // Retire every legacy single-channel id (see `_legacyChannelIds`) so system
+    // Settings doesn't show stale "Shift alarms" rows alongside the new
+    // per-tone group. Idempotent if the channel never existed.
+    for (final id in _legacyChannelIds) {
+      await androidImpl.deleteNotificationChannel(channelId: id);
+    }
+
+    // One group nests all per-tone channels under a single header.
+    await androidImpl.createNotificationChannelGroup(
+      const AndroidNotificationChannelGroup(
+        kAlarmChannelGroupId,
+        kAlarmChannelGroupName,
+        description: kAlarmChannelGroupDescription,
+      ),
+    );
+
+    // One channel per tone — the sound is bound HERE, immutably (API 26+
+    // resolves sound at the channel layer and ignores per-notification
+    // overrides that disagree, so the matching `sound:` in
+    // [buildAlarmNotificationDetails] is pre-O fallback + serialisation
+    // symmetry). `createNotificationChannel` is silently ignored if the id
+    // already exists, so a tone's sound is effectively write-once — adding a
+    // NEW tone is fine, but CHANGING an existing tone's audio requires a new
+    // channel id (the same discipline that produced `_legacyChannelIds`).
+    //
+    // NOTE: FLN's `AndroidNotificationChannel` exposes no lockscreen-visibility
+    // param; the per-notification `visibility: NotificationVisibility.public`
+    // in [buildAlarmNotificationDetails] surfaces the action buttons on the
+    // lockscreen instead.
+    for (final s in kAlarmSounds) {
       await androidImpl.createNotificationChannel(
-        const AndroidNotificationChannel(
-          _channelId,
-          _channelName,
-          description: _channelDescription,
+        AndroidNotificationChannel(
+          s.androidChannelId,
+          s.label,
+          description: kAlarmChannelGroupDescription,
+          groupId: kAlarmChannelGroupId,
           importance: Importance.max,
           playSound: true,
-          sound: _alarmTrack,
+          sound: RawResourceAndroidNotificationSound(s.androidResource),
           enableVibration: true,
         ),
       );
     }
-
-    return LocalNotificationsAlarmScheduler._(plugin);
   }
 
   /// Asks the OS for notification + exact-alarm permission. Idempotent —
@@ -352,6 +405,7 @@ class LocalNotificationsAlarmScheduler implements AlarmScheduler {
     required DateTime fireAt,
     required String title,
     required String body,
+    required String soundKey,
     String? payload,
   }) async {
     final tzFireAt = tz.TZDateTime.from(fireAt, tz.local);
@@ -360,7 +414,7 @@ class LocalNotificationsAlarmScheduler implements AlarmScheduler {
       '[Scheduler.scheduleAt] id=$id '
       'fireAt=$fireAt → tz=$tzFireAt '
       '(zone=${tz.local.name}) '
-      'title="$title" body="$body" payload="$payload"',
+      'title="$title" body="$body" sound="$soundKey" payload="$payload"',
     );
 
     // zonedSchedule replaces an existing notification with the same id —
@@ -379,7 +433,7 @@ class LocalNotificationsAlarmScheduler implements AlarmScheduler {
       title: title,
       body: body,
       scheduledDate: tzFireAt,
-      notificationDetails: buildAlarmNotificationDetails(),
+      notificationDetails: buildAlarmNotificationDetails(soundKey),
       androidScheduleMode: AndroidScheduleMode.alarmClock,
       payload: payload,
     );

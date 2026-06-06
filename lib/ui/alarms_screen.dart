@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
+import '../data/models/shift.dart';
+import '../data/models/shift_type.dart';
 import '../data/repositories/app_alarm_repository.dart';
+import '../state/app_preferences.dart';
+import 'alarm_time_projection.dart';
 import 'create_alarm_sheet.dart';
 import 'shift_format.dart';
 
@@ -19,6 +24,13 @@ class AlarmsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final alarms = context.watch<List<AppAlarm>>();
+    // The global lead time is the fallback offset for a follows-rotation card
+    // that has no per-alarm override. Provided by AppProviders; same source the
+    // engine uses.
+    final globalLeadMinutes = context.watch<AlarmSettings>().leadTime.inMinutes;
+    // Roster shifts (streamed app-wide) let each card show the REAL firing
+    // clock time for its linked shift type, not the bare offset.
+    final shifts = context.watch<List<Shift>>();
     return Scaffold(
       appBar: AppBar(title: const Text('Alarms')),
       // SafeArea(top: false) — AppBar already consumes the status-bar
@@ -28,7 +40,11 @@ class AlarmsScreen extends StatelessWidget {
         top: false,
         child: alarms.isEmpty
             ? const _EmptyState()
-            : _AlarmList(alarms: alarms),
+            : _AlarmList(
+                alarms: alarms,
+                globalLeadMinutes: globalLeadMinutes,
+                shifts: shifts,
+              ),
       ),
       floatingActionButton: FloatingActionButton(
         key: const ValueKey('alarms-add-fab'),
@@ -80,9 +96,15 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _AlarmList extends StatelessWidget {
-  const _AlarmList({required this.alarms});
+  const _AlarmList({
+    required this.alarms,
+    required this.globalLeadMinutes,
+    required this.shifts,
+  });
 
   final List<AppAlarm> alarms;
+  final int globalLeadMinutes;
+  final List<Shift> shifts;
 
   @override
   Widget build(BuildContext context) {
@@ -97,15 +119,24 @@ class _AlarmList extends StatelessWidget {
       itemBuilder: (_, i) => _AlarmCard(
         key: ValueKey('alarm-card-${sorted[i].id}'),
         alarm: sorted[i],
+        globalLeadMinutes: globalLeadMinutes,
+        shifts: shifts,
       ),
     );
   }
 }
 
 class _AlarmCard extends StatefulWidget {
-  const _AlarmCard({super.key, required this.alarm});
+  const _AlarmCard({
+    super.key,
+    required this.alarm,
+    required this.globalLeadMinutes,
+    required this.shifts,
+  });
 
   final AppAlarm alarm;
+  final int globalLeadMinutes;
+  final List<Shift> shifts;
 
   @override
   State<_AlarmCard> createState() => _AlarmCardState();
@@ -151,38 +182,55 @@ class _AlarmCardState extends State<_AlarmCard> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // Tapping the card body slides up the create/edit sheet pre-populated
+        // with this alarm. The Switch and delete button are separate siblings
+        // below, so their gestures never collide with this tap target.
         Expanded(
-          child: Opacity(
-            opacity: fadedWhenOff,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  formatHhmm(alarm.minutesOfDay),
-                  style: theme.textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    height: 1,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+          child: InkWell(
+            key: ValueKey('alarm-card-tap-${alarm.id}'),
+            onTap: () => showCreateAlarmSheet(context, initial: alarm),
+            borderRadius: BorderRadius.circular(8),
+            child: Opacity(
+              opacity: fadedWhenOff,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _alarmHeadline(
+                      alarm,
+                      widget.shifts,
+                      widget.globalLeadMinutes,
+                      AppPreferences.use24HourOf(context),
+                    ),
+                    style: theme.textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  alarm.label,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 6),
+                  Text(
+                    alarm.label,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _repeatLabel(alarm.repeatType),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 2),
+                  Text(
+                    _alarmDetailLine(alarm, widget.globalLeadMinutes),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -318,14 +366,50 @@ class _SlideToConfirmDeleteState extends State<_SlideToConfirmDelete> {
   }
 }
 
-/// Display copy for the [AppAlarmRepeatType] enum. Kept in the UI layer
-/// so the model file stays data-only — the user can re-word these
-/// strings without touching the persistence schema.
-String _repeatLabel(AppAlarmRepeatType type) {
-  switch (type) {
-    case AppAlarmRepeatType.followsRotation:
-      return 'Follows your rotation';
-    case AppAlarmRepeatType.oneTime:
-      return 'Rings one time only';
+/// Card headline — the calculated FIRING CLOCK TIME (AM/PM), the hero. One-time
+/// alarms ring at their absolute time; follows-rotation alarms ring at the
+/// linked shift's start (read from [shifts], default-fallback otherwise) minus
+/// the lead (per-alarm override, else [globalLeadMinutes]). The offset moves to
+/// [_alarmDetailLine].
+String _alarmHeadline(
+  AppAlarm a,
+  List<Shift> shifts,
+  int globalLeadMinutes,
+  bool use24Hour,
+) {
+  // oneTime and weekly both ring at their absolute picked clock time.
+  if (a.repeatType == AppAlarmRepeatType.oneTime ||
+      a.repeatType == AppAlarmRepeatType.weekly) {
+    return formatClock(a.minutesOfDay, use24Hour: use24Hour);
   }
+  final lead = a.relativeOffsetMinutes ?? globalLeadMinutes;
+  // linkedShiftType is non-null for any alarm created via the sheet; a stray
+  // null (invalid config, never scheduled) falls back to a Day anchor so the
+  // card still renders a clock rather than crashing.
+  final type = a.linkedShiftType ?? ShiftType.day;
+  final shiftStart =
+      resolveShiftStartMinutes(shifts, type, now: DateTime.now());
+  return formatClock(fireClockMinutes(shiftStart, lead), use24Hour: use24Hour);
+}
+
+/// Card detail line — the demoted offset label, e.g. "1h 30m before Day
+/// shifts". For an alarm on the global default, a "· default" marker signals
+/// the offset tracks the Settings value. One-time alarms keep a simple
+/// descriptor.
+String _alarmDetailLine(AppAlarm a, int globalLeadMinutes) {
+  if (a.repeatType == AppAlarmRepeatType.oneTime) {
+    return a.autoDeleteAfterFiring
+        ? 'Rings once · auto-deletes'
+        : 'Rings one time only';
+  }
+  if (a.repeatType == AppAlarmRepeatType.weekly) {
+    return formatWeekdays(a.weekdaysBitmask);
+  }
+  final shift = a.linkedShiftType == null
+      ? 'your shift'
+      : '${shiftTypeLabel(a.linkedShiftType!)} shifts';
+  if (a.relativeOffsetMinutes == null) {
+    return '${formatLeadOffset(globalLeadMinutes)} before $shift · default';
+  }
+  return '${formatLeadOffset(a.relativeOffsetMinutes!)} before $shift';
 }

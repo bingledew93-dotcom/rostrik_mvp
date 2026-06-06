@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../data/models/shift_type.dart';
 import '../logic/rotation_pattern_validator.dart';
 import '../logic/shift_generator.dart';
+import '../state/app_preferences.dart';
 import 'shift_format.dart';
 
 /// Bulk roster generator. Picks a pattern (start/end time + type) and a
@@ -137,12 +138,18 @@ class _TemplateScreenState extends State<TemplateScreen> {
 
           _PickerRow(
             label: 'Starts',
-            valueLabel: formatTimeOfDay(_startTime),
+            valueLabel: formatClockOfDay(
+              _startTime,
+              use24Hour: AppPreferences.use24HourOf(context),
+            ),
             onPressed: _pickStartTime,
           ),
           _PickerRow(
             label: 'Ends',
-            valueLabel: formatTimeOfDay(_endTime),
+            valueLabel: formatClockOfDay(
+              _endTime,
+              use24Hour: AppPreferences.use24HourOf(context),
+            ),
             onPressed: _pickEndTime,
           ),
           if (_isOvernight)

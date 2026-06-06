@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/shift_type.dart';
+import '../roster/shift_visuals.dart';
+import 'onboarding_progress.dart';
 import 'onboarding_state.dart';
 
 /// Step 3 of onboarding. 2×2 grid of roster types.
@@ -39,6 +42,7 @@ class RosterTypeScreen extends StatelessWidget {
           onPressed: onBack,
         ),
         title: const Text('Choose a roster type'),
+        bottom: const OnboardingProgressBar(step: 1),
       ),
       body: SafeArea(
         top: false,
@@ -64,10 +68,14 @@ class RosterTypeScreen extends StatelessWidget {
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.0,
                 children: [
+                  // Cards are colour-coded by shift type so a user can ID a
+                  // roster at a glance — the same palette the calendar and
+                  // timeline use (`visualFor`): Day = amber, Night = indigo.
                   _RosterTypeCard(
                     icon: Icons.wb_sunny_outlined,
                     label: 'Day Shifts',
                     enabled: true,
+                    accent: visualFor(ShiftType.day).color,
                     selected: selected == RosterType.day,
                     onTap: () => onSelect(RosterType.day),
                   ),
@@ -75,6 +83,7 @@ class RosterTypeScreen extends StatelessWidget {
                     icon: Icons.nightlight_outlined,
                     label: 'Night Shifts',
                     enabled: true,
+                    accent: visualFor(ShiftType.night).color,
                     selected: selected == RosterType.night,
                     onTap: () => onSelect(RosterType.night),
                   ),
@@ -82,6 +91,13 @@ class RosterTypeScreen extends StatelessWidget {
                     icon: Icons.sync_outlined,
                     label: 'Rotating',
                     enabled: true,
+                    // Rotating mixes Day + Night, so its accent alternates the
+                    // two via a gradient.
+                    accent: visualFor(ShiftType.day).color,
+                    accentGradient: [
+                      visualFor(ShiftType.day).color,
+                      visualFor(ShiftType.night).color,
+                    ],
                     selected: selected == RosterType.rotating,
                     onTap: () => onSelect(RosterType.rotating),
                   ),
@@ -89,6 +105,8 @@ class RosterTypeScreen extends StatelessWidget {
                     icon: Icons.tune_outlined,
                     label: 'Custom',
                     enabled: true,
+                    // Custom isn't a shift type — keep the brand accent.
+                    accent: theme.colorScheme.primary,
                     // Custom is action-on-tap, not selection. It never
                     // sets `selected = RosterType.custom`; tapping
                     // pushes the builder via the flow controller.
@@ -138,6 +156,8 @@ class _RosterTypeCard extends StatelessWidget {
     required this.label,
     required this.enabled,
     required this.onTap,
+    required this.accent,
+    this.accentGradient,
     this.selected = false,
   });
 
@@ -147,13 +167,30 @@ class _RosterTypeCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Shift-type colour for this card (the selected border + icon tint).
+  final Color accent;
+
+  /// When set (Rotating), the icon is painted with this gradient instead of a
+  /// flat [accent] — conveying that the roster mixes shift types.
+  final List<Color>? accentGradient;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final borderColour = selected
-        ? theme.colorScheme.primary
-        : theme.colorScheme.outlineVariant;
+    final borderColour =
+        selected ? accent : theme.colorScheme.outlineVariant;
     final borderWidth = selected ? 2.5 : 1.0;
+    final gradient = accentGradient;
+    final iconWidget = gradient == null
+        ? Icon(icon, size: 40, color: accent)
+        : ShaderMask(
+            shaderCallback: (rect) => LinearGradient(
+              colors: gradient,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ).createShader(rect),
+            child: Icon(icon, size: 40, color: Colors.white),
+          );
     return Opacity(
       opacity: enabled ? 1.0 : 0.55,
       child: Card(
@@ -171,11 +208,7 @@ class _RosterTypeCard extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      icon,
-                      size: 40,
-                      color: theme.colorScheme.primary,
-                    ),
+                    iconWidget,
                     const SizedBox(height: 12),
                     Text(
                       label,

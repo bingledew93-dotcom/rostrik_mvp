@@ -14,6 +14,7 @@ import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
 import '../logic/cycle_service.dart';
 import '../logic/shift_generator.dart';
+import 'app_preferences.dart';
 
 /// Root-level provider tree. Sits between LocalStorage (constructed in
 /// main()) and the widget tree. UI never imports Hive — it reads/writes
@@ -32,11 +33,13 @@ class AppProviders extends StatelessWidget {
     super.key,
     required this.storage,
     required this.scheduler,
+    required this.preferences,
     required this.child,
   });
 
   final LocalStorage storage;
   final AlarmScheduler scheduler;
+  final AppPreferences preferences;
   final Widget child;
 
   // Generous symmetric window around app-start `now`. Wide enough that
@@ -48,6 +51,10 @@ class AppProviders extends StatelessWidget {
     final now = DateTime.now();
     return MultiProvider(
       providers: [
+        // The storage facade itself — exposed so the Settings "Reset App Data"
+        // action can wipe every box in one call. UI still reads/writes day-to-
+        // day data through the repositories below, not this.
+        Provider<LocalStorage>.value(value: storage),
         Provider<ShiftRepository>.value(value: storage.shifts),
         Provider<ShiftCycleRepository>.value(value: storage.cycles),
         Provider<AppAlarmRepository>.value(value: storage.alarms),
@@ -99,6 +106,11 @@ class AppProviders extends StatelessWidget {
           create: (_) => storage.alarmSettings.watch(),
           initialData: AlarmSettings.defaults,
         ),
+        // UI-only display preferences (clock format, calendar week-start),
+        // backed by the generic 'settings' Hive box. Constructed in main()
+        // (which owns the box) and provided by value so this tree never
+        // disposes it. Reactive: a Settings toggle write notifies watchers.
+        ChangeNotifierProvider<AppPreferences>.value(value: preferences),
       ],
       child: child,
     );

@@ -1,5 +1,6 @@
 import 'package:hive_ce/hive.dart';
 
+import '../../alarms/alarm_sound.dart';
 import 'shift_type.dart';
 
 part 'app_alarm.g.dart';
@@ -7,29 +8,45 @@ part 'app_alarm.g.dart';
 /// How an [AppAlarm] repeats. Display strings live in the UI layer
 /// (`alarms_screen.dart`) — this enum is data-only.
 ///
-/// The full semantics (which calendar dates each variant resolves to,
-/// how `followsRotation` binds to a `ShiftCycle`) are intentionally
-/// out of scope this phase. The "complex bundle logic" — actually
-/// scheduling alarms from these rules — lands in the next phase. For
-/// now the AlarmsScreen reads, displays, and toggles `enabled`, and
-/// nothing downstream consumes [AppAlarm]; the engine still operates
-/// on per-shift alarms derived from the shift box.
+///   * [followsRotation] — fires before every matching shift in the roster
+///     (one OS alarm per shift inside the scheduling horizon). The lead time is
+///     either the global [AlarmSettings.leadTime] or this alarm's
+///     [AppAlarm.relativeOffsetMinutes] override.
+///   * [weekly] — fires at the absolute [AppAlarm.minutesOfDay] on each ISO
+///     weekday selected in [AppAlarm.weekdaysBitmask]. Independent of the
+///     roster — a standard "every Mon/Wed/Fri at 06:30" recurring alarm. The
+///     sync service materialises one OS alarm per due weekday inside the
+///     scheduling horizon (the native background re-sync rolls the window
+///     forward), so it has no native-repeat dependency and fires the same way
+///     from a killed state as every other alarm.
+///   * [oneTime] — fires once at the next future occurrence of
+///     [AppAlarm.minutesOfDay].
+///
+/// `AlarmSyncService` is the live consumer of these rules; it reconciles them
+/// into the OS pending set on every alarm / roster / settings change.
 @HiveType(typeId: 5)
 enum AppAlarmRepeatType {
   @HiveField(0)
   followsRotation,
   @HiveField(1)
   oneTime,
+  @HiveField(2)
+  weekly,
 }
 
-/// User-defined alarm rule. Separate from the per-shift alarms the
-/// engine schedules — this is the durable "I want a 06:00 wake-up"
-/// concept, eventually bound to a `ShiftCycle` (via `followsRotation`)
-/// or a single date (via `oneTime`).
+/// User-defined alarm rule, persisted in the `alarms` Hive box keyed by [id]
+/// and consumed by `AlarmSyncService` to drive OS alarm scheduling.
 ///
-/// Lifetime: created on the AlarmsScreen, edited via toggle / future
-/// edit flow, deleted via swipe-or-button. Persisted in the `alarms`
-/// Hive box keyed by [id].
+/// Lifetime: created on the AlarmsScreen, edited via the create/edit sheet,
+/// deleted via swipe-or-button.
+///
+/// **Lead-time model (followsRotation):** an alarm NEVER fires at an absolute
+/// clock time — the whole point is that it tracks the shift start, so an exact
+/// time that can't adapt when the shift moves is an anti-pattern. Instead the
+/// fire time is `shiftStart − leadTime`, where `leadTime` is:
+///   * the per-alarm [relativeOffsetMinutes] when it is set (an OVERRIDE), or
+///   * the global [AlarmSettings.leadTime] when [relativeOffsetMinutes] is null
+///     (the PRIMARY default — the single source of truth for standard alarms).
 @HiveType(typeId: 6)
 class AppAlarm {
   AppAlarm({
@@ -39,24 +56,28 @@ class AppAlarm {
     required this.repeatType,
     this.enabled = true,
     this.linkedShiftType,
-    this.isRelativeTime = false,
-    this.relativeOffsetMinutes = 90,
+    this.relativeOffsetMinutes,
+    this.isCriticalShift = false,
+    this.soundKey = kDefaultAlarmSoundKey,
+    this.weekdaysBitmask = 0,
+    this.autoDeleteAfterFiring = false,
   })  : assert(
           minutesOfDay >= 0 && minutesOfDay < 1440,
           'minutesOfDay must be 0..1439',
         ),
         assert(
-          relativeOffsetMinutes > 0,
-          'relativeOffsetMinutes must be positive — a zero/negative offset '
-          'would fire at or after the shift starts, defeating the purpose',
+          relativeOffsetMinutes == null || relativeOffsetMinutes > 0,
+          'relativeOffsetMinutes, when set, must be positive — a zero/negative '
+          'offset would fire at or after the shift starts, defeating the point',
         );
 
   @HiveField(0)
   final String id;
 
-  /// Minute-of-day for the alarm to ring (0..1439). Same shape that
-  /// `Shift.startMinutes` uses, so existing format helpers
-  /// (`formatHhmm`) work without conversion.
+  /// Minute-of-day (0..1439). Only meaningful for [AppAlarmRepeatType.oneTime]
+  /// — the absolute time it rings. Ignored for followsRotation alarms, which
+  /// always fire relative to the shift start (see the class-level lead-time
+  /// model). Kept the same shape as `Shift.startMinutes` so `formatHhmm` works.
   @HiveField(1)
   final int minutesOfDay;
 
@@ -68,52 +89,83 @@ class AppAlarm {
   final AppAlarmRepeatType repeatType;
 
   /// Toggled by the Switch on each card in `AlarmsScreen`. When false
-  /// `AlarmSyncService` skips this alarm during its desired-set
-  /// computation, and the next sync cancels any pending OS notifications
-  /// for it.
+  /// `AlarmSyncService` skips this alarm during its desired-set computation,
+  /// and the next sync cancels any pending OS notifications for it.
   @HiveField(4)
   final bool enabled;
 
-  /// Which shift type this alarm rings before. Only meaningful when
-  /// `repeatType == followsRotation` — `oneTime` alarms ignore it.
-  /// `null` for one-time alarms AND for legacy records (no migration
-  /// needed; the field's absence reads back as null).
-  ///
-  /// `AlarmSyncService` filters the next 30 days of shifts by this
-  /// type and emits one OS alarm per matching shift at the alarm's
-  /// `minutesOfDay` on that shift's date.
+  /// Which shift type a followsRotation alarm rings before. `null` for oneTime
+  /// alarms (and legacy records — the field's absence reads back as null). A
+  /// followsRotation alarm with a `null` link is invalid config and is skipped.
   @HiveField(5)
   final ShiftType? linkedShiftType;
 
-  /// "Time before shift" mode for follows-rotation alarms.
-  ///
-  ///   * `false` (default, exact-time): the OS alarm fires at
-  ///     `shift.date + minutesOfDay`. This is the simple "wake me up
-  ///     at 06:00 on every Day shift" case.
-  ///   * `true` (relative): the OS alarm fires at
-  ///     `shift.startDateTime - relativeOffsetMinutes`. Lets the user
-  ///     say "wake me up 90 minutes before any Day shift starts"
-  ///     without manually re-computing the alarm time for every
-  ///     shift-start variation across a custom roster.
-  ///
-  /// Ignored for `oneTime` alarms (those are inherently exact).
-  /// `false` is the default so the simpler mental model is the path
-  /// of least resistance; existing records pre-dating this field read
-  /// back as `false` via the adapter's `defaultValue`.
-  @HiveField(6, defaultValue: false)
-  final bool isRelativeTime;
+  // HiveField(6) was `isRelativeTime` — removed in the lead-time rewire that
+  // made followsRotation alarms always-relative. The field number is RETIRED,
+  // not reused: any record still carrying field 6 is simply ignored on read.
 
-  /// Minutes before `shift.startDateTime` to fire when [isRelativeTime]
-  /// is `true`. Default 90 (1h 30m) — a typical "shower, eat, commute"
-  /// runway for a Day-shift worker. Existing records pre-dating this
-  /// field read back as 90 via the adapter's `defaultValue`.
-  @HiveField(7, defaultValue: 90)
-  final int relativeOffsetMinutes;
+  /// Per-alarm lead-time OVERRIDE for followsRotation alarms — minutes before
+  /// the shift start to fire.
+  ///
+  ///   * `null` (default) → use the global [AlarmSettings.leadTime]. This is the
+  ///     primary path; the global setting is the single source of truth for
+  ///     standard shift alarms.
+  ///   * a positive value → override the global lead time for THIS alarm only
+  ///     (e.g. "wake me 90 min before Night shifts, but use the default for the
+  ///     rest").
+  ///
+  /// Ignored for oneTime alarms. Legacy records that stored the old non-null
+  /// default read back as that value — i.e. they become explicit overrides,
+  /// which is the correct migration now that exact-time mode is gone.
+  @HiveField(7)
+  final int? relativeOffsetMinutes;
 
-  /// `clearLinkedShiftType: true` lets a caller swap a `followsRotation`
-  /// alarm back to `oneTime` without leaving a stale `linkedShiftType`
-  /// behind — without it, passing `linkedShiftType: null` in copyWith
-  /// would be indistinguishable from "leave unchanged".
+  /// "Critical shift" wake mechanics. When true the wake-up screen requires a
+  /// sustained physical shake to dismiss, with a continuous 3-second hold as a
+  /// fail-safe — a guard against a half-asleep swipe silencing a must-not-miss
+  /// alarm. When false the normal slide-to-dismiss applies. Legacy records read
+  /// back `false`.
+  @HiveField(8, defaultValue: false)
+  final bool isCriticalShift;
+
+  /// Which bundled tone this alarm rings — an [AlarmSound.key] (e.g.
+  /// `'classic'`, `'siren'`). The OS owns alarm audio, so this only selects
+  /// which Android notification channel / iOS sound file the scheduler points
+  /// the firing notification at; it never plays audio in-process.
+  ///
+  /// Defaults to [kDefaultAlarmSoundKey]. Legacy records (no field 9) read back
+  /// the default via the adapter, and any unknown key resolves to the default
+  /// at scheduling time (see [resolveAlarmSound]), so a tone removed in a
+  /// future build can never strand an old alarm.
+  @HiveField(9, defaultValue: kDefaultAlarmSoundKey)
+  final String soundKey;
+
+  /// Selected ISO weekdays for a [AppAlarmRepeatType.weekly] alarm, packed as a
+  /// bitmask: bit `(weekday - 1)` set means that weekday is on
+  /// (`DateTime.monday == 1` → bit 0 … `DateTime.sunday == 7` → bit 6). `0`
+  /// means no day selected — the default, and what every legacy record (no
+  /// field 10) reads back as, so non-weekly alarms simply ignore it. A scalar
+  /// int (rather than a `List<int>`) keeps the Hive default trivially safe and
+  /// matches the existing scalar-default convention on this class. Conversions
+  /// to/from a `Set<int>` live in `lib/util/weekday_mask.dart`.
+  @HiveField(10, defaultValue: 0)
+  final int weekdaysBitmask;
+
+  /// When true, the alarm record is permanently deleted from Hive the instant
+  /// the user dismisses it — instead of lingering as a fired, stale config.
+  /// Only meaningful for (and only ever set on) [AppAlarmRepeatType.oneTime]
+  /// alarms; the create/edit sheet exposes the toggle for one-time only. The
+  /// dismiss handlers (in-app wake screen, foreground dispatcher, killed-app
+  /// background isolate) consult [shouldAutoDeleteOnDismiss] and delete via the
+  /// `appAlarmId` carried in the notification payload. Legacy records (no field
+  /// 11) read back `false`.
+  @HiveField(11, defaultValue: false)
+  final bool autoDeleteAfterFiring;
+
+  /// `clearLinkedShiftType` / `clearRelativeOffset` let a caller reset a field
+  /// back to `null` — without them, passing `null` is indistinguishable from
+  /// "leave unchanged". `clearRelativeOffset` is how the create/edit sheet
+  /// switches an alarm from a custom override back to the global default.
   AppAlarm copyWith({
     String? id,
     int? minutesOfDay,
@@ -122,8 +174,12 @@ class AppAlarm {
     bool? enabled,
     ShiftType? linkedShiftType,
     bool clearLinkedShiftType = false,
-    bool? isRelativeTime,
     int? relativeOffsetMinutes,
+    bool clearRelativeOffset = false,
+    bool? isCriticalShift,
+    String? soundKey,
+    int? weekdaysBitmask,
+    bool? autoDeleteAfterFiring,
   }) =>
       AppAlarm(
         id: id ?? this.id,
@@ -134,9 +190,14 @@ class AppAlarm {
         linkedShiftType: clearLinkedShiftType
             ? null
             : (linkedShiftType ?? this.linkedShiftType),
-        isRelativeTime: isRelativeTime ?? this.isRelativeTime,
-        relativeOffsetMinutes:
-            relativeOffsetMinutes ?? this.relativeOffsetMinutes,
+        relativeOffsetMinutes: clearRelativeOffset
+            ? null
+            : (relativeOffsetMinutes ?? this.relativeOffsetMinutes),
+        isCriticalShift: isCriticalShift ?? this.isCriticalShift,
+        soundKey: soundKey ?? this.soundKey,
+        weekdaysBitmask: weekdaysBitmask ?? this.weekdaysBitmask,
+        autoDeleteAfterFiring:
+            autoDeleteAfterFiring ?? this.autoDeleteAfterFiring,
       );
 
   @override
@@ -150,8 +211,11 @@ class AppAlarm {
           repeatType == other.repeatType &&
           enabled == other.enabled &&
           linkedShiftType == other.linkedShiftType &&
-          isRelativeTime == other.isRelativeTime &&
-          relativeOffsetMinutes == other.relativeOffsetMinutes;
+          relativeOffsetMinutes == other.relativeOffsetMinutes &&
+          isCriticalShift == other.isCriticalShift &&
+          soundKey == other.soundKey &&
+          weekdaysBitmask == other.weekdaysBitmask &&
+          autoDeleteAfterFiring == other.autoDeleteAfterFiring;
 
   @override
   int get hashCode => Object.hash(
@@ -161,8 +225,11 @@ class AppAlarm {
         repeatType,
         enabled,
         linkedShiftType,
-        isRelativeTime,
         relativeOffsetMinutes,
+        isCriticalShift,
+        soundKey,
+        weekdaysBitmask,
+        autoDeleteAfterFiring,
       );
 
   @override
@@ -170,6 +237,20 @@ class AppAlarm {
       'AppAlarm(id: $id, time: $minutesOfDay, label: "$label", '
       'repeat: $repeatType, enabled: $enabled, '
       'linkedShiftType: $linkedShiftType, '
-      'isRelativeTime: $isRelativeTime, '
-      'relativeOffsetMinutes: $relativeOffsetMinutes)';
+      'relativeOffsetMinutes: $relativeOffsetMinutes, '
+      'isCriticalShift: $isCriticalShift, soundKey: $soundKey, '
+      'weekdaysBitmask: $weekdaysBitmask, '
+      'autoDeleteAfterFiring: $autoDeleteAfterFiring)';
 }
+
+/// Whether the alarm [a] should be permanently deleted from Hive the instant it
+/// is dismissed, rather than left as a fired, stale config. Pure so the three
+/// dismiss sites (in-app wake screen, foreground dispatcher, killed-app
+/// background isolate) share one decision and one unit-test target. `null`
+/// (record already gone, or no `appAlarmId` in the payload) → never delete.
+/// Only one-time alarms with the flag qualify — `autoDeleteAfterFiring` is only
+/// ever set on one-time alarms, but the explicit type guard is belt-and-braces.
+bool shouldAutoDeleteOnDismiss(AppAlarm? a) =>
+    a != null &&
+    a.autoDeleteAfterFiring &&
+    a.repeatType == AppAlarmRepeatType.oneTime;

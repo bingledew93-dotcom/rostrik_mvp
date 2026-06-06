@@ -13,7 +13,9 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 
 import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
+import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_repository.dart';
+import 'alarm_payload.dart';
 import 'alarm_scheduler.dart';
 
 /// Name under which the main isolate's [ReceivePort] is registered with
@@ -45,6 +47,7 @@ const String alarmActionPortName = 'alarm_action_port';
 class NotificationActionDispatcher {
   NotificationActionDispatcher._({
     required this.shifts,
+    required this.alarms,
     required this.scheduler,
     required this.navigatorKey,
   });
@@ -65,6 +68,7 @@ class NotificationActionDispatcher {
   /// surfaces months later in unrelated places.
   static void setup({
     required ShiftRepository shifts,
+    required AppAlarmRepository alarms,
     required AlarmScheduler scheduler,
     required GlobalKey<NavigatorState> navigatorKey,
   }) {
@@ -76,6 +80,7 @@ class NotificationActionDispatcher {
     }
     final dispatcher = NotificationActionDispatcher._(
       shifts: shifts,
+      alarms: alarms,
       scheduler: scheduler,
       navigatorKey: navigatorKey,
     );
@@ -84,6 +89,11 @@ class NotificationActionDispatcher {
   }
 
   final ShiftRepository shifts;
+
+  /// Alarm-rule repository, used solely to permanently delete a fired one-time
+  /// alarm marked auto-delete the instant it is dismissed (see [dismiss]).
+  final AppAlarmRepository alarms;
+
   final AlarmScheduler scheduler;
   final GlobalKey<NavigatorState> navigatorKey;
 
@@ -148,7 +158,7 @@ class NotificationActionDispatcher {
   /// [AlarmScheduler] already in memory, so no Hive re-open and no
   /// timezone re-init are required.
   Future<void> snooze(String payload) async {
-    final parsed = _parsePayload(payload);
+    final parsed = AlarmPayload.decode(payload);
     if (parsed == null) return;
 
     // Kill the OS notification FIRST so the FLAG_INSISTENT audio loop
@@ -193,6 +203,11 @@ class NotificationActionDispatcher {
       fireAt: snoozedUntil,
       title: _titleFor(updated),
       body: _bodyFor(updated),
+      // Keep the user's chosen tone across the snooze reschedule. Decoded from
+      // the original payload (defaults to 'classic' if it was a bare 2-field
+      // string, e.g. WakeUpScreen's in-app snooze); the next AlarmSyncService
+      // reconcile re-issues the canonical payload regardless.
+      soundKey: parsed.soundKey,
       payload: payload,
     );
   }
@@ -201,7 +216,7 @@ class NotificationActionDispatcher {
   /// (and wipes any pending snooze on the same occurrence — user has
   /// chosen to handle the alarm fully) and cancels the OS notification.
   Future<void> dismiss(String payload) async {
-    final parsed = _parsePayload(payload);
+    final parsed = AlarmPayload.decode(payload);
     if (parsed == null) return;
 
     // Same rationale as snooze: kill the OS notification (and its
@@ -221,6 +236,11 @@ class NotificationActionDispatcher {
         'notification already cancelled',
       );
     }
+
+    // Permanently remove a fired one-time alarm marked auto-delete, at the
+    // dismissal instant, so it can't linger as stale config. Shared with the
+    // in-app wake-screen path; no-op for everything else.
+    await deleteAlarmIfAutoDelete(alarms, parsed.appAlarmId);
   }
 
   /// Direct call into the FLN singleton to cancel an OS notification by
@@ -236,23 +256,6 @@ class NotificationActionDispatcher {
     }
   }
 
-}
-
-/// Mirrors the same parser in `notification_response_handler.dart`. The two
-/// copies cannot share code without exposing a module-private helper across
-/// files; this is a 6-line duplication. Format: `<shiftId>|<notificationId>`.
-({String shiftId, int notificationId})? _parsePayload(String payload) {
-  final parts = payload.split('|');
-  if (parts.length != 2) {
-    debugPrint('[fg-dispatch] malformed payload "$payload"');
-    return null;
-  }
-  final notificationId = int.tryParse(parts[1]);
-  if (notificationId == null) {
-    debugPrint('[fg-dispatch] non-int notificationId in "$payload"');
-    return null;
-  }
-  return (shiftId: parts[0], notificationId: notificationId);
 }
 
 // Kept in sync with `AlarmEngine._titleFor` / `_bodyFor` AND the equivalents

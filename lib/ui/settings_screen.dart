@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
+import '../alarms/alarm_scheduler.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/shift_repository.dart';
+import '../data/storage/local_storage.dart';
 import '../logic/cycle_service.dart';
+import '../state/app_preferences.dart';
+import 'onboarding/onboarding_flow.dart';
 import 'pattern_picker_screen.dart';
 import 'shift_format.dart';
 
@@ -35,6 +39,10 @@ class SettingsScreen extends StatelessWidget {
             _SnoozeDurationSection(),
             Divider(height: 32),
             _ShiftCyclesSection(),
+            Divider(height: 32),
+            _PreferencesSection(),
+            Divider(height: 32),
+            _FactoryResetSection(),
           ],
         ),
       ),
@@ -453,4 +461,185 @@ String _formatLeadTime(int totalMinutes) {
   if (h == 0) return '$m min';
   if (m == 0) return '$h h';
   return '$h h $m min';
+}
+
+/// User display preferences — clock format and calendar week-start. Both are
+/// pure presentation toggles backed by [AppPreferences] (the generic 'settings'
+/// box); flipping either re-renders the affected surfaces live via the
+/// ChangeNotifierProvider. The active switch track is the theme's safety-orange
+/// (switchTheme maps a selected switch → primary), matching the alarm/permission
+/// toggles — no inline colour needed.
+class _PreferencesSection extends StatelessWidget {
+  const _PreferencesSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final prefs = context.watch<AppPreferences>();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PREFERENCES',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'How your schedule is displayed across the app.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            key: const ValueKey('settings-use-24h-toggle'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Use 24-Hour Time'),
+            subtitle: Text(
+              prefs.use24HourTime
+                  ? 'Times show as 14:30'
+                  : 'Times show as 02:30 PM',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            value: prefs.use24HourTime,
+            onChanged: (v) =>
+                context.read<AppPreferences>().setUse24HourTime(v),
+          ),
+          SwitchListTile(
+            key: const ValueKey('settings-week-start-toggle'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Start Calendar on Monday'),
+            subtitle: Text(
+              prefs.startWeekOnMonday
+                  ? 'Weeks begin on Monday'
+                  : 'Weeks begin on Sunday',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            value: prefs.startWeekOnMonday,
+            onChanged: (v) =>
+                context.read<AppPreferences>().setStartWeekOnMonday(v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Destructive "Reset App Data" action — wipes all local data and kicks the
+/// user back through onboarding. Styled with the theme's error colour so it
+/// reads as dangerous against the otherwise-orange surface. Primarily a
+/// testing affordance (re-run the first-launch flow without reinstalling), but
+/// also a legitimate user "start over" path.
+class _FactoryResetSection extends StatelessWidget {
+  const _FactoryResetSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final error = theme.colorScheme.error;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'DANGER ZONE',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: error,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Deletes your roster, alarms, and settings, then restarts '
+            'onboarding from scratch.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const ValueKey('settings-reset-app-data'),
+              onPressed: () => _confirmAndReset(context),
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Text('Reset App Data'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: error,
+                side: BorderSide(color: error.withValues(alpha: 0.6)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmAndReset(BuildContext context) async {
+    // Capture context-bound handles BEFORE any await — BuildContext must not
+    // be read across an async gap, and the Navigator must outlive this widget
+    // (we replace the whole stack at the end).
+    final scheduler = context.read<AlarmScheduler>();
+    final storage = context.read<LocalStorage>();
+    final navigator = Navigator.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        final scheme = Theme.of(dialogCtx).colorScheme;
+        return AlertDialog(
+          title: const Text('Reset app?'),
+          content: const Text(
+            'Are you sure? This will delete your roster, alarms, and '
+            'settings.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('settings-reset-confirm'),
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+              ),
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('Reset'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
+
+    // 1. Cancel every pending OS alarm so none fires from the wiped roster.
+    await scheduler.cancelAll();
+    // 2. Wipe the typed data boxes (shifts, cycles, alarms, settings, ids).
+    await storage.reset();
+    // 3. Reset the app-prefs box: drops the scheduled-fire cache + snooze
+    //    pref, and forces re-onboarding on the next first-launch gate read.
+    final prefs = Hive.box('settings');
+    await prefs.clear();
+    await prefs.put(onboardingCompleteKey, false);
+    // 4. Clear the whole nav stack back to a fresh onboarding flow.
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const OnboardingFlow()),
+      (_) => false,
+    );
+  }
 }

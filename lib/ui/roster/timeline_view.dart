@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../data/models/shift.dart';
 import '../../data/models/shift_type.dart';
 import '../../data/repositories/shift_repository.dart';
+import '../../state/app_preferences.dart';
 import '../shift_format.dart';
 import 'shift_filter.dart';
 import 'shift_visuals.dart';
@@ -165,7 +166,8 @@ class ShiftCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${shiftTypeLabel(shift.type)} · ${_timeRange(shift)}',
+                      '${shiftTypeLabel(shift.type)} · '
+                      '${_timeRange(shift, AppPreferences.use24HourOf(context))}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -181,7 +183,8 @@ class ShiftCard extends StatelessWidget {
   }
 }
 
-String _timeRange(Shift shift) {
+String _timeRange(Shift shift, bool use24Hour) {
   if (shift.type == ShiftType.off) return 'All day';
-  return '${formatHhmm(shift.startMinutes)} – ${formatHhmm(shift.endMinutes)}';
+  return '${formatClock(shift.startMinutes, use24Hour: use24Hour)} – '
+      '${formatClock(shift.endMinutes, use24Hour: use24Hour)}';
 }

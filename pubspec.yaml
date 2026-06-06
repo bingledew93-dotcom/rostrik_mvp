@@ -64,6 +64,24 @@ dependencies:
   # friends) that lets us replace the entire cell — required for the
   # Android-widget-style horizontal bars (no default dot markers).
   table_calendar: ^3.2.0
+  image_picker: ^1.2.2
+  image_cropper: ^12.2.1
+  google_mlkit_text_recognition: ^0.15.1
+  sensors_plus: ^7.0.0
+
+  # In-app preview of the bundled alarm tones in the create/edit sheet. NOT in
+  # the alarm-firing path — the OS owns alarm audio (Android channel sound +
+  # FLAG_INSISTENT, iOS notification sound). The previewer configures an
+  # alarm-usage audio context with transient (duck-others) focus so the preview
+  # plays at alarm loudness without permanently stealing audio focus.
+  audioplayers: ^6.0.0
+  # iOS-only at runtime: resolves the app container's Library/ dir so the
+  # bundled WAV assets can be copied into Library/Sounds/, where
+  # UNNotificationSound resolves them by name (no Xcode bundle membership).
+  # Already present transitively via hive_ce_flutter; declared directly because
+  # we import it.
+  path_provider: ^2.1.0
+  file_picker: ^11.0.2
 
 dev_dependencies:
   flutter_test:
@@ -90,6 +108,18 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Bundled alarm tones (16-bit PCM WAV @ 44.1 kHz). Master copies used by the
+  # in-app previewer (audioplayers AssetSource) AND copied to iOS Library/Sounds
+  # at startup. The Android notification-channel copies live separately in
+  # android/app/src/main/res/raw/. See assets/sounds/README.md for prep + the
+  # res/raw mp3→wav swap note.
+  assets:
+    - assets/sounds/
+    # Branding (app logo etc.). Folder registration: any file dropped in is
+    # bundled automatically — add rostrik_logo.png here for the WelcomeScreen
+    # hero (it falls back to an icon until the file exists).
+    - assets/images/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

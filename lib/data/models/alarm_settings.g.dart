@@ -16,15 +16,23 @@ class AlarmSettingsAdapter extends TypeAdapter<AlarmSettings> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return AlarmSettings(leadTime: fields[0] as Duration);
+    return AlarmSettings(
+      leadTime: fields[0] as Duration,
+      customRingtoneUri: fields[1] as String?,
+      customRingtoneName: fields[2] as String?,
+    );
   }
 
   @override
   void write(BinaryWriter writer, AlarmSettings obj) {
     writer
-      ..writeByte(1)
+      ..writeByte(3)
       ..writeByte(0)
-      ..write(obj.leadTime);
+      ..write(obj.leadTime)
+      ..writeByte(1)
+      ..write(obj.customRingtoneUri)
+      ..writeByte(2)
+      ..write(obj.customRingtoneName);
   }
 
   @override

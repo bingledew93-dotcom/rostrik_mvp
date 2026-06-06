@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
 import '../data/repositories/shift_repository.dart';
+import '../state/app_preferences.dart';
 import 'shift_format.dart';
 
 /// Convenience launcher — keeps callers free of `showModalBottomSheet` plumbing.
@@ -161,14 +162,22 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
             if (!_isOff) ...[
               _PickerRow(
                 label: 'Starts',
-                valueLabel:
-                    _start == null ? 'Pick time' : formatTimeOfDay(_start!),
+                valueLabel: _start == null
+                    ? 'Pick time'
+                    : formatClockOfDay(
+                        _start!,
+                        use24Hour: AppPreferences.use24HourOf(context),
+                      ),
                 onPressed: _pickStart,
               ),
               _PickerRow(
                 label: 'Ends',
-                valueLabel:
-                    _end == null ? 'Pick time' : formatTimeOfDay(_end!),
+                valueLabel: _end == null
+                    ? 'Pick time'
+                    : formatClockOfDay(
+                        _end!,
+                        use24Hour: AppPreferences.use24HourOf(context),
+                      ),
                 onPressed: _pickEnd,
               ),
               if (_isOvernight)

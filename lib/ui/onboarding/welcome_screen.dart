@@ -18,10 +18,21 @@ class WelcomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(flex: 2),
-              Icon(
-                Icons.alarm,
-                size: 96,
-                color: theme.colorScheme.primary,
+              // Brand hero. Uses the bundled logo when present; until
+              // `assets/images/rostrik_logo.png` is dropped in, errorBuilder
+              // falls back to the original alarm glyph so the screen never
+              // shows a broken-image box.
+              Center(
+                child: Image.asset(
+                  'assets/images/rostrik_logo.png',
+                  height: 132,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.alarm,
+                    size: 96,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
               ),
               const SizedBox(height: 32),
               Text(

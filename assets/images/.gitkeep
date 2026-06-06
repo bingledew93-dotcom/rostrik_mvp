@@ -1,0 +1,4 @@
+# Placeholder so the assets/images/ folder exists and is bundleable.
+# Drop rostrik_logo.png here (the WelcomeScreen hero looks for it).
+# The folder is registered in pubspec.yaml, so any file added here is
+# bundled automatically — no further pubspec edit needed.

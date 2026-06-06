@@ -3,13 +3,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../alarms/upcoming_alarm.dart';
+import '../data/models/alarm_settings.dart';
+import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/models/shift_type.dart';
+import '../data/repositories/shift_repository.dart';
 import '../logic/cycle_resolver.dart';
+import '../state/app_preferences.dart';
+import 'calendar/infinite_calendar.dart';
 import 'roster/shift_visuals.dart';
 import 'settings_screen.dart';
 import 'shift_format.dart';
+import 'slide_to_confirm.dart';
 
 /// Primary dashboard — "what's my next shift?" — on tab 0 of the
 /// `MainLayout` chassis.
@@ -21,7 +28,13 @@ import 'shift_format.dart';
 /// triggers a rebuild so the countdown stays fresh; cancelled in
 /// `dispose()` so the timer never outlives the widget.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.onOpenTab});
+
+  /// Switches the MainLayout bottom-nav tab. Supplied in production so the
+  /// "My Rotation" tile's "View full roster" affordance jumps to the Roster
+  /// tab. Null when the screen is pumped standalone (widget tests) — the
+  /// affordance is hidden in that case.
+  final void Function(int index)? onOpenTab;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -52,8 +65,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = DateTime.now();
     final shifts = context.watch<List<Shift>>();
     final cycles = context.watch<List<ShiftCycle>>();
+    final alarms = context.watch<List<AppAlarm>>();
+    final globalLeadMinutes = context.watch<AlarmSettings>().leadTime.inMinutes;
     final next = _findNext(shifts, now);
     final activeCycle = _pickActiveCycle(cycles);
+    // Early-bird skip: the single next roster-automated alarm due within 12h.
+    // When present, the dashboard offers a one-occurrence skip that leaves the
+    // master alarm rule armed (see `_DismissUpcomingAlarmControl`).
+    final upcoming = nextUpcomingAutomatedAlarm(
+      alarms: alarms,
+      shifts: shifts,
+      globalLeadMinutes: globalLeadMinutes,
+      now: now,
+      isSchedulePaused: AppPreferences.isSchedulePausedOf(context),
+    );
 
     return Scaffold(
       // Respect both top (notch / status bar) AND bottom (gesture pill)
@@ -65,7 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            Padding(
+            SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
                 horizontal: 24,
                 vertical: 24,
@@ -73,13 +98,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
+                  // Hero gets a fixed slice of the viewport so its internal
+                  // vertical centering still reads as a hero AND the page can
+                  // scroll once "My Rotation" expands (a centre-aligned Column
+                  // can't live in an unbounded scroll extent).
+                  SizedBox(
+                    height: MediaQuery.sizeOf(context).height * 0.42,
                     child: next == null
                         ? const _EmptyDashboard()
                         : _UpcomingShiftCard(shift: next, now: now),
                   ),
+                  if (upcoming != null)
+                    _DismissUpcomingAlarmControl(upcoming: upcoming),
                   if (activeCycle != null)
                     _RotationPositionCard(cycle: activeCycle, now: now),
+                  // Collapsed-by-default "My Rotation" — embeds the month
+                  // calendar + a next-shifts preview, keeping the home screen
+                  // clean until tapped. Only meaningful with an active cycle.
+                  if (activeCycle != null) ...[
+                    const SizedBox(height: 16),
+                    _MyRotationTile(
+                      cycle: activeCycle,
+                      shifts: shifts,
+                      now: now,
+                      onOpenTab: widget.onOpenTab,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -105,9 +149,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Selects the active anchored cycle. Mirrors the picker in
-  /// [CalendarScreen] so the Dashboard's rotation copy and the
-  /// Calendar grid always read off the same cycle.
+  /// Selects the active anchored cycle. Mirrors the picker in the
+  /// Timeline's Month view so the Dashboard's rotation copy and the
+  /// calendar grid always read off the same cycle.
   static ShiftCycle? _pickActiveCycle(List<ShiftCycle> cycles) {
     final anchored = cycles.where((c) => c.isAnchored).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -191,6 +235,7 @@ class _UpcomingShiftCard extends StatelessWidget {
     final inProgress = !start.isAfter(now);
     final countdownTarget = inProgress ? shift.endDateTime : start;
     final countdown = _formatCountdown(countdownTarget.difference(now));
+    final use24Hour = AppPreferences.use24HourOf(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,7 +273,7 @@ class _UpcomingShiftCard extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          _formatAbsoluteWhen(start, now, inProgress),
+          _formatAbsoluteWhen(start, now, inProgress, use24Hour),
           style: theme.textTheme.titleMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w500,
@@ -286,12 +331,16 @@ class _UpcomingShiftCard extends StatelessWidget {
     DateTime start,
     DateTime now,
     bool inProgress,
+    bool use24Hour,
   ) {
     final today = DateTime(now.year, now.month, now.day);
     final startDay = DateTime(start.year, start.month, start.day);
     final tomorrow = DateTime(today.year, today.month, today.day + 1);
     final yesterday = DateTime(today.year, today.month, today.day - 1);
-    final time = formatHhmm(start.hour * 60 + start.minute);
+    final time = formatClock(
+      start.hour * 60 + start.minute,
+      use24Hour: use24Hour,
+    );
     final verb = inProgress ? 'Started' : 'Starts';
     if (_isSameDay(startDay, today)) return '$verb today at $time';
     if (_isSameDay(startDay, tomorrow)) return 'Starts tomorrow at $time';
@@ -475,5 +524,211 @@ class _RotationPositionCard extends StatelessWidget {
       case ShiftType.off:
         return 'Off';
     }
+  }
+}
+
+/// Early-bird skip affordance: a prominent action shown when a roster-automated
+/// alarm is due within the next 12 hours. Tapping reveals an inline
+/// slide-to-confirm bar (Rostrik's visible-control → swipe-to-confirm standard,
+/// so a stray 4am tap can't silence a must-not-miss alarm); confirming marks
+/// only THIS occurrence's shift `isAlarmSkipped`. The master alarm rule stays
+/// enabled and future swings re-arm normally — the engine simply cancels this
+/// one pending notification on its next reconcile.
+class _DismissUpcomingAlarmControl extends StatefulWidget {
+  const _DismissUpcomingAlarmControl({required this.upcoming});
+
+  final UpcomingAutomatedAlarm upcoming;
+
+  @override
+  State<_DismissUpcomingAlarmControl> createState() =>
+      _DismissUpcomingAlarmControlState();
+}
+
+class _DismissUpcomingAlarmControlState
+    extends State<_DismissUpcomingAlarmControl> {
+  bool _confirming = false;
+
+  Future<void> _onConfirm() async {
+    // Snapshot the repo before the await — confirming skips the shift, the
+    // upcoming-alarm recompute returns null, and this control is removed from
+    // the tree, so reading context post-await would race with disposal.
+    final shifts = context.read<ShiftRepository>();
+    await shifts.upsert(
+      widget.upcoming.shift.copyWith(isAlarmSkipped: true),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fireClock = formatClock(
+      widget.upcoming.fireAt.hour * 60 + widget.upcoming.fireAt.minute,
+      use24Hour: AppPreferences.use24HourOf(context),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: _confirming
+          ? Row(
+              children: [
+                Expanded(
+                  child: SlideToConfirm(
+                    key: const ValueKey('dismiss-upcoming-slide'),
+                    label: 'Slide to skip this alarm',
+                    icon: Icons.alarm_off,
+                    onConfirm: _onConfirm,
+                  ),
+                ),
+                IconButton(
+                  key: const ValueKey('dismiss-upcoming-cancel'),
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Keep alarm',
+                  onPressed: () => setState(() => _confirming = false),
+                ),
+              ],
+            )
+          : SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('dismiss-upcoming-button'),
+                onPressed: () => setState(() => _confirming = true),
+                icon: const Icon(Icons.alarm_off),
+                label: Text('Dismiss upcoming alarm · $fireClock'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  textStyle: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Collapsed-by-default "My Rotation" section on the Dashboard. Consolidates
+/// the month calendar and an upcoming-shifts glance into one expandable tile so
+/// the home screen stays clean, with a jump to the full Roster tab. Embeds the
+/// existing [InfiniteCalendarView] and reuses the shared `visualFor` /
+/// `shift_format` helpers — no calendar/roster rendering is duplicated here.
+class _MyRotationTile extends StatelessWidget {
+  const _MyRotationTile({
+    required this.cycle,
+    required this.shifts,
+    required this.now,
+    this.onOpenTab,
+  });
+
+  final ShiftCycle cycle;
+  final List<Shift> shifts;
+  final DateTime now;
+  final void Function(int index)? onOpenTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Soonest-first upcoming working shifts (an in-progress shift still
+    // counts), capped to a short preview.
+    final preview = (shifts
+            .where((s) => s.type != ShiftType.off && s.endDateTime.isAfter(now))
+            .toList()
+          ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime)))
+        .take(3)
+        .toList();
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        leading: Icon(
+          Icons.event_note_outlined,
+          color: theme.colorScheme.primary,
+        ),
+        title: Text(
+          'My Rotation',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          'Calendar & upcoming shifts',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        children: [
+          // Read-only month overview — the fully interactive day-tap sheet
+          // lives on the Calendar tab; here it's a glance.
+          InfiniteCalendarView(
+            cycle: cycle,
+            startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
+          ),
+          if (preview.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                child: Text('Next shifts', style: theme.textTheme.labelLarge),
+              ),
+            ),
+            for (final s in preview) _NextShiftPreviewRow(shift: s),
+          ],
+          if (onOpenTab != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('my-rotation-view-roster'),
+                // Timeline is index 1 post-migration (was Roster at 2).
+                onPressed: () => onOpenTab!(1),
+                icon: const Icon(Icons.view_list, size: 18),
+                label: const Text('Open Timeline'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One compact upcoming-shift row inside [_MyRotationTile] — type glyph +
+/// "Day · Mon, Jun 8" + start time, all from the shared visual/format helpers.
+class _NextShiftPreviewRow extends StatelessWidget {
+  const _NextShiftPreviewRow({required this.shift});
+
+  final Shift shift;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final visual = visualFor(shift.type);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        children: [
+          Icon(visual.icon, color: visual.color, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '${shiftTypeLabel(shift.type)} · ${formatShiftDate(shift.date)}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            formatClock(
+              shift.startMinutes,
+              use24Hour: AppPreferences.use24HourOf(context),
+            ),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

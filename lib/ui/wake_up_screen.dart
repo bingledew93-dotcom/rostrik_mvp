@@ -9,7 +9,10 @@ import '../alarms/alarm_scheduler.dart';
 import '../alarms/alarm_sync_service.dart' show noShiftPayloadSentinel;
 import '../alarms/notification_action_dispatcher.dart';
 import '../data/models/shift.dart';
+import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_repository.dart';
+import '../state/app_preferences.dart';
+import 'critical_dismiss_controls.dart';
 import 'main_layout.dart';
 import 'shift_format.dart';
 
@@ -40,7 +43,13 @@ import 'shift_format.dart';
 ///   - On dispose: ticker cancel + subscription cancel. No audio cleanup
 ///     needed — the OS owns the sound.
 class WakeUpScreen extends StatefulWidget {
-  const WakeUpScreen({super.key, required this.shiftId, this.notificationId});
+  const WakeUpScreen({
+    super.key,
+    required this.shiftId,
+    this.notificationId,
+    this.isCritical = false,
+    this.appAlarmId = '',
+  });
 
   /// Shift id parsed from the notification payload. Used to look up the
   /// shift details to display.
@@ -50,6 +59,17 @@ class WakeUpScreen extends StatefulWidget {
   /// the alarm doesn't sit in the notification shade. Null only if the
   /// payload was malformed — in which case dismiss skips the cancel.
   final int? notificationId;
+
+  /// Critical-Shift alarm: require a sustained shake (with a 3-second hold
+  /// fail-safe) to dismiss instead of the casual slide. Parsed from the 3rd
+  /// payload field by `_parseWakeUpRoute`.
+  final bool isCritical;
+
+  /// Owning [AppAlarm] id parsed from the payload (5th field), or '' when
+  /// absent. Lets a dismiss permanently delete a fired one-time alarm marked
+  /// auto-delete. The shake/hold/slide dismiss paths all funnel through
+  /// `_onDismiss`, so deletion happens once, at the dismissal instant.
+  final String appAlarmId;
 
   @override
   State<WakeUpScreen> createState() => _WakeUpScreenState();
@@ -172,6 +192,7 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
     // Capture context-dependent refs up front — they can't be safely
     // re-read after the awaits below.
     final scheduler = context.read<AlarmScheduler>();
+    final alarms = context.read<AppAlarmRepository>();
     final navigator = Navigator.of(context);
 
     final notificationId = widget.notificationId;
@@ -186,6 +207,12 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
         await scheduler.cancel(notificationId);
       } catch (_) {}
     }
+
+    // Auto-delete a fired one-time alarm at the dismissal instant (the
+    // shake/hold/slide paths all reach here). No-op unless the payload carried
+    // a rule id for an auto-delete one-time alarm.
+    await deleteAlarmIfAutoDelete(alarms, widget.appAlarmId);
+
     if (!mounted) return;
     // Replace rather than pop — the wake-up screen is the root route on
     // alarm-launch, so popping would close the app instead of revealing
@@ -221,7 +248,10 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final timeLabel = formatHhmm(now.hour * 60 + now.minute);
+    final timeLabel = formatClock(
+      now.hour * 60 + now.minute,
+      use24Hour: AppPreferences.use24HourOf(context),
+    );
     // Pulled from the same 'settings' box the engine/dispatcher consult,
     // so the button label can't disagree with what a tap will actually
     // do. The box was opened in `main()` before runApp, so this read is
@@ -318,17 +348,27 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _SlideToDismiss(onDismissed: _onDismiss),
-                      const SizedBox(height: 8),
-                      const Center(
-                        child: Text(
-                          'Slide to dismiss',
-                          style: TextStyle(
-                            color: Colors.white60,
-                            fontSize: 14,
+                      // Critical-Shift alarms can't be silenced by a casual
+                      // swipe: require a sustained shake, with a 3-second hold
+                      // as the always-present fail-safe. Normal alarms keep the
+                      // slide-to-dismiss.
+                      if (widget.isCritical) ...[
+                        ShakeToDismiss(onDismissed: _onDismiss),
+                        const SizedBox(height: 12),
+                        HoldToDismiss(onDismissed: _onDismiss),
+                      ] else ...[
+                        _SlideToDismiss(onDismissed: _onDismiss),
+                        const SizedBox(height: 8),
+                        const Center(
+                          child: Text(
+                            'Slide to dismiss',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -356,6 +396,7 @@ class _ShiftSummary extends StatelessWidget {
     if (shiftId == noShiftPayloadSentinel) {
       return const _SummaryText('Alarm');
     }
+    final use24Hour = AppPreferences.use24HourOf(context);
     return FutureBuilder<Shift?>(
       future: context.read<ShiftRepository>().getById(shiftId),
       builder: (_, snap) {
@@ -367,7 +408,7 @@ class _ShiftSummary extends StatelessWidget {
           return const _SummaryText('Upcoming shift');
         }
         final type = shiftTypeLabel(shift.type);
-        final start = formatHhmm(shift.startMinutes);
+        final start = formatClock(shift.startMinutes, use24Hour: use24Hour);
         return _SummaryText('Upcoming $type shift · starts $start');
       },
     );

@@ -331,9 +331,11 @@ void main() {
         // No Night row, no Off row.
         expect(find.text('Night shift'), findsNothing);
         expect(find.text('Off'), findsNothing);
-        // Default Day window 07:00 → 15:00 from `_kDay*` constants.
-        expect(find.text('07:00'), findsOneWidget);
-        expect(find.text('15:00'), findsOneWidget);
+        // Default Day window 07:00 → 15:00 from `_kDay*` constants. The picker
+        // pumps without an AppPreferences provider, so the 24h preference falls
+        // back to its default (false → 12-hour AM/PM).
+        expect(find.text('07:00 AM'), findsOneWidget);
+        expect(find.text('03:00 PM'), findsOneWidget);
       },
     );
 

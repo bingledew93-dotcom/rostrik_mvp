@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- OCR roster scanner (Phase 6): image_picker opens the camera and
+	     image_cropper lets the user crop tight around the shift grid. iOS
+	     hard-crashes the picker without a camera usage string. The photo
+	     library string is defensive (a future "import from gallery" path);
+	     the camera flow itself runs with requestFullMetadata:false so it
+	     does not prompt for library access. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Rostrik uses the camera to photograph your printed roster and read the shift times on your device.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Rostrik can read a saved photo of your roster to import shift times on your device.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -53,18 +63,17 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<!-- Strict portrait lock (Beta blocker: landscape overflow). Only
+	     UIInterfaceOrientationPortrait is allowed on both iPhone and iPad, so
+	     iOS itself refuses to rotate even if a future Flutter-side change drops
+	     the SystemChrome lock. Upside-down is intentionally excluded. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<!-- Background execution wiring for the 14-day rolling alarm window.
 	     `fetch` is the legacy background fetch mode and lets BGAppRefreshTask

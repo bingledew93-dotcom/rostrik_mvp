@@ -3,6 +3,7 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 
 import '../custom_builder_screen.dart';
 import '../main_layout.dart';
+import 'arm_engine_screen.dart';
 import 'onboarding_state.dart';
 import 'pattern_picker_onboarding_screen.dart';
 import 'permissions_screen.dart';
@@ -42,18 +43,32 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   /// Custom-card path on step 3. Skips the preset picker entirely —
   /// pushes [CustomBuilderScreen] directly. If the user generates a
-  /// roster there (the screen pops `true`), we mark onboarding
-  /// complete and replace the whole stack with [MainLayout]. If they
-  /// back out (`null`), we just return to step 3 with no state
-  /// change.
+  /// roster there (the screen pops `true`), we route to the final "Arm
+  /// your alarms" step (same as the preset path) so a custom roster also
+  /// lands fully armed. If they back out (`null`), we just return to
+  /// step 3 with no state change.
   Future<void> _launchCustomBuilder() async {
     final navigator = Navigator.of(context);
     final generated = await navigator.push<bool>(
       MaterialPageRoute(builder: (_) => const CustomBuilderScreen()),
     );
     if (generated != true || !mounted) return;
+    await navigator.push(
+      MaterialPageRoute(
+        builder: (_) => ArmEngineScreen(
+          onArmComplete: _complete,
+          onBack: navigator.pop,
+        ),
+      ),
+    );
+  }
+
+  /// Final completion, invoked by the Arm Engine screen after alarms are
+  /// seeded. Flips the first-launch flag and replaces the stack with the
+  /// Dashboard. Shared by both the preset and custom paths.
+  Future<void> _complete() async {
+    final navigator = Navigator.of(context);
     await Hive.box('settings').put(onboardingCompleteKey, true);
-    if (!mounted) return;
     navigator.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const MainLayout()),
       (_) => false,

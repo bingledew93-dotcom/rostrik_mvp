@@ -1,3 +1,10 @@
+// Namespaced because `hive_ce_flutter` transitively pulls in an
+// instance-based `IsolateNameServer` that shadows `dart:ui`'s static one.
+// Without the `as ui` qualifier the lookup in [mainIsolateIsAlive] fails to
+// resolve to the platform name server. (Same workaround as
+// notification_response_handler.dart / notification_action_dispatcher.dart.)
+import 'dart:ui' as ui;
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
@@ -6,6 +13,7 @@ import '../data/storage/local_storage.dart';
 import '../util/clock.dart';
 import 'alarm_sync_service.dart';
 import 'local_notifications_alarm_scheduler.dart';
+import 'notification_action_dispatcher.dart' show alarmActionPortName;
 
 /// Bridge between the native background-task runners and the Dart-side
 /// [AlarmSyncService]. Runs in a SEPARATE Dart isolate from the main UI
@@ -102,6 +110,30 @@ void syncAlarmsBackgroundEntrypoint() {
 /// is a one-shot reconcile; reactive watching only makes sense when
 /// the app is alive and the user is editing state.
 Future<void> _runSync() async {
+  // A2 guard: never open / mutate Hive from this isolate while the main UI
+  // isolate is alive in the SAME process. iOS `BGAppRefreshTask` can fire
+  // while the app is only SUSPENDED (not killed); the suspended main isolate
+  // still holds the Hive boxes open in memory. A concurrent open+write from
+  // here races the `idMap` monotonic counter and the `_scheduledFireAt`
+  // persistence across two in-memory caches over the same files — which can
+  // mint a duplicate notification id (two shifts → one id → one alarm
+  // silently dropped) until the next full reconcile.
+  //
+  // When the main isolate is alive it already owns reconciliation (its
+  // reactive watches + the initial sync in `start()`), so bailing is the
+  // correct outcome, not a failure: we return normally and let native mark
+  // the task complete. On Android boot the UI isolate is dead, the port
+  // lookup is null, and we proceed. Trade-off: a long iOS suspension won't
+  // roll the window forward via this path, but the 14-day buffer covers it
+  // and iOS reclaims suspended apps — after which a real cold/bg run runs.
+  if (mainIsolateIsAlive()) {
+    debugPrint(
+      '[bg-sync] main isolate alive — skipping background sync; foreground '
+      'reconcile owns Hive (prevents id/counter divergence)',
+    );
+    return;
+  }
+
   final storage = await LocalStorage.init();
   // Mirror main.dart line-for-line: the 'settings' box is opened
   // there before the scheduler init. AlarmSyncService's hydrate /
@@ -116,10 +148,34 @@ Future<void> _runSync() async {
     alarms: storage.alarms,
     shifts: storage.shifts,
     cycles: storage.cycles,
+    alarmSettings: storage.alarmSettings,
     scheduler: scheduler,
     idMap: storage.notificationIds,
     clock: const SystemClock(),
   );
 
+  // A1: prime `_scheduledFireAt` from the persisted snapshot before the
+  // one-shot reconcile. The background path calls `syncAlarms()` directly
+  // and never `start()` — where hydration normally happens — so without
+  // this every background run treats every desired id as new and re-issues
+  // `scheduleAt` for the whole window, defeating the platform-channel-burst
+  // avoidance the persistence layer was built for. No-op if the settings
+  // box failed to open above.
+  service.hydrate();
+
   await service.syncAlarms();
 }
+
+/// True when the main UI isolate is alive in THIS process, detected via the
+/// port [NotificationActionDispatcher] registers under [alarmActionPortName]
+/// in `main()`. That port exists whenever the app process is alive
+/// (foreground OR background-suspended) and disappears once the process is
+/// killed. Mirrors the liveness probe the background notification handler
+/// uses ([notificationBackgroundHandler]).
+///
+/// Public + [visibleForTesting] (rather than private) so the bail decision
+/// in [_runSync] can be unit-tested by registering / removing the port,
+/// without standing up a real headless engine.
+@visibleForTesting
+bool mainIsolateIsAlive() =>
+    ui.IsolateNameServer.lookupPortByName(alarmActionPortName) != null;

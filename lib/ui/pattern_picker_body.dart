@@ -8,6 +8,7 @@ import '../logic/shift_generator.dart';
 import 'custom_builder_screen.dart';
 import 'onboarding/onboarding_state.dart';
 import 'roster/shift_visuals.dart';
+import '../state/app_preferences.dart';
 import 'shift_format.dart';
 
 /// Shared body widget for the Pattern Picker. Powers both the
@@ -79,25 +80,68 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
 
   bool get _canGenerate => _selected != null && !_generating;
 
+  @override
+  void initState() {
+    super.initState();
+    // Zero-friction default for onboarding: when the user has already narrowed
+    // to a roster type, pre-select that category's 7/7 swing (the most common
+    // shift-worker rotation, and the primary option per the design) so an
+    // exhausted first-timer can just hit Generate. Only when restricted — the
+    // post-onboarding picker (restrictToType == null) opens with nothing
+    // selected so its "disabled until you pick" contract is preserved.
+    final restrict = widget.restrictToType;
+    if (restrict != null) {
+      final presets = _presetsFor(restrict);
+      if (presets.isNotEmpty) {
+        _applyPreset(
+          presets.firstWhere(
+            (p) => p.label.contains('7/7'),
+            orElse: () => presets.first,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Curated preset list for a restricted roster type. Custom never reaches the
+  /// body (it routes to the builder), so it maps to an empty list defensively.
+  static List<RotationPattern> _presetsFor(RosterType type) {
+    switch (type) {
+      case RosterType.day:
+        return kDayPatterns;
+      case RosterType.night:
+        return kNightPatterns;
+      case RosterType.rotating:
+        return kRotatingPatterns;
+      case RosterType.custom:
+        return const [];
+    }
+  }
+
+  /// Sets [p] as the selection and re-seeds the per-type edit windows. Pure
+  /// state mutation (no setState) so it's callable from both [initState] and
+  /// the setState-wrapped [_selectPreset].
+  void _applyPreset(RotationPattern p) {
+    _selected = p;
+    _editedTimes.clear();
+    for (final block in p.blocks) {
+      if (block.type == ShiftType.off) continue;
+      // First occurrence of each type seeds the edit window. If a pattern ever
+      // ships with two blocks of the same type at different times, they'd
+      // share the first one's window.
+      _editedTimes.putIfAbsent(
+        block.type,
+        () => _ShiftTimes(block.startMinutes, block.endMinutes),
+      );
+    }
+  }
+
   void _selectPreset(RotationPattern p) {
     // Re-selecting the same preset is a no-op — without this, a user
     // who tapped their selected tile again would silently lose their
     // edited times to a re-seed.
     if (_selected?.id == p.id) return;
-    setState(() {
-      _selected = p;
-      _editedTimes.clear();
-      for (final block in p.blocks) {
-        if (block.type == ShiftType.off) continue;
-        // First occurrence of each type seeds the edit window. If a
-        // pattern ever ships with two blocks of the same type at
-        // different times, they'd share the first one's window.
-        _editedTimes.putIfAbsent(
-          block.type,
-          () => _ShiftTimes(block.startMinutes, block.endMinutes),
-        );
-      }
-    });
+    setState(() => _applyPreset(p));
   }
 
   Future<void> _pickShiftStart(ShiftType type) async {
@@ -551,6 +595,7 @@ class _ShiftTimesRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final use24Hour = AppPreferences.use24HourOf(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -561,7 +606,7 @@ class _ShiftTimesRow extends StatelessWidget {
           OutlinedButton(
             key: ValueKey('shift-times-${type.name}-start'),
             onPressed: onPickStart,
-            child: Text(formatHhmm(times.startMinutes)),
+            child: Text(formatClock(times.startMinutes, use24Hour: use24Hour)),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -574,7 +619,7 @@ class _ShiftTimesRow extends StatelessWidget {
           OutlinedButton(
             key: ValueKey('shift-times-${type.name}-end'),
             onPressed: onPickEnd,
-            child: Text(formatHhmm(times.endMinutes)),
+            child: Text(formatClock(times.endMinutes, use24Hour: use24Hour)),
           ),
         ],
       ),

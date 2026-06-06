@@ -100,4 +100,21 @@ class LocalStorage {
     _instance = storage;
     return storage;
   }
+
+  /// Factory-reset the local data: clears every typed box this owns — shifts,
+  /// cycles, alarms, the global alarm settings, and the notification-id map.
+  /// Clearing fires each box's change events, so the repository `watch()`
+  /// streams re-emit empty and the UI reacts immediately.
+  ///
+  /// Out of scope (the caller handles these, since they live outside this
+  /// store): cancelling pending OS alarms (no scheduler handle here) and the
+  /// generic `'settings'` prefs box — onboarding flag, snooze, scheduled-fire
+  /// cache — which `main()` opens, not `init()`.
+  Future<void> reset() async {
+    await Hive.box<Shift>(HiveShiftRepository.boxName).clear();
+    await Hive.box<ShiftCycle>(HiveShiftCycleRepository.boxName).clear();
+    await Hive.box<AppAlarm>(HiveAppAlarmRepository.boxName).clear();
+    await Hive.box<AlarmSettings>(HiveAlarmSettingsRepository.boxName).clear();
+    await Hive.box<int>(HiveNotificationIdMap.boxName).clear();
+  }
 }

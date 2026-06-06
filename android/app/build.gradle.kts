@@ -28,7 +28,9 @@ android {
         applicationId = "com.example.rostrik_mvp"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // google_mlkit_text_recognition (and uCrop via image_cropper) require
+        // API 21+. Floor at 21 without downgrading a higher Flutter default.
+        minSdk = maxOf(flutter.minSdkVersion, 21)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

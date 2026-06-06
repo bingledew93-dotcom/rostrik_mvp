@@ -12,9 +12,12 @@ import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../data/models/alarm_settings.dart';
+import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
+import '../data/repositories/hive_app_alarm_repository.dart';
 import '../data/repositories/hive_shift_repository.dart';
+import 'alarm_payload.dart';
 import 'local_notifications_alarm_scheduler.dart';
 import 'notification_action_dispatcher.dart';
 
@@ -136,6 +139,15 @@ Future<void> _ensureBackgroundIsolateInit() async {
   if (!Hive.isAdapterRegistered(3)) {
     Hive.registerAdapter(AlarmSettingsAdapter());
   }
+  // Needed for the auto-delete path: dismissing a fired one-time alarm marked
+  // auto-delete removes its record from the `alarms` box. typeIds match
+  // local_storage.dart so the on-disk records read back identically.
+  if (!Hive.isAdapterRegistered(5)) {
+    Hive.registerAdapter(AppAlarmRepeatTypeAdapter());
+  }
+  if (!Hive.isAdapterRegistered(6)) {
+    Hive.registerAdapter(AppAlarmAdapter());
+  }
 
   // Untyped key-value box for app preferences. Opened here so the
   // slow-path snooze handler (and the buildAlarmNotificationDetails call
@@ -152,31 +164,12 @@ Future<void> _ensureBackgroundIsolateInit() async {
   _isolateInitDone = true;
 }
 
-/// Parses the payload string emitted by AlarmEngine. Format:
-/// `<shiftId>|<notificationId>` — see [alarm_engine.dart:145](../alarms/alarm_engine.dart).
-/// Returns `null` if the payload is malformed; callers treat that as a
-/// no-op rather than throwing, because a thrown exception in a background
-/// isolate is a silent failure with no user-visible feedback.
-({String shiftId, int notificationId})? _parsePayload(String payload) {
-  final parts = payload.split('|');
-  if (parts.length != 2) {
-    debugPrint('[bg-isolate] malformed payload "$payload" (expected "id|int")');
-    return null;
-  }
-  final notificationId = int.tryParse(parts[1]);
-  if (notificationId == null) {
-    debugPrint('[bg-isolate] non-int notificationId in "$payload"');
-    return null;
-  }
-  return (shiftId: parts[0], notificationId: notificationId);
-}
-
 /// Marks the shift acknowledged in Hive and defensively cancels the OS
 /// notification. AlarmEngine will see `isAcknowledged == true` on its next
 /// reconcile (typically when the user re-opens the app) and will NOT
 /// re-schedule this occurrence.
 Future<void> _handleDismiss(String payload) async {
-  final parsed = _parsePayload(payload);
+  final parsed = AlarmPayload.decode(payload);
   if (parsed == null) return;
 
   await _ensureBackgroundIsolateInit();
@@ -198,11 +191,31 @@ Future<void> _handleDismiss(String payload) async {
     debugPrint('[bg-isolate] dismiss: marked ${shift.id} acknowledged');
   }
 
+  // Auto-delete a fired one-time alarm marked auto-delete, at the dismissal
+  // instant — even here, in the killed-app path. The main isolate is dead (we
+  // took the slow path), so it re-reads the box from disk on next open; the
+  // record is simply gone. No-op unless the payload carried a rule id for an
+  // auto-delete one-time alarm.
+  await _maybeAutoDeleteAlarm(parsed.appAlarmId);
+
   // `cancelNotification: true` on the action button means the OS has likely
   // already dismissed the heads-up by the time we get here, but a second
   // cancel is cheap and idempotent. It covers edge cases like the user
   // expanding the notification before tapping.
   await FlutterLocalNotificationsPlugin().cancel(id: parsed.notificationId);
+}
+
+/// Killed-app counterpart of the foreground dispatcher's auto-delete: removes a
+/// fired one-time alarm marked auto-delete from the `alarms` box directly in
+/// this isolate. No-op when the payload had no rule id, the rule is gone, or it
+/// isn't an auto-delete one-time alarm.
+Future<void> _maybeAutoDeleteAlarm(String appAlarmId) async {
+  if (appAlarmId.isEmpty) return;
+  final alarmBox = await Hive.openBox<AppAlarm>(HiveAppAlarmRepository.boxName);
+  final alarm = alarmBox.get(appAlarmId);
+  if (!shouldAutoDeleteOnDismiss(alarm)) return;
+  await alarmBox.delete(appAlarmId);
+  debugPrint('[bg-isolate] dismiss: auto-deleted alarm $appAlarmId');
 }
 
 /// Writes `snoozedUntil = now + snooze_duration` to Hive and reschedules the same
@@ -213,7 +226,7 @@ Future<void> _handleDismiss(String payload) async {
 /// buttons, iOS category. AlarmEngine's next reconcile will see
 /// `snoozedUntil` and converge to the same scheduled time idempotently.
 Future<void> _handleSnooze(String payload) async {
-  final parsed = _parsePayload(payload);
+  final parsed = AlarmPayload.decode(payload);
   if (parsed == null) return;
 
   await _ensureBackgroundIsolateInit();
@@ -250,7 +263,10 @@ Future<void> _handleSnooze(String payload) async {
     title: _titleFor(shift),
     body: _bodyFor(shift),
     scheduledDate: tz.TZDateTime.from(snoozedUntil, tz.local),
-    notificationDetails: buildAlarmNotificationDetails(),
+    // Decoded tone key (defaults to 'classic' for a legacy/bare payload) keeps
+    // the snoozed alarm on the user's chosen channel/sound in the killed-app
+    // path; the next main-isolate reconcile re-issues the canonical payload.
+    notificationDetails: buildAlarmNotificationDetails(parsed.soundKey),
     androidScheduleMode: AndroidScheduleMode.alarmClock,
     // Preserve the original `shiftId|notificationId` so a subsequent
     // Snooze / Dismiss / body-tap on the rescheduled alarm carries the
