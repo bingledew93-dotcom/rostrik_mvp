@@ -2,43 +2,38 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rostrik_mvp/data/models/alarm_settings.dart';
 
 void main() {
-  group('AlarmSettings — custom ringtone versioning', () {
-    test('defaults carry a null ringtone (matches legacy 1-field records)', () {
-      expect(AlarmSettings.defaults.customRingtoneUri, isNull);
-      expect(AlarmSettings.defaults.customRingtoneName, isNull);
+  // Custom ringtones migrated OFF AlarmSettings onto the per-alarm AppAlarm —
+  // AlarmSettings now holds only the global lead time + vibration toggle.
+  group('AlarmSettings', () {
+    test('defaults: 60-min lead time, vibration on', () {
+      expect(AlarmSettings.defaults.leadTime, AlarmSettings.defaultLeadTime);
+      expect(AlarmSettings.defaults.vibrationEnabled, isTrue);
     });
 
-    test('copyWith sets the ringtone path + name, preserving lead time', () {
-      final updated = AlarmSettings.defaults.copyWith(
-        customRingtoneUri: '/cache/song.mp3',
-        customRingtoneName: 'song.mp3',
-      );
-      expect(updated.leadTime, AlarmSettings.defaultLeadTime);
-      expect(updated.customRingtoneUri, '/cache/song.mp3');
-      expect(updated.customRingtoneName, 'song.mp3');
+    test('copyWith updates lead time, preserving vibration', () {
+      final updated =
+          AlarmSettings.defaults.copyWith(leadTime: const Duration(minutes: 45));
+      expect(updated.leadTime, const Duration(minutes: 45));
+      expect(updated.vibrationEnabled, isTrue);
     });
 
-    test('copyWith without ringtone args leaves existing values intact', () {
-      const withTone = AlarmSettings(
-        leadTime: Duration(minutes: 30),
-        customRingtoneUri: '/cache/a.wav',
-        customRingtoneName: 'a.wav',
-      );
-      final bumped = withTone.copyWith(leadTime: const Duration(minutes: 45));
-      expect(bumped.leadTime, const Duration(minutes: 45));
-      expect(bumped.customRingtoneUri, '/cache/a.wav');
-      expect(bumped.customRingtoneName, 'a.wav');
+    test('copyWith toggles vibration, preserving lead time', () {
+      final off = AlarmSettings.defaults.copyWith(vibrationEnabled: false);
+      expect(off.vibrationEnabled, isFalse);
+      expect(off.leadTime, AlarmSettings.defaultLeadTime);
     });
 
-    test('equality + hashCode include the ringtone fields', () {
+    test('equality + hashCode cover both fields', () {
       const a = AlarmSettings(leadTime: Duration(minutes: 60));
-      const b = AlarmSettings(
+      expect(a, AlarmSettings.defaults);
+      const diffLead = AlarmSettings(leadTime: Duration(minutes: 30));
+      const diffVibe = AlarmSettings(
         leadTime: Duration(minutes: 60),
-        customRingtoneName: 'x.mp3',
+        vibrationEnabled: false,
       );
-      expect(a, AlarmSettings.defaults); // both null-ringtone → equal
-      expect(a == b, isFalse);
-      expect(a.hashCode == b.hashCode, isFalse);
+      expect(a == diffLead, isFalse);
+      expect(a == diffVibe, isFalse);
+      expect(a.hashCode == diffVibe.hashCode, isFalse);
     });
   });
 }

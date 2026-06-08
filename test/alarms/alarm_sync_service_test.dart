@@ -74,6 +74,7 @@ void main() {
     int? relativeOffsetMinutes,
     bool isCriticalShift = false,
     String soundKey = 'classic',
+    String? customRingtoneUri,
   }) =>
       AppAlarm(
         id: id,
@@ -85,6 +86,10 @@ void main() {
         relativeOffsetMinutes: relativeOffsetMinutes,
         isCriticalShift: isCriticalShift,
         soundKey: soundKey,
+        customRingtoneUri: customRingtoneUri,
+        ringtoneSource: customRingtoneUri == null
+            ? RingtoneSource.classic
+            : RingtoneSource.vault,
       );
 
   Shift mkShift({
@@ -419,9 +424,9 @@ void main() {
           .toList();
       expect(fields, hasLength(2));
       // Every payload is
-      // <shiftId>|<id>|<code>|<soundKey>|<appAlarmId>|<ringtone>.
-      expect(fields.every((f) => f.length == 6), isTrue,
-          reason: 'canonical payload has 6 fields');
+      // <shiftId>|<id>|<code>|<soundKey>|<appAlarmId>|<ringtone>|<vibrate>.
+      expect(fields.every((f) => f.length == 7), isTrue,
+          reason: 'canonical payload has 7 fields');
       // Critical alarm: code 'c' + 'siren' tone + its rule id in field 5.
       expect(
         fields.any((f) => f[2] == 'c' && f[3] == 'siren' && f[4] == 'crit'),
@@ -436,24 +441,21 @@ void main() {
       );
     });
 
-    test('the global custom ringtone rides field 6 of the payload', () async {
-      // Forward-plumbing: the engine reads AlarmSettings.customRingtoneUri and
-      // threads it through; no consumer yet, but the wire carries it.
-      await settings.write(
-        const AlarmSettings(
-          leadTime: Duration(minutes: 60),
-          customRingtoneUri: '/support/ringtones/midnight.mp3',
-        ),
-      );
+    test('a per-alarm custom ringtone rides field 6 of the payload', () async {
+      // The engine now reads the URI off the AppAlarm being scheduled (it
+      // migrated off the global AlarmSettings) and threads it into the payload.
       await shifts.upsert(
         mkShift(id: 'd1', date: DateTime(2026, 6, 2), type: ShiftType.day),
       );
-      await alarms.upsert(followsRotation(id: 'a'));
+      await alarms.upsert(
+        followsRotation(id: 'a', customRingtoneUri: '/support/ringtones/midnight.mp3'),
+      );
       await service.syncAlarms();
 
       final fields = scheduler.scheduled.values.single.payload!.split('|');
-      expect(fields.length, 6);
+      expect(fields.length, 7);
       expect(fields[5], '/support/ringtones/midnight.mp3');
+      expect(fields[6], '1', reason: 'vibration defaults on (field 7)');
     });
 
     test('a null custom ringtone leaves field 6 empty', () async {
@@ -464,8 +466,9 @@ void main() {
       await service.syncAlarms();
 
       final fields = scheduler.scheduled.values.single.payload!.split('|');
-      expect(fields.length, 6);
+      expect(fields.length, 7);
       expect(fields[5], '');
+      expect(fields[6], '1', reason: 'vibration defaults on (field 7)');
     });
 
     test('scheduleAt receives the alarm soundKey', () async {
@@ -541,7 +544,7 @@ void main() {
       await service.syncAlarms();
 
       final fields = scheduler.scheduled.values.first.payload!.split('|');
-      expect(fields.length, 6);
+      expect(fields.length, 7);
       expect(fields[0], noShiftPayloadSentinel);
       expect(fields[4], 'wk7');
     });

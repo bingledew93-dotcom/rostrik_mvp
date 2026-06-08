@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'alarm_payload.dart';
 import 'alarm_scheduler.dart';
 import 'alarm_sound.dart';
 import 'notification_action_dispatcher.dart';
@@ -60,6 +61,17 @@ const List<String> _legacyChannelIds = <String>[
 /// the alarm" case where the previous in-UI ringtone strategy failed.
 const int _flagInsistent = 4;
 
+/// Single SILENT channel for custom-ringtone alarms (Phase 2b, single-
+/// notification architecture). It plays NO sound — the user's custom tone is
+/// played by the native `MediaPlayer` that `WakeUpScreen` starts when the
+/// FullScreenIntent launches it. Routing custom alarms here is what prevents
+/// the bundled tone from ringing OVER the native custom audio. Vibration stays
+/// on as a physical cue for the unlocked-active case (where the FSI only shows
+/// a heads-up and `WakeUpScreen` never launches, so no custom audio plays).
+/// Nested under the same [kAlarmChannelGroupId] group as the per-tone channels.
+const String _silentAlarmChannelId = 'rostrik_alarm_custom_silent';
+const String _silentAlarmChannelName = 'Custom ringtone alarms';
+
 /// Constructs the [NotificationDetails] for a Rostrik alarm ringing the tone
 /// identified by [soundKey] (an `AlarmSound.key`; unknown keys fall back to the
 /// default via [resolveAlarmSound]).
@@ -87,7 +99,10 @@ const int _flagInsistent = 4;
 /// and serialisation symmetry. On iOS the tone is the per-notification
 /// `sound:` filename, resolved from `Library/Sounds/` (see
 /// [installIosNotificationSounds]).
-NotificationDetails buildAlarmNotificationDetails(String soundKey) {
+NotificationDetails buildAlarmNotificationDetails(
+  String soundKey, {
+  bool useSilentChannel = false,
+}) {
   final sound = resolveAlarmSound(soundKey);
   // The Snooze action button title reflects the user's current snooze
   // duration so the lock-screen affordance matches what'll actually
@@ -99,46 +114,66 @@ NotificationDetails buildAlarmNotificationDetails(String soundKey) {
   // (`main()` and `_ensureBackgroundIsolateInit`).
   final int snoozeMins =
       Hive.box('settings').get('snooze_duration', defaultValue: 1) as int;
-  final androidDetails = AndroidNotificationDetails(
-    // Per-tone channel — the sound is bound here, immutably, by `init()`.
-    sound.androidChannelId,
-    sound.label,
-    channelDescription: kAlarmChannelGroupDescription,
-    importance: Importance.max,
-    priority: Priority.max,
-    category: AndroidNotificationCategory.alarm,
-    fullScreenIntent: true,
-    playSound: true,
-    sound: RawResourceAndroidNotificationSound(sound.androidResource),
-    // FLAG_INSISTENT (4) makes the channel sound and vibration LOOP
-    // until the notification is dismissed. `Int32List.fromList` is the
-    // wire type FLN's platform channel expects; the bare `<int>[4]`
-    // would be serialised as a regular List<int> and silently ignored.
-    additionalFlags: Int32List.fromList(<int>[_flagInsistent]),
-    enableVibration: true,
-    // Public lockscreen visibility — the title/body AND the Snooze/Dismiss
-    // action buttons render on the lockscreen, so the user can dismiss
-    // the alarm without authenticating. Android's secure-lockscreen
-    // contract still gates the WakeUpScreen's slide-to-dismiss behind
-    // auth, but the action-button path (broadcast receiver → background
-    // isolate) bypasses that gate entirely. Shift type + start time are
-    // low-sensitivity for this app's audience.
-    visibility: NotificationVisibility.public,
-    actions: <AndroidNotificationAction>[
-      AndroidNotificationAction(
-        actionIdSnooze,
-        'Snooze ($snoozeMins min)',
-        showsUserInterface: false,
-        cancelNotification: true,
-      ),
-      const AndroidNotificationAction(
-        actionIdDismiss,
-        'Dismiss',
-        showsUserInterface: false,
-        cancelNotification: true,
-      ),
-    ],
-  );
+  // Shared across both channel variants: public lockscreen visibility so the
+  // title/body AND the Snooze/Dismiss buttons render on the lockscreen (the
+  // user can dismiss without authenticating — the action-button path bypasses
+  // the keyguard via the broadcast receiver → background isolate).
+  final actions = <AndroidNotificationAction>[
+    AndroidNotificationAction(
+      actionIdSnooze,
+      'Snooze ($snoozeMins min)',
+      showsUserInterface: false,
+      cancelNotification: true,
+    ),
+    const AndroidNotificationAction(
+      actionIdDismiss,
+      'Dismiss',
+      showsUserInterface: false,
+      cancelNotification: true,
+    ),
+  ];
+
+  // Custom-ringtone alarms (payload carried a customRingtoneUri) route to the
+  // SILENT channel: no channel sound and NO FLAG_INSISTENT, because the native
+  // MediaPlayer started by WakeUpScreen owns the looping custom audio. Bundled-
+  // tone alarms keep the per-tone channel + FLAG_INSISTENT exactly as before.
+  final androidDetails = useSilentChannel
+      ? AndroidNotificationDetails(
+          _silentAlarmChannelId,
+          _silentAlarmChannelName,
+          channelDescription: kAlarmChannelGroupDescription,
+          importance: Importance.max,
+          priority: Priority.max,
+          category: AndroidNotificationCategory.alarm,
+          // Still a full-screen intent — this is what launches WakeUpScreen,
+          // which is what STARTS the native custom audio. Without FSI there'd
+          // be no trigger for the tone in the single-notification design.
+          fullScreenIntent: true,
+          playSound: false,
+          enableVibration: true,
+          visibility: NotificationVisibility.public,
+          actions: actions,
+        )
+      : AndroidNotificationDetails(
+          // Per-tone channel — the sound is bound here, immutably, by `init()`.
+          sound.androidChannelId,
+          sound.label,
+          channelDescription: kAlarmChannelGroupDescription,
+          importance: Importance.max,
+          priority: Priority.max,
+          category: AndroidNotificationCategory.alarm,
+          fullScreenIntent: true,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound(sound.androidResource),
+          // FLAG_INSISTENT (4) makes the channel sound and vibration LOOP
+          // until the notification is dismissed. `Int32List.fromList` is the
+          // wire type FLN's platform channel expects; the bare `<int>[4]`
+          // would be serialised as a regular List<int> and silently ignored.
+          additionalFlags: Int32List.fromList(<int>[_flagInsistent]),
+          enableVibration: true,
+          visibility: NotificationVisibility.public,
+          actions: actions,
+        );
 
   final iosDetails = DarwinNotificationDetails(
     presentAlert: true,
@@ -375,6 +410,23 @@ class LocalNotificationsAlarmScheduler implements AlarmScheduler {
         ),
       );
     }
+
+    // Silent channel for custom-ringtone alarms (single-notification Phase 2b):
+    // NO sound (the native MediaPlayer that WakeUpScreen starts owns the custom
+    // audio), vibration on as a physical cue. One shared channel under the same
+    // group. `playSound: false` is bound immutably here, just like the per-tone
+    // sounds above.
+    await androidImpl.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _silentAlarmChannelId,
+        _silentAlarmChannelName,
+        description: kAlarmChannelGroupDescription,
+        groupId: kAlarmChannelGroupId,
+        importance: Importance.max,
+        playSound: false,
+        enableVibration: true,
+      ),
+    );
   }
 
   /// Asks the OS for notification + exact-alarm permission. Idempotent —
@@ -433,7 +485,16 @@ class LocalNotificationsAlarmScheduler implements AlarmScheduler {
       title: title,
       body: body,
       scheduledDate: tzFireAt,
-      notificationDetails: buildAlarmNotificationDetails(soundKey),
+      // Single source of truth: the payload's customRingtoneUri (encoded by
+      // AlarmSyncService from the global AlarmSettings) decides whether this
+      // alarm is custom. If so, route it to the SILENT channel so the bundled
+      // tone doesn't play over the native audio WakeUpScreen will start — the
+      // SAME payload also reaches WakeUpScreen, so the channel choice and the
+      // wake-screen audio can never disagree. No reconcile/ledger change.
+      notificationDetails: buildAlarmNotificationDetails(
+        soundKey,
+        useSilentChannel: AlarmPayload.decode(payload)?.customRingtoneUri != null,
+      ),
       androidScheduleMode: AndroidScheduleMode.alarmClock,
       payload: payload,
     );

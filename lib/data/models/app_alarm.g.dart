@@ -28,13 +28,20 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       soundKey: fields[9] == null ? 'classic' : fields[9] as String,
       weekdaysBitmask: fields[10] == null ? 0 : (fields[10] as num).toInt(),
       autoDeleteAfterFiring: fields[11] == null ? false : fields[11] as bool,
+      // Fields 12-14 (per-alarm custom ringtone) added in the per-alarm audio
+      // migration. Absent on legacy records → null URI/name, classic source.
+      customRingtoneUri: fields[12] as String?,
+      customRingtoneName: fields[13] as String?,
+      ringtoneSource: fields[14] == null
+          ? RingtoneSource.classic
+          : RingtoneSource.values[(fields[14] as num).toInt()],
     );
   }
 
   @override
   void write(BinaryWriter writer, AppAlarm obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -56,7 +63,13 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       ..writeByte(10)
       ..write(obj.weekdaysBitmask)
       ..writeByte(11)
-      ..write(obj.autoDeleteAfterFiring);
+      ..write(obj.autoDeleteAfterFiring)
+      ..writeByte(12)
+      ..write(obj.customRingtoneUri)
+      ..writeByte(13)
+      ..write(obj.customRingtoneName)
+      ..writeByte(14)
+      ..write(obj.ringtoneSource.index);
   }
 
   @override

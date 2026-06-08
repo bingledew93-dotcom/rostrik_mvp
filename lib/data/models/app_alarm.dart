@@ -1,7 +1,10 @@
 import 'package:hive_ce/hive.dart';
 
 import '../../alarms/alarm_sound.dart';
+import 'ringtone_source.dart';
 import 'shift_type.dart';
+
+export 'ringtone_source.dart' show RingtoneSource;
 
 part 'app_alarm.g.dart';
 
@@ -61,6 +64,9 @@ class AppAlarm {
     this.soundKey = kDefaultAlarmSoundKey,
     this.weekdaysBitmask = 0,
     this.autoDeleteAfterFiring = false,
+    this.customRingtoneUri,
+    this.customRingtoneName,
+    this.ringtoneSource = RingtoneSource.classic,
   })  : assert(
           minutesOfDay >= 0 && minutesOfDay < 1440,
           'minutesOfDay must be 0..1439',
@@ -162,6 +168,27 @@ class AppAlarm {
   @HiveField(11, defaultValue: false)
   final bool autoDeleteAfterFiring;
 
+  /// Per-alarm custom ringtone — the durable vault path ([RingtoneSource.vault])
+  /// or `content://` system URI ([RingtoneSource.system]) this alarm plays, or
+  /// null for a bundled tone ([RingtoneSource.classic], the default). Migrated
+  /// here from the (formerly global) `AlarmSettings` so each alarm carries its
+  /// own audio. Non-null routes the firing notification to the silent channel
+  /// and `WakeUpScreen` plays it natively. Legacy records (no field 12) read
+  /// back null.
+  @HiveField(12)
+  final String? customRingtoneUri;
+
+  /// Human-readable name of [customRingtoneUri] (what the editor shows), or null
+  /// for a bundled tone. Legacy records (no field 13) read back null.
+  @HiveField(13)
+  final String? customRingtoneName;
+
+  /// How to interpret [customRingtoneUri] — see [RingtoneSource]. Defaults to
+  /// [RingtoneSource.classic] (bundled tone); legacy records (no field 14) read
+  /// back classic via the adapter.
+  @HiveField(14)
+  final RingtoneSource ringtoneSource;
+
   /// `clearLinkedShiftType` / `clearRelativeOffset` let a caller reset a field
   /// back to `null` — without them, passing `null` is indistinguishable from
   /// "leave unchanged". `clearRelativeOffset` is how the create/edit sheet
@@ -180,6 +207,9 @@ class AppAlarm {
     String? soundKey,
     int? weekdaysBitmask,
     bool? autoDeleteAfterFiring,
+    String? customRingtoneUri,
+    String? customRingtoneName,
+    RingtoneSource? ringtoneSource,
   }) =>
       AppAlarm(
         id: id ?? this.id,
@@ -198,6 +228,9 @@ class AppAlarm {
         weekdaysBitmask: weekdaysBitmask ?? this.weekdaysBitmask,
         autoDeleteAfterFiring:
             autoDeleteAfterFiring ?? this.autoDeleteAfterFiring,
+        customRingtoneUri: customRingtoneUri ?? this.customRingtoneUri,
+        customRingtoneName: customRingtoneName ?? this.customRingtoneName,
+        ringtoneSource: ringtoneSource ?? this.ringtoneSource,
       );
 
   @override
@@ -215,7 +248,10 @@ class AppAlarm {
           isCriticalShift == other.isCriticalShift &&
           soundKey == other.soundKey &&
           weekdaysBitmask == other.weekdaysBitmask &&
-          autoDeleteAfterFiring == other.autoDeleteAfterFiring;
+          autoDeleteAfterFiring == other.autoDeleteAfterFiring &&
+          customRingtoneUri == other.customRingtoneUri &&
+          customRingtoneName == other.customRingtoneName &&
+          ringtoneSource == other.ringtoneSource;
 
   @override
   int get hashCode => Object.hash(
@@ -230,6 +266,9 @@ class AppAlarm {
         soundKey,
         weekdaysBitmask,
         autoDeleteAfterFiring,
+        customRingtoneUri,
+        customRingtoneName,
+        ringtoneSource,
       );
 
   @override
@@ -240,7 +279,10 @@ class AppAlarm {
       'relativeOffsetMinutes: $relativeOffsetMinutes, '
       'isCriticalShift: $isCriticalShift, soundKey: $soundKey, '
       'weekdaysBitmask: $weekdaysBitmask, '
-      'autoDeleteAfterFiring: $autoDeleteAfterFiring)';
+      'autoDeleteAfterFiring: $autoDeleteAfterFiring, '
+      'customRingtoneUri: $customRingtoneUri, '
+      'customRingtoneName: $customRingtoneName, '
+      'ringtoneSource: $ringtoneSource)';
 }
 
 /// Whether the alarm [a] should be permanently deleted from Hive the instant it

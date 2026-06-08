@@ -1,8 +1,17 @@
 package com.example.rostrik_mvp
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
@@ -46,6 +55,10 @@ class MainActivity : FlutterActivity() {
         private const val TAG = "Rostrik"
         private const val CHANNEL = "rostrik/alarm_routing"
 
+        // Phase 2a custom-audio channel. Wire name must match
+        // `lib/alarms/ringtone_channel.dart`'s `RingtoneChannel.channelName`.
+        private const val RINGTONE_CHANNEL = "rostrik/ringtone_picker"
+
         // Dart-side methods exchanged on this channel. Keep these strings
         // in sync with `main.dart`; the names are part of the wire
         // contract between Kotlin and Dart.
@@ -55,9 +68,38 @@ class MainActivity : FlutterActivity() {
         // flutter_local_notifications stores the schedule's `payload`
         // string under this extra key in the PendingIntent it builds.
         private const val EXTRA_PAYLOAD = "payload"
+
+        // RingtoneSource.index values — MUST match the Dart enum order in
+        // `lib/data/models/alarm_settings.dart` (classic, vault, system).
+        private const val SOURCE_CLASSIC = 0
+        private const val SOURCE_VAULT = 1
+        private const val SOURCE_SYSTEM = 2
+
+        // startActivityForResult request code for the system ringtone picker.
+        // FlutterActivity extends the FRAMEWORK android.app.Activity (NOT an
+        // androidx ComponentActivity), so the modern ActivityResult API is
+        // unavailable here — we use the classic request-code path, routed
+        // through [onActivityResult].
+        private const val RINGTONE_PICKER_REQUEST = 0x52494E47 // "RING"
     }
 
     private var alarmChannel: MethodChannel? = null
+    private var ringtoneChannel: MethodChannel? = null
+
+    /// In-flight `pickSystemRingtone` reply, held while the system picker
+    /// Activity is up and completed from [onActivityResult]. Only one pick can
+    /// be in flight at a time (re-entrant calls are rejected).
+    private var pendingRingtoneResult: MethodChannel.Result? = null
+
+    /// Preview player for the Phase-2a "Play Now" harness. A plain looping
+    /// [MediaPlayer] (no foreground service — preview is foreground, on-demand)
+    /// that runs the same resolve-and-fallback logic the fire-time engine will.
+    private var previewPlayer: MediaPlayer? = null
+
+    /// Active haptic vibrator while a custom tone is playing WITH vibration on.
+    /// Held so it survives an audio fallback (releasing the player must NOT stop
+    /// the buzz) and is cancelled by [stopPreviewPlayer] / onDestroy.
+    private var vibrator: Vibrator? = null
 
     /// Payload captured by [onCreate] before the Dart side could ask
     /// for it. Cleared atomically the first time
@@ -82,6 +124,33 @@ class MainActivity : FlutterActivity() {
                     pendingPayload = null
                     Log.d(TAG, "$METHOD_GET_INITIAL_PAYLOAD → ${payload ?: "<null>"}")
                     result.success(payload)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // Phase 2a custom-audio channel: system-tone picker + native preview
+        // harness (the engine that Phase 2b promotes into the foreground
+        // service). Separate channel so the alarm-routing contract above is
+        // untouched.
+        ringtoneChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            RINGTONE_CHANNEL,
+        )
+        ringtoneChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "pickSystemRingtone" -> {
+                    launchRingtonePicker(call.argument<String>("currentUri"), result)
+                }
+                "previewRingtone" -> {
+                    val source = call.argument<Int>("source") ?: SOURCE_CLASSIC
+                    val vibrate = call.argument<Boolean>("vibrate") ?: false
+                    previewRingtone(source, call.argument<String>("uri"), vibrate)
+                    result.success(null)
+                }
+                "stopPreview" -> {
+                    stopPreviewPlayer()
+                    result.success(null)
                 }
                 else -> result.notImplemented()
             }
@@ -155,6 +224,254 @@ class MainActivity : FlutterActivity() {
             channel.invokeMethod(METHOD_ALARM_FIRED, payload)
         } else {
             pendingPayload = payload
+        }
+    }
+
+    override fun onDestroy() {
+        // Never let a preview tone outlive the editor screen.
+        stopPreviewPlayer()
+        super.onDestroy()
+    }
+
+    // ---------------------------------------------------------------------
+    // Phase 2a — system ringtone picker
+    // ---------------------------------------------------------------------
+
+    /** Launches the system alarm-tone picker; the reply is delivered async via
+     *  [onActivityResult]. Rejects re-entrant calls so a second pick can't
+     *  strand the first [MethodChannel.Result]. */
+    private fun launchRingtonePicker(currentUri: String?, result: MethodChannel.Result) {
+        if (pendingRingtoneResult != null) {
+            result.error("ALREADY_ACTIVE", "Ringtone picker already open", null)
+            return
+        }
+        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select alarm tone")
+            if (!currentUri.isNullOrEmpty()) {
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                    Uri.parse(currentUri),
+                )
+            }
+        }
+        pendingRingtoneResult = result
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, RINGTONE_PICKER_REQUEST)
+        } catch (e: Exception) {
+            // No picker activity on this device/ROM — fail the call cleanly.
+            pendingRingtoneResult = null
+            Log.w(TAG, "ringtone picker launch failed", e)
+            result.error("LAUNCH_FAILED", e.message, null)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        // Let FlutterActivity forward to any plugins first (none use our code).
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != RINGTONE_PICKER_REQUEST) return
+
+        val pending = pendingRingtoneResult
+        pendingRingtoneResult = null
+        if (pending == null) return
+
+        if (resultCode != Activity.RESULT_OK) {
+            pending.success(null) // user cancelled
+            return
+        }
+        val uri = extractPickedRingtoneUri(data)
+        if (uri == null) {
+            pending.success(null) // "Silent" / no selection
+            return
+        }
+        val title = try {
+            RingtoneManager.getRingtone(applicationContext, uri)
+                ?.getTitle(applicationContext)
+        } catch (e: Exception) {
+            Log.w(TAG, "ringtone title lookup failed", e)
+            null
+        } ?: "System tone"
+        pending.success(mapOf("uri" to uri.toString(), "title" to title))
+    }
+
+    /** Reads the picked tone URI out of the picker result, across API levels. */
+    private fun extractPickedRingtoneUri(data: Intent?): Uri? {
+        if (data == null) return null
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            data.getParcelableExtra(
+                RingtoneManager.EXTRA_RINGTONE_PICKED_URI,
+                Uri::class.java,
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Phase 2a — native preview engine (the Phase-2b fire-time player, run
+    // on-demand). Resolve the chosen source, and on ANY failure fall through
+    // to the bundled classic tone so a preview is never silent.
+    // ---------------------------------------------------------------------
+
+    private fun previewRingtone(sourceIndex: Int, uri: String?, vibrate: Boolean) {
+        stopPreviewPlayer()
+        // Start the haptic loop BEFORE audio so it accompanies whatever rings —
+        // including the classic/RingtoneManager fallbacks below (which release
+        // the player but deliberately do NOT cancel vibration).
+        if (vibrate) startVibration()
+        val player = MediaPlayer()
+        previewPlayer = player
+        try {
+            configureAlarmPlayer(player)
+            // Mid-stream failures (media-server death, codec stall) surface here,
+            // not at prepare() — fall back rather than dying silently.
+            player.setOnErrorListener { _, what, extra ->
+                Log.w(TAG, "preview MediaPlayer error what=$what extra=$extra → classic")
+                fallbackToClassic()
+                true
+            }
+            when (sourceIndex) {
+                SOURCE_VAULT ->
+                    player.setDataSource(
+                        requireNotNull(uri) { "vault source needs a path" },
+                    )
+                SOURCE_SYSTEM ->
+                    player.setDataSource(
+                        applicationContext,
+                        Uri.parse(requireNotNull(uri) { "system source needs a uri" }),
+                    )
+                else -> setClassicDataSource(player) // SOURCE_CLASSIC
+            }
+            // SYNCHRONOUS prepare: a bad path / revoked content:// throws HERE,
+            // before start(), so the catch can fall back with no audible gap.
+            player.prepare()
+            player.start()
+        } catch (e: Exception) {
+            Log.w(TAG, "preview resolve failed (${e.message}) → classic fallback", e)
+            fallbackToClassic()
+        }
+    }
+
+    /** Last-resort audio: the bundled `classic_alarm`, then the device's default
+     *  alarm ringtone. The user is never left in silence. Releases the failed
+     *  player but NOT the vibrator — a swap of audio source must keep any active
+     *  haptic loop running. */
+    private fun fallbackToClassic() {
+        releasePlayer()
+        val player = MediaPlayer()
+        previewPlayer = player
+        try {
+            configureAlarmPlayer(player)
+            setClassicDataSource(player)
+            player.prepare()
+            player.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "classic fallback failed → system default alarm tone", e)
+            previewPlayer = null
+            try {
+                RingtoneManager.getRingtone(
+                    applicationContext,
+                    RingtoneManager.getActualDefaultRingtoneUri(
+                        applicationContext,
+                        RingtoneManager.TYPE_ALARM,
+                    ),
+                )?.play()
+            } catch (e2: Exception) {
+                Log.e(TAG, "even the default alarm ringtone failed", e2)
+            }
+        }
+    }
+
+    private fun configureAlarmPlayer(player: MediaPlayer) {
+        player.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build(),
+        )
+        player.isLooping = true
+    }
+
+    /** Points [player] at `res/raw/classic_alarm`. The AssetFileDescriptor is
+     *  closed right after setDataSource (MediaPlayer dups the fd), before the
+     *  caller's prepare(). */
+    private fun setClassicDataSource(player: MediaPlayer) {
+        val afd = resources.openRawResourceFd(R.raw.classic_alarm)
+        try {
+            player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+        } finally {
+            afd.close()
+        }
+    }
+
+    /** Full stop: release the audio player AND cancel any haptic loop. Used by
+     *  the channel `stopPreview`, onDestroy, and the start of a new play. */
+    private fun stopPreviewPlayer() {
+        releasePlayer()
+        stopVibration()
+    }
+
+    /** Stops + releases the [MediaPlayer] only, leaving the vibrator untouched
+     *  (so an audio fallback can swap players without dropping the buzz). */
+    private fun releasePlayer() {
+        val player = previewPlayer ?: return
+        previewPlayer = null
+        try {
+            if (player.isPlaying) player.stop()
+        } catch (e: IllegalStateException) {
+            // already stopped/uninitialised — fine.
+        }
+        try {
+            player.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "preview player release failed", e)
+        }
+    }
+
+    /** Starts a continuous, aggressive looping vibration (buzz 1s / pause 1s,
+     *  repeating). Resolves the [Vibrator] across API levels. Best-effort — a
+     *  device without a vibrator, or a failure, must never break the alarm. */
+    private fun startVibration() {
+        stopVibration()
+        val v = resolveVibrator() ?: return
+        if (!v.hasVibrator()) return
+        vibrator = v
+        val pattern = longArrayOf(0, 1000, 1000) // delay, on, off — index 0 loops
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            } else {
+                @Suppress("DEPRECATION")
+                v.vibrate(pattern, 0)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "startVibration failed", e)
+        }
+    }
+
+    private fun stopVibration() {
+        val v = vibrator ?: return
+        vibrator = null
+        try {
+            v.cancel()
+        } catch (e: Exception) {
+            Log.w(TAG, "vibrator cancel failed", e)
+        }
+    }
+
+    private fun resolveVibrator(): Vibrator? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE)
+                as? VibratorManager
+            vm?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
     }
 }

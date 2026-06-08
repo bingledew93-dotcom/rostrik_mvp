@@ -17,6 +17,7 @@ import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import 'alarm_payload.dart';
 import 'alarm_scheduler.dart';
+import 'ringtone_channel.dart';
 
 /// Name under which the main isolate's [ReceivePort] is registered with
 /// `IsolateNameServer`. Looked up by the background-isolate notification
@@ -103,6 +104,13 @@ class NotificationActionDispatcher {
   /// (the OS reclaims the entry when the process dies).
   final ReceivePort _actionPort = ReceivePort();
 
+  /// Bridge to the native player. In the single-notification architecture a
+  /// custom-ringtone alarm's tone is played by the native `MediaPlayer`
+  /// (started by `WakeUpScreen`), NOT the OS notification channel — so
+  /// cancelling the notification does NOT stop it. Snooze/Dismiss therefore
+  /// stop it explicitly here. No-op for bundled-tone alarms / off Android.
+  final RingtoneChannel _ringtone = RingtoneChannel();
+
   /// Registers [_actionPort] with the [IsolateNameServer] under
   /// [alarmActionPortName] and starts the listener loop. Removes any
   /// stale registration first so hot-restart in dev does not collide
@@ -161,6 +169,10 @@ class NotificationActionDispatcher {
     final parsed = AlarmPayload.decode(payload);
     if (parsed == null) return;
 
+    // Stop any native custom-ringtone audio (silent-channel alarms don't loop
+    // via FLAG_INSISTENT, so the notification cancel below won't silence them).
+    await _ringtone.stopPreview();
+
     // Kill the OS notification FIRST so the FLAG_INSISTENT audio loop
     // stops the moment the user taps. Android auto-cancels on a
     // notification-action-button tap, but the in-app Snooze button on
@@ -218,6 +230,10 @@ class NotificationActionDispatcher {
   Future<void> dismiss(String payload) async {
     final parsed = AlarmPayload.decode(payload);
     if (parsed == null) return;
+
+    // Stop native custom-ringtone audio first (see snooze) — the silent-channel
+    // alarm's tone is the native player's, not the OS notification's.
+    await _ringtone.stopPreview();
 
     // Same rationale as snooze: kill the OS notification (and its
     // FLAG_INSISTENT audio loop) before any DB work so the audio dies

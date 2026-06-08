@@ -461,8 +461,13 @@ class AlarmSyncService {
           // — even from a killed state where the notification id alone can't be
           // reversed to a rule. Harmless for non-auto-delete alarms.
           appAlarmId: entry.value.alarm.id,
-          // Global custom ringtone (forward-plumbing; no native consumer yet).
-          customRingtoneUri: settings.customRingtoneUri,
+          // Per-alarm custom ringtone — non-null routes THIS alarm to the silent
+          // channel and is replayed natively by WakeUpScreen. (Migrated off the
+          // global settings; each alarm now carries its own.)
+          customRingtoneUri: entry.value.alarm.customRingtoneUri,
+          // Vibration stays a GLOBAL toggle — carried so WakeUpScreen can drive
+          // (or skip) the native haptic loop for a custom-ringtone alarm.
+          vibrationEnabled: settings.vibrationEnabled,
         ),
       );
       _scheduledFireAt[id] = desiredFireAt;

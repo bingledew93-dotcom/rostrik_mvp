@@ -17,7 +17,7 @@ import 'alarm_sound.dart';
 /// design):
 ///
 /// ```
-///   <shiftId>|<notificationId>|<dismissCode>|<soundKey>|<appAlarmId>|<ringtone>
+///   <shiftId>|<notificationId>|<dismissCode>|<soundKey>|<appAlarmId>|<ringtone>|<vibrate>
 ///      0  shiftId        Shift UUID, or the `NONE` sentinel for an alarm with
 ///                        no linked shift (oneTime / weekly).
 ///      1  notificationId OS notification id (int).
@@ -29,22 +29,27 @@ import 'alarm_sound.dart';
 ///                        auto-delete one-time alarm can be removed at the
 ///                        dismissal instant — even from a killed state, where
 ///                        the notification id alone can't be reversed to a rule.
-///      5  ringtone       durable path of the global custom ringtone, or ''
-///                        for the bundled default. FORWARD-PLUMBING for the
-///                        deferred native playback path — no consumer yet.
+///      5  ringtone       durable path / `content://` URI of the global custom
+///                        ringtone, or '' for the bundled default. Non-empty ⇒
+///                        the alarm was scheduled on the SILENT channel and
+///                        WakeUpScreen plays this tone via the native player.
+///      6  vibrate        '1' = vibrate, '0' = silent. Drives the continuous
+///                        native haptic loop for custom-ringtone alarms.
 /// ```
 ///
-/// **Backward-tolerant decode.** A 2-, 3-, 4- or 5-field payload still decodes:
-/// any missing tail field is defaulted (`isCritical = false`,
+/// **Backward-tolerant decode.** A 2-, 3-, 4-, 5- or 6-field payload still
+/// decodes: any missing tail field is defaulted (`isCritical = false`,
 /// `soundKey = kDefaultAlarmSoundKey`, `appAlarmId = ''`,
-/// `customRingtoneUri = null`). This matters for live cases like:
+/// `customRingtoneUri = null`, `vibrationEnabled = true`). This matters for live
+/// cases like:
 ///   * OS-pending notifications scheduled by an older build (pre-sound /
-///     pre-critical / pre-appAlarmId / pre-ringtone) that fire after an update,
+///     pre-critical / pre-appAlarmId / pre-ringtone / pre-vibrate) that fire
+///     after an update,
 ///   * `WakeUpScreen`'s in-app Snooze, which reconstructs a bare
 ///     `shiftId|notificationId` string, and
 ///   * any shorter payload from a build immediately before a field landed.
 /// In all of them, the next `AlarmSyncService` reconcile re-issues the full
-/// 6-field form, so the degradation is momentary.
+/// 7-field form, so the degradation is momentary.
 class AlarmPayload {
   const AlarmPayload({
     required this.shiftId,
@@ -53,6 +58,7 @@ class AlarmPayload {
     required this.soundKey,
     this.appAlarmId = '',
     this.customRingtoneUri,
+    this.vibrationEnabled = true,
   });
 
   final String shiftId;
@@ -73,15 +79,21 @@ class AlarmPayload {
   /// `|`-free (see the create-sheet's ringtone persist step).
   final String? customRingtoneUri;
 
+  /// Whether the firing alarm vibrates (field 6). Defaults to true (absent on
+  /// pre-vibrate payloads). Read by `WakeUpScreen` and passed to the native
+  /// haptic engine alongside the custom tone.
+  final bool vibrationEnabled;
+
   /// Field-2 code for critical-shift wake mechanics.
   static const String _criticalCode = 'c';
 
   /// Field-2 code for the normal slide-to-dismiss.
   static const String _normalCode = 'n';
 
-  /// Builds the canonical 6-field payload string. [customRingtoneUri] is
+  /// Builds the canonical 7-field payload string. [customRingtoneUri] is
   /// emitted as an empty trailing field when null (the common, bundled-default
-  /// case), which the backward-tolerant [decode] reads back as null.
+  /// case); [vibrationEnabled] is emitted as '1' / '0'. Both are read back by
+  /// the backward-tolerant [decode] (absent ⇒ null / true respectively).
   static String encode({
     required String shiftId,
     required int notificationId,
@@ -89,10 +101,11 @@ class AlarmPayload {
     required String soundKey,
     required String appAlarmId,
     required String? customRingtoneUri,
+    required bool vibrationEnabled,
   }) =>
       '$shiftId|$notificationId|'
       '${isCritical ? _criticalCode : _normalCode}|$soundKey|$appAlarmId|'
-      '${customRingtoneUri ?? ''}';
+      '${customRingtoneUri ?? ''}|${vibrationEnabled ? '1' : '0'}';
 
   /// Parses [payload] into an [AlarmPayload], or `null` if it is missing,
   /// empty, has an empty shiftId, or carries a non-int notificationId — all of
@@ -115,6 +128,9 @@ class AlarmPayload {
     final customRingtoneUri = (parts.length > 5 && parts[5].isNotEmpty)
         ? parts[5]
         : null;
+    // Field 6 (vibrate) — absent ⇒ true (historical always-vibrate default);
+    // only an explicit '0' turns it off.
+    final vibrationEnabled = parts.length > 6 ? parts[6] != '0' : true;
 
     return AlarmPayload(
       shiftId: parts[0],
@@ -123,6 +139,7 @@ class AlarmPayload {
       soundKey: soundKey,
       appAlarmId: appAlarmId,
       customRingtoneUri: customRingtoneUri,
+      vibrationEnabled: vibrationEnabled,
     );
   }
 }

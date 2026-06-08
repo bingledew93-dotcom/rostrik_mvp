@@ -305,12 +305,15 @@ class RostrikApp extends StatelessWidget {
 /// roster).
 ///
 /// Decoding is delegated to the shared [AlarmPayload] codec (the single source
-/// of truth for the `<shiftId>|<notificationId>|<dismissCode>|<soundKey>`
+/// of truth for the
+/// `<shiftId>|<notificationId>|<dismissCode>|<soundKey>|<appAlarmId>|<ringtone>`
 /// contract). A null result (missing / empty shiftId / non-int notificationId)
 /// falls through to the normal roster. `shiftId` may be the `'NONE'` sentinel
 /// for an alarm with no linked shift — WakeUpScreen renders a generic title in
-/// that case without hitting the ShiftRepository. The tone field is irrelevant
-/// to the wake screen (the OS owns the audio) and is ignored here.
+/// that case without hitting the ShiftRepository. The bundled-tone `soundKey`
+/// is irrelevant here (the OS channel owns that audio), but the custom
+/// `customRingtoneUri` IS threaded through: when present, WakeUpScreen plays it
+/// via the native player (the notification was scheduled on the silent channel).
 Widget? _parseWakeUpRoute(String? payload) {
   final parsed = AlarmPayload.decode(payload);
   if (parsed == null) return null;
@@ -319,5 +322,7 @@ Widget? _parseWakeUpRoute(String? payload) {
     notificationId: parsed.notificationId,
     isCritical: parsed.isCritical,
     appAlarmId: parsed.appAlarmId,
+    customRingtoneUri: parsed.customRingtoneUri,
+    vibrationEnabled: parsed.vibrationEnabled,
   );
 }

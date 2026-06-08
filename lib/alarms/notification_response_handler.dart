@@ -266,7 +266,13 @@ Future<void> _handleSnooze(String payload) async {
     // Decoded tone key (defaults to 'classic' for a legacy/bare payload) keeps
     // the snoozed alarm on the user's chosen channel/sound in the killed-app
     // path; the next main-isolate reconcile re-issues the canonical payload.
-    notificationDetails: buildAlarmNotificationDetails(parsed.soundKey),
+    // A custom-ringtone alarm (payload carried a URI) re-snoozes onto the
+    // SILENT channel too, so the rescheduled fire also defers audio to the
+    // native player WakeUpScreen starts — consistent with the original.
+    notificationDetails: buildAlarmNotificationDetails(
+      parsed.soundKey,
+      useSilentChannel: parsed.customRingtoneUri != null,
+    ),
     androidScheduleMode: AndroidScheduleMode.alarmClock,
     // Preserve the original `shiftId|notificationId` so a subsequent
     // Snooze / Dismiss / body-tap on the rescheduled alarm carries the

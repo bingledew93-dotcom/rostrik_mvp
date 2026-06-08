@@ -4,7 +4,7 @@ import 'package:rostrik_mvp/alarms/alarm_sound.dart';
 
 void main() {
   group('AlarmPayload.encode', () {
-    test('produces the canonical 6-field form', () {
+    test('produces the canonical 7-field form', () {
       expect(
         AlarmPayload.encode(
           shiftId: 'abc',
@@ -13,11 +13,11 @@ void main() {
           soundKey: 'siren',
           appAlarmId: 'alarm-9',
           customRingtoneUri: '/support/ringtones/horn.mp3',
+          vibrationEnabled: true,
         ),
-        'abc|42|c|siren|alarm-9|/support/ringtones/horn.mp3',
+        'abc|42|c|siren|alarm-9|/support/ringtones/horn.mp3|1',
       );
-      // Null ringtone → empty trailing field (two pipes after the soundKey:
-      // empty appAlarmId then empty ringtone).
+      // Null ringtone → empty field; vibration off → trailing '0'.
       expect(
         AlarmPayload.encode(
           shiftId: 'NONE',
@@ -26,32 +26,40 @@ void main() {
           soundKey: 'classic',
           appAlarmId: '',
           customRingtoneUri: null,
+          vibrationEnabled: false,
         ),
-        'NONE|7|n|classic||',
+        // 7 fields: shiftId|notifId|n|classic|<empty appAlarmId>|<empty ringtone>|0
+        'NONE|7|n|classic|||0',
       );
     });
   });
 
   group('AlarmPayload round-trip', () {
     for (final isCritical in [true, false]) {
-      for (final soundKey in const ['classic', 'siren', 'digital', 'chime']) {
-        test('critical=$isCritical sound=$soundKey survives encode→decode', () {
-          final wire = AlarmPayload.encode(
-            shiftId: 'shift-1',
-            notificationId: 1234,
-            isCritical: isCritical,
-            soundKey: soundKey,
-            appAlarmId: 'alarm-1',
-            customRingtoneUri: 'ring-$soundKey',
-          );
-          final decoded = AlarmPayload.decode(wire)!;
-          expect(decoded.shiftId, 'shift-1');
-          expect(decoded.notificationId, 1234);
-          expect(decoded.isCritical, isCritical);
-          expect(decoded.soundKey, soundKey);
-          expect(decoded.appAlarmId, 'alarm-1');
-          expect(decoded.customRingtoneUri, 'ring-$soundKey');
-        });
+      for (final vibrate in [true, false]) {
+        for (final soundKey in const ['classic', 'siren', 'digital', 'chime']) {
+          test(
+              'critical=$isCritical vibrate=$vibrate sound=$soundKey survives '
+              'encode→decode', () {
+            final wire = AlarmPayload.encode(
+              shiftId: 'shift-1',
+              notificationId: 1234,
+              isCritical: isCritical,
+              soundKey: soundKey,
+              appAlarmId: 'alarm-1',
+              customRingtoneUri: 'ring-$soundKey',
+              vibrationEnabled: vibrate,
+            );
+            final decoded = AlarmPayload.decode(wire)!;
+            expect(decoded.shiftId, 'shift-1');
+            expect(decoded.notificationId, 1234);
+            expect(decoded.isCritical, isCritical);
+            expect(decoded.soundKey, soundKey);
+            expect(decoded.appAlarmId, 'alarm-1');
+            expect(decoded.customRingtoneUri, 'ring-$soundKey');
+            expect(decoded.vibrationEnabled, vibrate);
+          });
+        }
       }
     }
   });
@@ -121,6 +129,38 @@ void main() {
       expect(
         AlarmPayload.decode('s1|99|n|classic|alarm-7|')!.customRingtoneUri,
         isNull,
+      );
+    });
+
+    test('a 6-field (pre-vibrate) payload defaults vibration ON', () {
+      // Every payload shorter than 7 fields predates the vibrate flag — they
+      // must keep the historical always-vibrate behaviour.
+      expect(
+        AlarmPayload.decode('s1|99|n|classic|alarm-7|/ring/a.mp3')!
+            .vibrationEnabled,
+        isTrue,
+      );
+      expect(AlarmPayload.decode('s1|99')!.vibrationEnabled, isTrue);
+    });
+
+    test('a full 7-field payload exposes the vibrate flag', () {
+      expect(
+        AlarmPayload.decode('s1|99|n|classic|alarm-7|/ring/a.mp3|1')!
+            .vibrationEnabled,
+        isTrue,
+      );
+      expect(
+        AlarmPayload.decode('s1|99|n|classic|alarm-7|/ring/a.mp3|0')!
+            .vibrationEnabled,
+        isFalse,
+      );
+    });
+
+    test('an empty 7th field reads back as vibration ON (default)', () {
+      expect(
+        AlarmPayload.decode('s1|99|n|classic|alarm-7|/ring/a.mp3|')!
+            .vibrationEnabled,
+        isTrue,
       );
     });
   });

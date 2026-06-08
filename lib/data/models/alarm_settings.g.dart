@@ -16,23 +16,25 @@ class AlarmSettingsAdapter extends TypeAdapter<AlarmSettings> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
+    // Fields 1 (customRingtoneUri), 2 (customRingtoneName) and 3 (ringtoneSource)
+    // were RETIRED when custom ringtones moved to AppAlarm. They are still read
+    // off the wire of older records into `fields` above (so nothing crashes) but
+    // are intentionally ignored here — only leadTime (0) + vibrationEnabled (4)
+    // survive.
     return AlarmSettings(
       leadTime: fields[0] as Duration,
-      customRingtoneUri: fields[1] as String?,
-      customRingtoneName: fields[2] as String?,
+      vibrationEnabled: (fields[4] as bool?) ?? true,
     );
   }
 
   @override
   void write(BinaryWriter writer, AlarmSettings obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(2)
       ..writeByte(0)
       ..write(obj.leadTime)
-      ..writeByte(1)
-      ..write(obj.customRingtoneUri)
-      ..writeByte(2)
-      ..write(obj.customRingtoneName);
+      ..writeByte(4)
+      ..write(obj.vibrationEnabled);
   }
 
   @override

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../alarms/alarm_scheduler.dart';
 import '../alarms/alarm_sync_service.dart' show noShiftPayloadSentinel;
 import '../alarms/notification_action_dispatcher.dart';
+import '../alarms/ringtone_channel.dart';
 import '../data/models/shift.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_repository.dart';
@@ -18,14 +19,22 @@ import 'shift_format.dart';
 
 /// Full-screen wake-up shown when an alarm fires.
 ///
-/// Audio model: the OS notification is the single source of alarm sound.
-/// `LocalNotificationsAlarmScheduler` schedules with FLAG_INSISTENT, so
-/// the channel sound loops continuously until the notification is
-/// cancelled (slide-to-dismiss here, or the action-button paths in the
-/// background isolate / dispatcher). This screen owns NO audio — every
-/// dismiss path ultimately calls `AlarmScheduler.cancel(notificationId)`
-/// or writes the Hive flag that causes a cancel, which is what stops
-/// the loop.
+/// Audio model — TWO cases:
+///   * Bundled tone (default): the OS notification is the single source of
+///     sound. `LocalNotificationsAlarmScheduler` schedules with FLAG_INSISTENT,
+///     so the channel sound loops until the notification is cancelled. This
+///     screen owns NO audio for these; every dismiss path ultimately calls
+///     `AlarmScheduler.cancel(notificationId)` or writes a Hive flag that
+///     causes a cancel, which stops the loop.
+///   * Custom ringtone (Phase 2b single-notification): the alarm was scheduled
+///     on a SILENT channel (no OS sound), and the user's tone is played HERE by
+///     the native `MediaPlayer` via [RingtoneChannel.playAlarmUri] — started in
+///     `initState` when [customRingtoneUri] is non-null and stopped on every
+///     exit path (dismiss / snooze / self-destruct / dispose). This is the
+///     trade-off accepted for the June Beta: a custom tone only rings when the
+///     FSI actually launches this screen (locked / not-foreground); when the
+///     phone is already unlocked and active the FSI shows a heads-up instead,
+///     so the custom tone is skipped (the user is already awake).
 ///
 /// Lifecycle:
 ///   - On init: 1Hz ticker to refresh the clock + a reactive subscription
@@ -49,6 +58,9 @@ class WakeUpScreen extends StatefulWidget {
     this.notificationId,
     this.isCritical = false,
     this.appAlarmId = '',
+    this.customRingtoneUri,
+    this.vibrationEnabled = true,
+    this.ringtoneChannel,
   });
 
   /// Shift id parsed from the notification payload. Used to look up the
@@ -71,6 +83,21 @@ class WakeUpScreen extends StatefulWidget {
   /// `_onDismiss`, so deletion happens once, at the dismissal instant.
   final String appAlarmId;
 
+  /// Global custom-ringtone URI parsed from the payload (6th field), or null for
+  /// a bundled-tone alarm. Non-null ⇒ scheduled on the SILENT channel, so the
+  /// tone must be played here by the native player (see the class doc).
+  final String? customRingtoneUri;
+
+  /// Whether to vibrate, parsed from the payload (7th field). Drives the
+  /// continuous native haptic loop alongside a custom tone. Only applies to the
+  /// custom-tone path here — bundled-tone alarms vibrate via their channel.
+  final bool vibrationEnabled;
+
+  /// Injectable native-audio bridge — defaults to a real [RingtoneChannel] in
+  /// `initState`. The default is itself test-safe (every method no-ops off
+  /// Android / without a native handler).
+  final RingtoneChannel? ringtoneChannel;
+
   @override
   State<WakeUpScreen> createState() => _WakeUpScreenState();
 }
@@ -85,6 +112,10 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
   Timer? _clockTicker;
   StreamSubscription<List<Shift>>? _shiftSub;
 
+  /// Native-audio bridge. For a custom-ringtone alarm this screen owns the
+  /// looping tone; for a bundled alarm it's unused (the OS channel plays).
+  late final RingtoneChannel _ringtone;
+
   /// One-shot guard so multiple stream emissions that all satisfy the
   /// self-destruct condition (e.g. ack and snooze landing in the same
   /// box change) don't fire pushReplacement repeatedly. Without this a
@@ -94,6 +125,17 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
   @override
   void initState() {
     super.initState();
+    _ringtone = widget.ringtoneChannel ?? RingtoneChannel();
+
+    // Custom-ringtone alarm: START the looping tone through the proven native
+    // engine (MediaPlayer + try/catch → classic fallback). The OS notification
+    // is on the silent channel, so this is the ONLY audio for this alarm.
+    // Fire-and-forget; the native side loops until a dismiss/snooze stops it.
+    final customUri = widget.customRingtoneUri;
+    if (customUri != null && customUri.isNotEmpty) {
+      _ringtone.playAlarmUri(customUri, vibrate: widget.vibrationEnabled);
+    }
+
     // 1 Hz refresh — granular enough that the seconds tick visibly but
     // doesn't burn CPU. Forces a rebuild that re-reads DateTime.now().
     _clockTicker = Timer.periodic(
@@ -158,6 +200,11 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
   Future<void> _selfDestruct() async {
     if (_destructed) return;
     _destructed = true;
+    // An external Dismiss/Snooze (notification action) flipped the Hive flag
+    // that brought us here. For a custom alarm the dispatcher already stopped
+    // the native audio, but stopping again is idempotent and covers the
+    // bg-isolate→port race where the order isn't guaranteed.
+    _ringtone.stopPreview();
     if (!mounted) return;
     final navigator = Navigator.of(context);
     // pushReplacement (rather than pop) because WakeUpScreen is the
@@ -177,14 +224,12 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
     _shiftSub = null;
     _clockTicker?.cancel();
     _clockTicker = null;
-    // No audio cleanup — the OS owns alarm sound via FLAG_INSISTENT on
-    // the notification. Every dismissal path (slide-to-dismiss here,
-    // _selfDestruct, the Snooze/Dismiss action buttons) cancels the
-    // notification before this widget is torn down, which is what
-    // stops the audio. A native swipe-away gesture on this screen
-    // alone does NOT stop the sound — that's by design: the alarm
-    // keeps ringing until the user explicitly dismisses the
-    // notification or the OS times it out.
+    // Safety net for the CUSTOM-tone case: this screen owns the native player,
+    // so guarantee it's stopped if the screen is torn down by any path the
+    // explicit handlers below didn't already cover. Idempotent / no-op for a
+    // bundled-tone alarm (the OS owns that sound via FLAG_INSISTENT, and the
+    // notification cancel in the dismiss paths is what stops it).
+    _ringtone.stopPreview();
     super.dispose();
   }
 
@@ -194,6 +239,11 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
     final scheduler = context.read<AlarmScheduler>();
     final alarms = context.read<AppAlarmRepository>();
     final navigator = Navigator.of(context);
+
+    // Stop the native custom tone immediately on the dismiss gesture (silent-
+    // channel alarms have no FLAG_INSISTENT loop for the cancel below to kill).
+    // No-op for bundled-tone alarms / off Android.
+    await _ringtone.stopPreview();
 
     final notificationId = widget.notificationId;
     if (notificationId != null) {
@@ -242,6 +292,10 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
   void _onSnooze() {
     final id = widget.notificationId;
     if (id == null) return;
+    // Stop the native custom tone now (the dispatcher also stops it, but do it
+    // here too so the audio dies the instant the button is tapped, before the
+    // async dispatch + Hive write). No-op for bundled-tone alarms.
+    _ringtone.stopPreview();
     NotificationActionDispatcher.instance?.snooze('${widget.shiftId}|$id');
   }
 

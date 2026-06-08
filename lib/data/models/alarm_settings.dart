@@ -2,40 +2,36 @@ import 'package:hive_ce/hive.dart';
 
 part 'alarm_settings.g.dart';
 
-/// User-configurable alarm settings.
+/// Global alarm settings.
 ///
-/// V1 holds a single global "fire X minutes before each shift" lead time.
-/// Per-shift-type lead times, snooze, ringtone, and enable/disable flags
-/// will land here as additional [HiveField]s — adding a new optional field
-/// with a fresh field number is a non-breaking Hive change, which is the
-/// whole reason we model this as a proper [HiveType] instead of persisting
-/// a raw int.
+/// Holds the global "fire X minutes before each shift" lead time and the global
+/// vibration toggle. Custom ringtones used to live here too (fields 1-3) but
+/// were migrated to the per-alarm [AppAlarm] model — those legacy field numbers
+/// are RETIRED, not reused: the adapter reads them off the wire of older records
+/// and discards them (see `alarm_settings.g.dart`).
 @HiveType(typeId: 3)
 class AlarmSettings {
   const AlarmSettings({
     required this.leadTime,
-    this.customRingtoneUri,
-    this.customRingtoneName,
+    this.vibrationEnabled = true,
   });
 
   @HiveField(0)
   final Duration leadTime;
 
-  /// Path/URI of a user-picked custom ringtone, or null for the bundled
-  /// default. Added in the Custom Ringtones phase. Nullable + a fresh
-  /// [HiveField] number, so existing records (written with only field 0) read
-  /// back as null — a non-breaking adapter bump.
-  ///
-  /// Phase 1 is storage only: this value is persisted and surfaced in the
-  /// editor, but the OS-owned alarm playback path is NOT yet wired to it.
-  @HiveField(1)
-  final String? customRingtoneUri;
+  // HiveFields 1 (customRingtoneUri), 2 (customRingtoneName) and 3
+  // (ringtoneSource) were REMOVED when custom ringtones migrated to [AppAlarm].
+  // The numbers are retired — the adapter skips them on read so existing Hive
+  // records don't crash, and never writes them again.
 
-  /// Human-readable file name of [customRingtoneUri] (what the editor shows),
-  /// or null when on the bundled default. Same non-breaking versioning as
-  /// [customRingtoneUri].
-  @HiveField(2)
-  final String? customRingtoneName;
+  /// Whether a firing alarm vibrates. `@HiveField(4)` (kept at its original
+  /// number for wire compatibility); defaults to true so legacy records keep
+  /// the historical always-vibrate behaviour. Governs the continuous NATIVE
+  /// haptic loop `WakeUpScreen` drives for custom-ringtone alarms; bundled-tone
+  /// alarms still vibrate via their notification channel (Android binds channel
+  /// vibration immutably, so it can't be toggled at runtime for those).
+  @HiveField(4)
+  final bool vibrationEnabled;
 
   static const Duration defaultLeadTime = Duration(minutes: 60);
 
@@ -44,13 +40,11 @@ class AlarmSettings {
 
   AlarmSettings copyWith({
     Duration? leadTime,
-    String? customRingtoneUri,
-    String? customRingtoneName,
+    bool? vibrationEnabled,
   }) =>
       AlarmSettings(
         leadTime: leadTime ?? this.leadTime,
-        customRingtoneUri: customRingtoneUri ?? this.customRingtoneUri,
-        customRingtoneName: customRingtoneName ?? this.customRingtoneName,
+        vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
       );
 
   @override
@@ -59,15 +53,12 @@ class AlarmSettings {
       other is AlarmSettings &&
           runtimeType == other.runtimeType &&
           leadTime == other.leadTime &&
-          customRingtoneUri == other.customRingtoneUri &&
-          customRingtoneName == other.customRingtoneName;
+          vibrationEnabled == other.vibrationEnabled;
 
   @override
-  int get hashCode =>
-      Object.hash(leadTime, customRingtoneUri, customRingtoneName);
+  int get hashCode => Object.hash(leadTime, vibrationEnabled);
 
   @override
   String toString() => 'AlarmSettings(leadTime: $leadTime, '
-      'customRingtoneUri: $customRingtoneUri, '
-      'customRingtoneName: $customRingtoneName)';
+      'vibrationEnabled: $vibrationEnabled)';
 }

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../alarms/alarm_sound.dart';
+import '../alarms/ringtone_channel.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
@@ -15,7 +16,6 @@ import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../state/app_preferences.dart';
 import '../util/weekday_mask.dart';
-import 'alarm_sound_previewer.dart';
 import 'alarm_time_projection.dart';
 import 'shift_format.dart';
 
@@ -56,16 +56,20 @@ Future<void> showCreateAlarmSheet(BuildContext context, {AppAlarm? initial}) {
 /// Stateful body of the create-alarm sheet. Exposed (`public`) so the
 /// widget tests can drive it directly without the bottom-sheet wrapper.
 class CreateAlarmSheet extends StatefulWidget {
-  const CreateAlarmSheet({super.key, this.previewer, this.initial});
-
-  /// Injectable for tests — a fake-backed previewer avoids the audioplayers
-  /// platform channel. Production passes none (a real [AlarmSoundPreviewer] is
-  /// created in `initState`).
-  final AlarmSoundPreviewer? previewer;
+  const CreateAlarmSheet({
+    super.key,
+    this.initial,
+    this.ringtoneChannel,
+  });
 
   /// When non-null, the sheet opens in Edit Mode pre-populated from this alarm,
   /// and Save updates the record under its existing id. Null = create flow.
   final AppAlarm? initial;
+
+  /// Injectable bridge to the native ringtone picker + preview engine. Defaults
+  /// to a real [RingtoneChannel] in `initState`; the default is itself
+  /// test-safe (every method no-ops off Android / without a native handler).
+  final RingtoneChannel? ringtoneChannel;
 
   @override
   State<CreateAlarmSheet> createState() => _CreateAlarmSheetState();
@@ -91,17 +95,27 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   int _customOffsetMinutes = 90;
   // Critical-Shift wake mechanics (shake-to-dismiss + hold fail-safe).
   bool _isCriticalShift = false;
-  // Bundled tone this alarm will ring. The OS plays it (per-tone channel / iOS
-  // sound); the previewer below is only for "what does this sound like".
+  // Bundled tone this alarm will ring (when no custom ringtone is set). The OS
+  // plays it (per-tone channel / iOS sound).
   String _soundKey = kDefaultAlarmSoundKey;
+  // Per-alarm custom ringtone DRAFT — migrated off the global AlarmSettings, so
+  // every field here is local editor state written into the AppAlarm on Save.
+  // Null URI + classic source ⇒ a bundled tone (`_soundKey`).
+  String? _customRingtoneUri;
+  String? _customRingtoneName;
+  RingtoneSource _ringtoneSource = RingtoneSource.classic;
   // Selected ISO weekdays (1..7) for a weekly alarm. Empty until the user picks
   // days; a weekly alarm can't be saved while empty.
   final Set<int> _weekdays = <int>{};
   // One-time only: delete the record permanently the instant it's dismissed.
   bool _autoDeleteAfterFiring = false;
   bool _saving = false;
+  // True while the native preview MediaPlayer is looping the current ringtone
+  // (the Phase-2a "Play Now" test harness). Toggled by the row's Play/Stop
+  // button; the native player loops until explicitly stopped.
+  bool _ringtonePreviewing = false;
 
-  late final AlarmSoundPreviewer _previewer;
+  late final RingtoneChannel _ringtoneChannel;
 
   /// True when the sheet was opened to edit an existing alarm — drives the
   /// header copy and makes Save write back under the existing id.
@@ -110,7 +124,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   @override
   void initState() {
     super.initState();
-    _previewer = widget.previewer ?? AlarmSoundPreviewer();
+    _ringtoneChannel = widget.ringtoneChannel ?? RingtoneChannel();
 
     // Edit Mode: pre-populate every field from the alarm being edited so the
     // user lands on its exact current state (label, sound, sliders, chips,
@@ -129,66 +143,196 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _soundKey = initial.soundKey;
       _weekdays.addAll(weekdaysFromMask(initial.weekdaysBitmask));
       _autoDeleteAfterFiring = initial.autoDeleteAfterFiring;
+      _customRingtoneUri = initial.customRingtoneUri;
+      _customRingtoneName = initial.customRingtoneName;
+      _ringtoneSource = initial.ringtoneSource;
     }
   }
 
   @override
   void dispose() {
-    _previewer.dispose();
+    // Never let a preview tone outlive the sheet. Fire-and-forget — the native
+    // side releases the player; off-Android this is a no-op.
+    _ringtoneChannel.stopPreview();
     _labelController.dispose();
     super.dispose();
   }
 
-  /// Selects [sound] AND previews it. Fire-and-forget: the previewer's strict
-  /// stop-before-play means rapid taps never overlap.
-  void _selectSound(AlarmSound sound) {
-    setState(() => _soundKey = sound.key);
-    _previewer.preview(sound);
+  /// Opens the ringtone-source chooser (bundled tones / Files / System Tone) and
+  /// routes to the matching handler. Every option mutates LOCAL draft state (the
+  /// custom ringtone is per-alarm now), written into the AppAlarm on Save.
+  Future<void> _chooseRingtoneSource() async {
+    // No custom override ⇒ tick the active bundled tone.
+    final hasCustom = _customRingtoneName != null;
+    // The chooser pops a String: 'tone:<key>' for a bundled tone, or 'files' /
+    // 'system' for the two custom sources.
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        final accent = Theme.of(sheetCtx).colorScheme.primary;
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Bundled tones — selecting one sets this alarm's soundKey.
+                for (final s in kAlarmSounds)
+                  ListTile(
+                    key: ValueKey('ringtone-tone-${s.key}'),
+                    leading: const Icon(Icons.music_note_outlined),
+                    title: Text(s.label),
+                    trailing: (!hasCustom && _soundKey == s.key)
+                        ? Icon(Icons.check, color: accent)
+                        : null,
+                    onTap: () => Navigator.of(sheetCtx).pop('tone:${s.key}'),
+                  ),
+                const Divider(height: 1),
+                ListTile(
+                  key: const ValueKey('ringtone-source-files'),
+                  leading: const Icon(Icons.folder_open_outlined),
+                  title: const Text('Select from Files'),
+                  subtitle:
+                      const Text('Pick an audio file saved on your device'),
+                  onTap: () => Navigator.of(sheetCtx).pop('files'),
+                ),
+                ListTile(
+                  key: const ValueKey('ringtone-source-system'),
+                  leading: const Icon(Icons.library_music_outlined),
+                  title: const Text('Select System Tone'),
+                  subtitle:
+                      const Text("Choose from your device's alarm sounds"),
+                  onTap: () => Navigator.of(sheetCtx).pop('system'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'files') {
+      await _pickVaultRingtone();
+    } else if (choice == 'system') {
+      await _pickSystemRingtone();
+    } else if (choice.startsWith('tone:')) {
+      await _useBundledTone(choice.substring(5));
+    }
   }
 
-  /// Opens the system audio browser and, on selection, persists the picked
-  /// file's path + name to the global [AlarmSettings]. Phase 1: storage only —
-  /// nothing here touches the OS playback path. Cancelled picks are a no-op.
-  Future<void> _pickRingtone() async {
-    // Snapshot the repo BEFORE the await so we never touch `context` across the
-    // async gap (the file browser is a separate activity/sheet).
-    final repo = context.read<AlarmSettingsRepository>();
-    // file_picker 11.x: `pickFiles` is a static on FilePicker. Audio-only.
+  /// Vault source: open the audio file browser, copy the pick into durable
+  /// app-private storage, and set the LOCAL draft (path + name + vault source).
+  /// Cancelled picks are a no-op.
+  Future<void> _pickVaultRingtone() async {
+    // file_picker 11.x: `pickFiles` is a static on FilePicker. Audio-only. No
+    // `context` is read here, so the awaits below can't strand a BuildContext.
     final result = await FilePicker.pickFiles(type: FileType.audio);
     if (result == null || result.files.isEmpty) return; // cancelled
     final file = result.files.first;
     final srcPath = file.path;
     if (srcPath == null) return; // no usable path (shouldn't happen on mobile)
+    // Drop the previous vault copy (if any) so re-picks don't accumulate files.
+    await _maybeDeletePreviousVaultFile();
     // file_picker hands back a path in the app CACHE dir, which the OS can
-    // purge at any time — the exact "cached file cleared" failure mode. Copy it
-    // into durable app-support storage so the saved URI keeps resolving, and
-    // store THAT path. (Native playback wiring is the deferred Phase 2.)
+    // purge at any time — copy into durable app-support storage and store THAT
+    // path. Our own process always reads it back with no permission.
     final durablePath = await _persistRingtone(srcPath, file.name);
-    final current = await repo.read();
-    await repo.write(
-      current.copyWith(
-        customRingtoneUri: durablePath,
-        customRingtoneName: file.name,
-      ),
+    if (!mounted) return;
+    setState(() {
+      _customRingtoneUri = durablePath;
+      _customRingtoneName = file.name;
+      _ringtoneSource = RingtoneSource.vault;
+    });
+  }
+
+  /// System source: open the native `RingtoneManager` alarm-tone picker and set
+  /// the LOCAL draft (content:// URI + title + system source). Cancelled picks
+  /// (or non-Android, where the bridge returns null) are a no-op.
+  Future<void> _pickSystemRingtone() async {
+    final pick = await _ringtoneChannel.pickSystemRingtone(
+      // Pre-select the current tone only when it's already a system tone.
+      currentUri: _ringtoneSource == RingtoneSource.system
+          ? _customRingtoneUri
+          : null,
     );
-    // No setState / context use: the sheet watches AlarmSettings, so the write
-    // re-emits through the stream and the row rebuilds with the new name.
+    if (pick == null) return;
+    await _maybeDeletePreviousVaultFile();
+    if (!mounted) return;
+    setState(() {
+      _customRingtoneUri = pick.uri;
+      _customRingtoneName = pick.title;
+      _ringtoneSource = RingtoneSource.system;
+    });
+  }
+
+  /// Selects a BUNDLED tone for THIS alarm: sets [_soundKey] and resets the
+  /// custom ringtone draft to classic (null URI/name), so the bundled tone
+  /// actually rings (a non-classic source would route the alarm to the silent
+  /// channel). Drops any previous vault copy.
+  Future<void> _useBundledTone(String soundKey) async {
+    await _maybeDeletePreviousVaultFile();
+    if (!mounted) return;
+    setState(() {
+      _soundKey = soundKey;
+      _customRingtoneUri = null;
+      _customRingtoneName = null;
+      _ringtoneSource = RingtoneSource.classic;
+    });
+  }
+
+  /// Deletes the current draft's vault file if it is one — called before
+  /// replacing it (re-pick / switch to system or bundled) so per-alarm vault
+  /// copies don't accumulate. Best-effort; touches no `context`.
+  Future<void> _maybeDeletePreviousVaultFile() async {
+    if (_ringtoneSource != RingtoneSource.vault) return;
+    final uri = _customRingtoneUri;
+    if (uri == null) return;
+    try {
+      final f = File(uri);
+      if (f.existsSync()) await f.delete();
+    } catch (_) {
+      // best-effort cleanup — a leftover file is harmless.
+    }
+  }
+
+  /// Persists the global Vibrate toggle. Repo captured before the await so no
+  /// `context` is used across the async gap.
+  Future<void> _setVibration(bool enabled) async {
+    final repo = context.read<AlarmSettingsRepository>();
+    final current = await repo.read();
+    await repo.write(current.copyWith(vibrationEnabled: enabled));
+  }
+
+  /// Play/Stop for the native preview engine. Plays THIS alarm's DRAFT custom
+  /// tone through the Kotlin `MediaPlayer` (with its try/catch → classic
+  /// fallback). Only shown when a custom tone is set (see build).
+  Future<void> _toggleRingtonePreview() async {
+    if (_ringtonePreviewing) {
+      await _ringtoneChannel.stopPreview();
+      if (mounted) setState(() => _ringtonePreviewing = false);
+      return;
+    }
+    // Flip the icon immediately; the native player loops until Stop.
+    setState(() => _ringtonePreviewing = true);
+    await _ringtoneChannel.previewRingtone(
+      source: _ringtoneSource,
+      uri: _customRingtoneUri,
+    );
   }
 
   /// Copies the picked audio file into `<app-support>/ringtones/` and returns
-  /// the durable absolute path. Only one global ringtone is ever active, so the
-  /// directory is wiped first — the slot never accumulates auditioned files.
-  /// The destination name is stripped of path separators and the payload
-  /// delimiter (`|`) so the stored path is safe to embed in the alarm payload.
+  /// the durable absolute path. Uses a UUID-prefixed filename (NOT a directory
+  /// wipe) so MULTIPLE alarms' per-alarm tones coexist. The name is stripped of
+  /// path separators and the payload delimiter (`|`) so the stored path is
+  /// payload-safe.
   static Future<String> _persistRingtone(String srcPath, String name) async {
     final supportDir = await getApplicationSupportDirectory();
     final dir = Directory('${supportDir.path}/ringtones');
-    if (dir.existsSync()) dir.deleteSync(recursive: true);
-    dir.createSync(recursive: true);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     final safeName = name.isEmpty
         ? 'ringtone'
         : name.replaceAll(RegExp(r'[\\/|]'), '_');
-    final dest = File('${dir.path}/$safeName');
+    final dest = File('${dir.path}/${_uuid.v4()}_$safeName');
     await File(srcPath).copy(dest.path);
     return dest.path;
   }
@@ -240,6 +384,10 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       weekdaysBitmask: isWeekly ? weekdayMaskFromSet(_weekdays) : 0,
       // Auto-delete is a one-time-only affordance.
       autoDeleteAfterFiring: isOneTime && _autoDeleteAfterFiring,
+      // Per-alarm custom ringtone draft → persisted on the alarm itself.
+      customRingtoneUri: _customRingtoneUri,
+      customRingtoneName: _customRingtoneName,
+      ringtoneSource: _ringtoneSource,
     );
     await repo.upsert(alarm);
     if (!mounted) return;
@@ -389,9 +537,14 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     final theme = Theme.of(context);
     final alarmSettings = context.watch<AlarmSettings>();
     final globalLeadMinutes = alarmSettings.leadTime.inMinutes;
-    // Global custom ringtone (default "Rostrik Classic" → the bundled .wav).
-    // Stored on AlarmSettings, surfaced here in the alarm editor.
-    final ringtoneName = alarmSettings.customRingtoneName ?? 'Rostrik Classic';
+    // Audio summary for the Ringtone row — read from THIS alarm's local draft.
+    // A custom ringtone (file / system tone) takes precedence and shows its
+    // name; otherwise the row shows the selected BUNDLED tone label (Classic /
+    // Siren / Digital / Chime). The presence of a custom NAME is the
+    // discriminator, so a custom selection always wins the label.
+    final hasCustomRingtone = _customRingtoneName != null;
+    final ringtoneName =
+        _customRingtoneName ?? resolveAlarmSound(_soundKey).label;
     // Roster shifts (streamed app-wide) let the hero show the REAL firing clock
     // time for the linked shift, not the bare offset. Empty/absent-of-type →
     // falls back to a per-type default so a clock always renders.
@@ -511,25 +664,78 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   const Text('Shake to dismiss · 3-second hold fail-safe'),
             ),
             const SizedBox(height: 8),
-            // Bundled-tone picker. One permanently-visible row of chips — one
-            // tap selects AND previews (no menu). Applies to both repeat types.
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Sound', style: theme.textTheme.labelLarge),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final s in kAlarmSounds)
-                  ChoiceChip(
-                    key: ValueKey('create-alarm-sound-${s.key}'),
-                    label: Text(s.label),
-                    selected: _soundKey == s.key,
-                    onSelected: (_) => _selectSound(s),
+            // Audio — the SINGLE source of truth for this alarm's sound. Tapping
+            // the name opens the source chooser (Files / System Tone / Rostrik
+            // Classic); the Play/Stop button auditions the current tone through
+            // the NATIVE engine (exercising the try/catch → classic fallback).
+            // 'Rostrik Classic' is the bundled default; custom tones get wired
+            // to fire-time playback in Phase 2b.
+            Padding(
+              key: const ValueKey('create-alarm-ringtone-row'),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.music_note_outlined,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      key: const ValueKey('create-alarm-ringtone-select'),
+                      onTap: _chooseRingtoneSource,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Ringtone', style: theme.textTheme.labelLarge),
+                            const SizedBox(height: 2),
+                            Text(
+                              ringtoneName,
+                              key: const ValueKey('create-alarm-ringtone-name'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Native preview is only meaningful for a CUSTOM tone (a
+                  // file / system URI that should be auditioned via the native
+                  // engine + fallback). Bundled tones are known-good and play
+                  // through the OS channel, so the Play button is hidden for
+                  // them rather than misleadingly previewing the classic tone.
+                  if (hasCustomRingtone)
+                    IconButton(
+                      key: const ValueKey('create-alarm-ringtone-preview'),
+                      onPressed: _toggleRingtonePreview,
+                      tooltip: _ringtonePreviewing ? 'Stop' : 'Play',
+                      icon: Icon(
+                        _ringtonePreviewing
+                            ? Icons.stop_circle_outlined
+                            : Icons.play_circle_outline,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Haptics — global, bound to AlarmSettings. Governs the continuous
+            // native vibration for custom-ringtone alarms (bundled-tone alarms
+            // keep their channel vibration, which Android binds immutably).
+            SwitchListTile(
+              key: const ValueKey('create-alarm-vibrate'),
+              contentPadding: EdgeInsets.zero,
+              value: alarmSettings.vibrationEnabled,
+              onChanged: _setVibration,
+              secondary: const Icon(Icons.vibration),
+              title: const Text('Vibrate'),
             ),
             const SizedBox(height: 8),
             Align(
@@ -564,52 +770,6 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
               child: _buildRepeatReveal(theme, globalLeadMinutes),
-            ),
-            const SizedBox(height: 16),
-            // Custom ringtone (Phase 1 — storage + selection only). Sits BELOW
-            // the repeat config on purpose: the lead-mode / weekday controls in
-            // the reveal above stay where they are, so this row never shoves
-            // them off-screen. Tapping opens the system audio browser; the
-            // picked file's name shows here and its path saves to the global
-            // AlarmSettings. Playback wiring is a later phase.
-            InkWell(
-              key: const ValueKey('create-alarm-ringtone-row'),
-              onTap: _pickRingtone,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.music_note_outlined,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Ringtone', style: theme.textTheme.labelLarge),
-                          const SizedBox(height: 2),
-                          Text(
-                            ringtoneName,
-                            key: const ValueKey('create-alarm-ringtone-name'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
             ),
             const SizedBox(height: 24),
             FilledButton(

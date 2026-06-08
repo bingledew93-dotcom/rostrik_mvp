@@ -6,30 +6,13 @@ import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
 import 'package:rostrik_mvp/data/repositories/app_alarm_repository.dart';
-import 'package:rostrik_mvp/ui/alarm_sound_previewer.dart';
 import 'package:rostrik_mvp/ui/create_alarm_sheet.dart';
 
 import '../alarms/fakes.dart';
 
-/// Records preview calls so the tone-selector test can verify a tap previews,
-/// without the audioplayers platform channel.
-class _RecordingPreviewPlayer implements PreviewAudioPlayer {
-  final List<String> calls = [];
-
-  @override
-  Future<void> play(String assetKey) async => calls.add('play:$assetKey');
-
-  @override
-  Future<void> stop() async => calls.add('stop');
-
-  @override
-  Future<void> dispose() async => calls.add('dispose');
-}
-
 void main() {
   Future<FakeAppAlarmRepository> pumpSheet(
     WidgetTester tester, {
-    AlarmSoundPreviewer? previewer,
     List<Shift> shifts = const [],
     AppAlarm? initial,
     AlarmSettings settings = AlarmSettings.defaults,
@@ -59,7 +42,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: CreateAlarmSheet(previewer: previewer, initial: initial),
+            body: CreateAlarmSheet(initial: initial),
           ),
         ),
       ),
@@ -265,31 +248,14 @@ void main() {
     });
 
     testWidgets('defaults to the classic sound', (tester) async {
+      // Audio defaults to bundled 'classic' (the Ringtone row's "Rostrik
+      // Classic") — the per-tone bundled chips were removed in the Phase-2b
+      // audio consolidation; custom tones are chosen via the Ringtone row.
       final repo = await pumpSheet(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
       await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
       await tester.pumpAndSettle();
       expect((await repo.getAll()).single.soundKey, 'classic');
-    });
-
-    testWidgets('selecting a tone persists its key AND previews it',
-        (tester) async {
-      final player = _RecordingPreviewPlayer();
-      final repo = await pumpSheet(
-        tester,
-        previewer: AlarmSoundPreviewer(player: player),
-      );
-
-      await tester.tap(find.byKey(const ValueKey('create-alarm-sound-siren')));
-      await tester.pumpAndSettle();
-
-      // Tapping a tone previews it (stop-before-play through the injected fake).
-      expect(player.calls, ['stop', 'play:sounds/siren.wav']);
-
-      await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
-      await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
-      await tester.pumpAndSettle();
-      expect((await repo.getAll()).single.soundKey, 'siren');
     });
 
     testWidgets('empty label defaults to "Alarm"', (tester) async {
@@ -440,29 +406,47 @@ void main() {
   });
 
   group('custom ringtone row', () {
-    testWidgets('renders and defaults to "Rostrik Classic"', (tester) async {
+    testWidgets('renders and defaults to the bundled Classic tone label',
+        (tester) async {
       await pumpSheet(tester);
       expect(
         find.byKey(const ValueKey('create-alarm-ringtone-row')),
         findsOneWidget,
       );
       expect(find.text('Ringtone'), findsOneWidget);
-      expect(find.text('Rostrik Classic'), findsOneWidget);
+      // No custom override → the row shows the selected bundled tone's label
+      // ('classic' default → 'Classic'). The per-tone chips were consolidated
+      // into the Ringtone chooser; bundled tones are picked there now.
+      expect(find.text('Classic'), findsOneWidget);
     });
 
-    testWidgets('shows the saved custom ringtone name when one is set',
+    testWidgets('shows the per-alarm custom ringtone name when one is set',
         (tester) async {
-      // The name is read straight off the global AlarmSettings.
+      // Custom ringtones are per-alarm now — the name comes off the AppAlarm
+      // being edited, and takes precedence over the bundled tone label.
       await pumpSheet(
         tester,
-        settings: const AlarmSettings(
-          leadTime: Duration(minutes: 60),
+        initial: AppAlarm(
+          id: 'edit-tone',
+          minutesOfDay: 6 * 60,
+          label: 'Gym',
+          repeatType: AppAlarmRepeatType.oneTime,
           customRingtoneUri: '/cache/midnight.mp3',
           customRingtoneName: 'midnight.mp3',
+          ringtoneSource: RingtoneSource.vault,
         ),
       );
       expect(find.text('midnight.mp3'), findsOneWidget);
-      expect(find.text('Rostrik Classic'), findsNothing);
+      expect(find.text('Classic'), findsNothing);
+    });
+
+    testWidgets('renders the global Vibrate toggle (default on)',
+        (tester) async {
+      await pumpSheet(tester);
+      final tile = tester.widget<SwitchListTile>(
+        find.byKey(const ValueKey('create-alarm-vibrate')),
+      );
+      expect(tile.value, isTrue);
     });
   });
 }
