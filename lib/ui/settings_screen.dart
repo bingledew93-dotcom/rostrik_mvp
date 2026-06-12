@@ -13,6 +13,7 @@ import '../state/app_preferences.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'pattern_picker_screen.dart';
 import 'shift_format.dart';
+import 'work_history_screen.dart';
 
 /// Global alarm-settings screen. Reads via `context.watch<AlarmSettings>()`,
 /// writes via `context.read<AlarmSettingsRepository>().write(...)`.
@@ -39,6 +40,8 @@ class SettingsScreen extends StatelessWidget {
             _SnoozeDurationSection(),
             Divider(height: 32),
             _ShiftCyclesSection(),
+            Divider(height: 32),
+            _WorkHistorySection(),
             Divider(height: 32),
             _PreferencesSection(),
             Divider(height: 32),
@@ -461,6 +464,54 @@ String _formatLeadTime(int totalMinutes) {
   if (h == 0) return '$m min';
   if (m == 0) return '$h h';
   return '$h h $m min';
+}
+
+/// "WORK HISTORY" entry point — opens the [WorkHistoryScreen] where completed
+/// ad-hoc shifts are listed and exported as CSV for payslip verification.
+/// A plain navigation tile (no inline state) — all the data work lives on the
+/// destination screen.
+class _WorkHistorySection extends StatelessWidget {
+  const _WorkHistorySection();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'WORK HISTORY',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Review and export your completed custom shifts to verify payslips.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              key: const ValueKey('settings-open-work-history'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const WorkHistoryScreen()),
+              ),
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('View & Export Work History'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// User display preferences — clock format and calendar week-start. Both are

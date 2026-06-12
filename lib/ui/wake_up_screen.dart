@@ -2,12 +2,15 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../alarms/alarm_scheduler.dart';
+import '../alarms/alarm_sound.dart';
 import '../alarms/alarm_sync_service.dart' show noShiftPayloadSentinel;
 import '../alarms/notification_action_dispatcher.dart';
+import '../alarms/pending_dismissal_guard.dart';
 import '../alarms/ringtone_channel.dart';
 import '../data/models/shift.dart';
 import '../data/repositories/app_alarm_repository.dart';
@@ -16,6 +19,14 @@ import '../state/app_preferences.dart';
 import 'critical_dismiss_controls.dart';
 import 'main_layout.dart';
 import 'shift_format.dart';
+
+/// Alarm-routing channel — same wire name as `MainActivity.CHANNEL` and
+/// main.dart's `_alarmRoutingChannel`. WakeUpScreen uses it for the two
+/// lifecycle calls the Kotlin side answers: polling the native dismissal
+/// ledger (cross-isolate reactivity) and relinquishing the lock-screen
+/// window flags on teardown.
+const MethodChannel _alarmRoutingChannel =
+    MethodChannel('rostrik/alarm_routing');
 
 /// Full-screen wake-up shown when an alarm fires.
 ///
@@ -49,8 +60,18 @@ import 'shift_format.dart';
 ///     self-destructs — replaces itself with the roster. This is what
 ///     fixes the "phantom UI" case where the user dismissed via heads-up
 ///     while WakeUpScreen was already pushed.
-///   - On dispose: ticker cancel + subscription cancel. No audio cleanup
-///     needed — the OS owns the sound.
+///   - On dispose: ticker cancel + subscription cancel + a
+///     [RingtoneChannel.stopPreview] safety net — stops the foreground-service
+///     player and cancels the haptic loop, guaranteeing no audio outlives the
+///     screen on any teardown path the explicit handlers didn't cover. Applies
+///     to every alarm now (custom AND preset both play via the service).
+///
+/// Lockdown: the root [Scaffold] is wrapped in an UNCONDITIONAL
+/// `PopScope(canPop: false)`. This screen is the root route on alarm launch,
+/// so a system back/predictive-back would otherwise finish the FSI activity —
+/// and via the dispose safety net silently kill a custom-tone alarm with no
+/// dismiss/snooze bookkeeping. Every exit must go through Snooze,
+/// slide-to-dismiss, or the Critical shake/hold mechanics.
 class WakeUpScreen extends StatefulWidget {
   const WakeUpScreen({
     super.key,
@@ -59,6 +80,7 @@ class WakeUpScreen extends StatefulWidget {
     this.isCritical = false,
     this.appAlarmId = '',
     this.customRingtoneUri,
+    this.soundKey = kDefaultAlarmSoundKey,
     this.vibrationEnabled = true,
     this.ringtoneChannel,
   });
@@ -83,10 +105,17 @@ class WakeUpScreen extends StatefulWidget {
   /// `_onDismiss`, so deletion happens once, at the dismissal instant.
   final String appAlarmId;
 
-  /// Global custom-ringtone URI parsed from the payload (6th field), or null for
-  /// a bundled-tone alarm. Non-null ⇒ scheduled on the SILENT channel, so the
-  /// tone must be played here by the native player (see the class doc).
+  /// Custom-ringtone URI parsed from the payload (6th field), or null for a
+  /// bundled/preset-tone alarm. When non-null the native player plays this
+  /// URI; when null it plays the [soundKey]'s bundled tone. EITHER way the
+  /// audio runs through the foreground service (see the class doc) — every
+  /// fire-time alarm does.
   final String? customRingtoneUri;
+
+  /// Bundled-tone key parsed from the payload (4th field) — selects which
+  /// preset `res/raw` tone the native player loops when [customRingtoneUri] is
+  /// null. Defaults to [kDefaultAlarmSoundKey] (a bare/legacy payload).
+  final String soundKey;
 
   /// Whether to vibrate, parsed from the payload (7th field). Drives the
   /// continuous native haptic loop alongside a custom tone. Only applies to the
@@ -102,7 +131,8 @@ class WakeUpScreen extends StatefulWidget {
   State<WakeUpScreen> createState() => _WakeUpScreenState();
 }
 
-class _WakeUpScreenState extends State<WakeUpScreen> {
+class _WakeUpScreenState extends State<WakeUpScreen>
+    with WidgetsBindingObserver {
   /// How far back / forward to watch for Hive changes. Wide enough that
   /// any realistic wake-up alarm is in range (a snoozed alarm pushed
   /// forward by 9 minutes can't possibly cross this boundary), but
@@ -112,8 +142,9 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
   Timer? _clockTicker;
   StreamSubscription<List<Shift>>? _shiftSub;
 
-  /// Native-audio bridge. For a custom-ringtone alarm this screen owns the
-  /// looping tone; for a bundled alarm it's unused (the OS channel plays).
+  /// Native-audio bridge. This screen owns the looping tone for EVERY alarm —
+  /// custom URI or preset — by starting the foreground-service player; the OS
+  /// notification is silent.
   late final RingtoneChannel _ringtone;
 
   /// One-shot guard so multiple stream emissions that all satisfy the
@@ -122,45 +153,152 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
   /// quick double-tap could stack two RosterScreens behind us.
   bool _destructed = false;
 
+  /// Live repository handle, captured in initState so the ledger-poll path
+  /// can ack the dismissal through the MAIN isolate's Hive (updating its
+  /// in-memory cache + firing its streams) without touching `context` from
+  /// an async gap. Null for shift-less alarms (sentinel id — nothing to ack).
+  ShiftRepository? _shiftRepo;
+
+  /// Re-entrancy guard for the 1 Hz native-ledger poll — a slow channel hop
+  /// must not stack a second poll on top of the first.
+  bool _ledgerCheckInFlight = false;
+
   @override
   void initState() {
     super.initState();
+    // Lifecycle observer for the SLEEPING-TICKER fix — see
+    // [didChangeAppLifecycleState]. Removed in dispose.
+    WidgetsBinding.instance.addObserver(this);
     _ringtone = widget.ringtoneChannel ?? RingtoneChannel();
 
-    // Custom-ringtone alarm: START the looping tone through the proven native
-    // engine (MediaPlayer + try/catch → classic fallback). The OS notification
-    // is on the silent channel, so this is the ONLY audio for this alarm.
-    // Fire-and-forget; the native side loops until a dismiss/snooze stops it.
+    // START the looping tone through the native foreground-service engine —
+    // for EVERY fire-time alarm, custom OR preset. The OS notification is on
+    // the silent channel (no FLAG_INSISTENT), so this is the ONLY audio, and
+    // the foreground service keeps it alive when the lock-screen shade occludes
+    // (and Android 14 destroys) this activity. Fire-and-forget; the native side
+    // loops until a Dismiss/Snooze stops it.
     final customUri = widget.customRingtoneUri;
     if (customUri != null && customUri.isNotEmpty) {
       _ringtone.playAlarmUri(customUri, vibrate: widget.vibrationEnabled);
+    } else {
+      // Preset internal tone: play its bundled res/raw through the SAME
+      // service (regression fix — presets used to ride FLAG_INSISTENT, which
+      // the lock-screen shade pull silenced).
+      _ringtone.playAlarmBundled(
+        resolveAlarmSound(widget.soundKey).androidResource,
+        vibrate: widget.vibrationEnabled,
+      );
     }
 
     // 1 Hz refresh — granular enough that the seconds tick visibly but
-    // doesn't burn CPU. Forces a rebuild that re-reads DateTime.now().
-    _clockTicker = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => setState(() {}),
-    );
+    // doesn't burn CPU. Forces a rebuild that re-reads DateTime.now(), AND
+    // piggybacks the cross-isolate dismissal poll (see
+    // _checkNativeDismissalLedger) so an external dismiss kills this screen
+    // within a second.
+    _clockTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {});
+      _checkNativeDismissalLedger();
+    });
 
     // Reactive listen on the shift's Hive record. `watchInRange` is the
     // only reactive surface ShiftRepository exposes; we filter for our
     // shiftId inside the listener. The wide window keeps things robust
     // against the small bookkeeping window between scheduling and firing.
     //
+    // This stream is the FAST self-destruct path: any dismissal that lands
+    // in THIS isolate's Hive (in-app dismiss, foreground dispatcher,
+    // bg-isolate port forward) fires it instantly. It CANNOT see a write
+    // another isolate made straight to disk — Hive's watch events are
+    // per-VM-cache — which is exactly the gap the native-ledger poll on the
+    // clock ticker closes.
+    //
     // Skip the subscription entirely for shift-less alarms — there is
     // no Hive row to watch, and the self-destruct condition (ack /
     // snooze) doesn't apply. Slide-to-dismiss still works because it
     // goes through `scheduler.cancel(notificationId)`, not the repo.
     if (widget.shiftId != noShiftPayloadSentinel) {
+      _shiftRepo = context.read<ShiftRepository>();
       final now = DateTime.now();
-      _shiftSub = context
-          .read<ShiftRepository>()
+      _shiftSub = _shiftRepo!
           .watchInRange(
             now.subtract(_watchHalfWindow),
             now.add(_watchHalfWindow),
           )
           .listen(_onShiftsChanged);
+    }
+  }
+
+  /// SLEEPING-TICKER fix (Android 14 field bug): when the notification shade
+  /// suspends the Flutter UI, the 1 Hz ticker (and its ledger poll) is
+  /// asleep. A Dismiss tapped from the shade updates the native ledger, but
+  /// nothing in Dart ran until the user touched the screen — leaving a dead
+  /// WakeUpScreen on display. The instant the app transitions back to
+  /// [AppLifecycleState.resumed], drain the ledger immediately rather than
+  /// waiting for the next tick.
+  ///
+  /// THE SILENCE-BUG CONTRACT also lives here, by omission: inactive /
+  /// paused / hidden / detached deliberately do NOTHING — and above all
+  /// never touch [_ringtone]. A ringing alarm's audio may only stop via an
+  /// explicit Dismiss or Snooze (the native side enforces the same rule for
+  /// activity pause/stop/destroy). Adding any audio handling to the
+  /// non-resumed branches is a regression of the exact field bug where
+  /// pulling down the shade silenced the alarm.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkNativeDismissalLedger();
+    }
+    // All other states: intentionally no action.
+  }
+
+  /// CROSS-ISOLATE REACTIVITY (Zombie-UI, final piece): detects a dismissal
+  /// performed OUTSIDE this isolate — the notification-panel Dismiss handled
+  /// by the background engine — and self-destructs within one tick.
+  ///
+  /// Why polling the native ledger and not a Hive listenable: the background
+  /// isolate writes to DISK; this isolate's Box cache (and therefore every
+  /// `box.watch()` / ValueListenable built on it) never sees that write. The
+  /// `pending_dismissals` ledger file is process-level truth both sides
+  /// share. One tiny channel call per second, bounded strictly to the
+  /// ringing window — the poll dies with this screen.
+  ///
+  /// On a hit: replay the ledger into THIS isolate's Hive via the live repo
+  /// (so the cache, the streams, and the engine's next reconcile all agree),
+  /// clear the ledger natively, then run the normal self-destruct sequence
+  /// (stops the native tone, replaces this screen with the chassis).
+  Future<void> _checkNativeDismissalLedger() async {
+    if (_destructed || _ledgerCheckInFlight) return;
+    if (widget.shiftId == noShiftPayloadSentinel) return;
+    _ledgerCheckInFlight = true;
+    try {
+      final raw = await _alarmRoutingChannel
+          .invokeMethod<List<Object?>>('getPendingDismissals');
+      final ids = raw?.whereType<String>().toList() ?? const <String>[];
+      if (!ids.contains(widget.shiftId)) return;
+
+      debugPrint(
+        '[wake] external dismissal found in native ledger for '
+        '${widget.shiftId} — replaying to Hive and self-destructing',
+      );
+      final repo = _shiftRepo;
+      if (repo != null) {
+        // Replay EVERY ledger entry, not just ours — they are all
+        // dismissals, and clearing the ledger below must not orphan a
+        // sibling entry before the boot-time replay would have seen it.
+        await ackPendingDismissalsInHive(shifts: repo, shiftIds: ids);
+      }
+      try {
+        await _alarmRoutingChannel.invokeMethod<void>('clearPendingDismissals');
+      } catch (_) {
+        // Best-effort — an uncleared ledger replays idempotently next boot.
+      }
+      await _selfDestruct();
+    } catch (_) {
+      // No native handler (iOS / tests) — the Hive stream fast path above
+      // remains the reactive surface on those platforms.
+    } finally {
+      _ledgerCheckInFlight = false;
     }
   }
 
@@ -179,12 +317,10 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
       }
     }
     if (shift == null) return;
-    final snoozedUntil = shift.snoozedUntil;
-    final now = DateTime.now();
-    final shouldClose =
-        shift.isAcknowledged ||
-        (snoozedUntil != null && snoozedUntil.isAfter(now));
-    if (shouldClose) {
+    // THE shared handled-occurrence predicate — same gate main.dart's
+    // cold-boot wake route applies, so screen and route can never disagree
+    // about whether this alarm is still live.
+    if (shift.isAlarmHandledAt(DateTime.now())) {
       _selfDestruct();
     }
   }
@@ -220,6 +356,7 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _shiftSub?.cancel();
     _shiftSub = null;
     _clockTicker?.cancel();
@@ -230,7 +367,25 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
     // bundled-tone alarm (the OS owns that sound via FLAG_INSISTENT, and the
     // notification cancel in the dismiss paths is what stops it).
     _ringtone.stopPreview();
+    // WINDOW-FLAG PURGE: every exit path (slider, snooze self-destruct,
+    // reactive ledger pop) lands here, so this is the single point where the
+    // app relinquishes the lock screen — MainActivity clears showWhenLocked /
+    // turnScreenOn / FLAG_KEEP_SCREEN_ON. Without it, a WakeUpScreen
+    // stranded in the Recents task kept drawing over the keyguard long
+    // after the alarm was externally dismissed.
+    _relinquishLockScreen();
     super.dispose();
+  }
+
+  /// Fire-and-forget signal to MainActivity to drop the lock-screen bypass
+  /// window flags. Swallows every failure — no native handler (iOS / tests)
+  /// just means there are no flags to drop.
+  Future<void> _relinquishLockScreen() async {
+    try {
+      await _alarmRoutingChannel.invokeMethod<void>('relinquishLockScreen');
+    } catch (_) {
+      // No-op off Android / in tests.
+    }
   }
 
   Future<void> _onDismiss() async {
@@ -313,122 +468,131 @@ class _WakeUpScreenState extends State<WakeUpScreen> {
     final int snoozeMins =
         Hive.box('settings').get('snooze_duration', defaultValue: 1) as int;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        // Layout shape: LayoutBuilder → SingleChildScrollView →
-        // SizedBox(height: safeHeight) → Padding → Column. The SizedBox
-        // is the key — it gives the Column a strict, bounded vertical
-        // extent, which is what Spacer needs to lay out. We deliberately
-        // avoid IntrinsicHeight: the slide-to-dismiss handle uses an
-        // inner LayoutBuilder, and intrinsic queries traversing through
-        // a LayoutBuilder throw at layout time. We also avoid
-        // SliverFillRemaining (its flex-child path triggered the same
-        // intrinsic-dimension crash during the FSI lock-screen boot).
-        //
-        // `safeHeight` is clamped to a 650 px minimum so a temporarily
-        // tiny viewport (e.g. transient FSI constraints during boot, or
-        // a split-screen window) still gives the Column enough room to
-        // distribute its Spacers without collapsing the bottom controls
-        // off-screen; the outer SingleChildScrollView lets that excess
-        // scroll instead of overflowing.
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final double viewportHeight = constraints.hasBoundedHeight
-                ? constraints.maxHeight
-                : MediaQuery.sizeOf(context).height;
-            final double safeHeight = math.max(viewportHeight, 650.0);
-            return SingleChildScrollView(
-              child: SizedBox(
-                height: safeHeight,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 32,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Top breathing room. Smaller flex than the middle
-                      // spacer so the clock sits in the upper third
-                      // rather than dead-centre.
-                      const Spacer(flex: 2),
-                      Center(
-                        child: Text(
-                          timeLabel,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 128,
-                            fontWeight: FontWeight.w200,
-                            letterSpacing: -2,
-                            height: 1,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      _ShiftSummary(shiftId: widget.shiftId),
-                      // Mid-section breathing room — larger flex so the
-                      // bottom action cluster anchors low on tall screens.
-                      // In landscape this collapses to whatever space is
-                      // left after the fixed content; the outer
-                      // SingleChildScrollView lets the layout scroll if
-                      // the 650 px floor exceeds the viewport, so the
-                      // buttons stay reachable.
-                      const Spacer(flex: 5),
-                      // Snooze — large tap target, warm amber so it's
-                      // distinguishable from the white slide-to-dismiss
-                      // handle at 4 AM. Height matches the slider track
-                      // for visual rhythm. No elevation (flat to match
-                      // the rest of the screen) and pill-shaped to read
-                      // as the action partner of the slider below.
-                      SizedBox(
-                        height: 64,
-                        child: ElevatedButton(
-                          onPressed: _onSnooze,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber.shade400,
-                            foregroundColor: Colors.black,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(36),
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          child: Text('Snooze ($snoozeMins min)'),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Critical-Shift alarms can't be silenced by a casual
-                      // swipe: require a sustained shake, with a 3-second hold
-                      // as the always-present fail-safe. Normal alarms keep the
-                      // slide-to-dismiss.
-                      if (widget.isCritical) ...[
-                        ShakeToDismiss(onDismissed: _onDismiss),
-                        const SizedBox(height: 12),
-                        HoldToDismiss(onDismissed: _onDismiss),
-                      ] else ...[
-                        _SlideToDismiss(onDismissed: _onDismiss),
-                        const SizedBox(height: 8),
-                        const Center(
+    // UNCONDITIONAL back-gesture lockdown. WakeUpScreen is the root route on
+    // alarm launch, so a system back/predictive-back would finish the FSI
+    // activity — tearing this screen down and (via dispose's safety net)
+    // silencing a custom-tone alarm with NO dismiss/snooze bookkeeping. A
+    // ringing alarm may only be left through the explicit affordances:
+    // Snooze, slide-to-dismiss, or the Critical shake/hold mechanics.
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          // Layout shape: LayoutBuilder → SingleChildScrollView →
+          // SizedBox(height: safeHeight) → Padding → Column. The SizedBox
+          // is the key — it gives the Column a strict, bounded vertical
+          // extent, which is what Spacer needs to lay out. We deliberately
+          // avoid IntrinsicHeight: the slide-to-dismiss handle uses an
+          // inner LayoutBuilder, and intrinsic queries traversing through
+          // a LayoutBuilder throw at layout time. We also avoid
+          // SliverFillRemaining (its flex-child path triggered the same
+          // intrinsic-dimension crash during the FSI lock-screen boot).
+          //
+          // `safeHeight` is clamped to a 650 px minimum so a temporarily
+          // tiny viewport (e.g. transient FSI constraints during boot, or
+          // a split-screen window) still gives the Column enough room to
+          // distribute its Spacers without collapsing the bottom controls
+          // off-screen; the outer SingleChildScrollView lets that excess
+          // scroll instead of overflowing.
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final double viewportHeight = constraints.hasBoundedHeight
+                  ? constraints.maxHeight
+                  : MediaQuery.sizeOf(context).height;
+              final double safeHeight = math.max(viewportHeight, 650.0);
+              return SingleChildScrollView(
+                child: SizedBox(
+                  height: safeHeight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 32,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Top breathing room. Smaller flex than the middle
+                        // spacer so the clock sits in the upper third
+                        // rather than dead-centre.
+                        const Spacer(flex: 2),
+                        Center(
                           child: Text(
-                            'Slide to dismiss',
-                            style: TextStyle(
-                              color: Colors.white60,
-                              fontSize: 14,
+                            timeLabel,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 128,
+                              fontWeight: FontWeight.w200,
+                              letterSpacing: -2,
+                              height: 1,
                             ),
                           ),
                         ),
+                        const SizedBox(height: 24),
+                        _ShiftSummary(shiftId: widget.shiftId),
+                        // Mid-section breathing room — larger flex so the
+                        // bottom action cluster anchors low on tall screens.
+                        // In landscape this collapses to whatever space is
+                        // left after the fixed content; the outer
+                        // SingleChildScrollView lets the layout scroll if
+                        // the 650 px floor exceeds the viewport, so the
+                        // buttons stay reachable.
+                        const Spacer(flex: 5),
+                        // Snooze — large tap target, warm amber so it's
+                        // distinguishable from the white slide-to-dismiss
+                        // handle at 4 AM. Height matches the slider track
+                        // for visual rhythm. No elevation (flat to match
+                        // the rest of the screen) and pill-shaped to read
+                        // as the action partner of the slider below.
+                        SizedBox(
+                          height: 64,
+                          child: ElevatedButton(
+                            onPressed: _onSnooze,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.amber.shade400,
+                              foregroundColor: Colors.black,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(36),
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            child: Text('Snooze ($snoozeMins min)'),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Critical-Shift alarms can't be silenced by a casual
+                        // swipe: require a sustained shake, with a 3-second hold
+                        // as the always-present fail-safe. Normal alarms keep the
+                        // slide-to-dismiss.
+                        if (widget.isCritical) ...[
+                          ShakeToDismiss(onDismissed: _onDismiss),
+                          const SizedBox(height: 12),
+                          HoldToDismiss(onDismissed: _onDismiss),
+                        ] else ...[
+                          _SlideToDismiss(onDismissed: _onDismiss),
+                          const SizedBox(height: 8),
+                          const Center(
+                            child: Text(
+                              'Slide to dismiss',
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

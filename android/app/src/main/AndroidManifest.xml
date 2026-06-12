@@ -13,10 +13,22 @@
          and ACTION_LOCKED_BOOT_COMPLETED on all supported Android
          versions — there is no separate "locked boot" permission. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Required so the alarm can fire while the device is dozing/asleep. -->
+    <!-- Required so the alarm can fire while the device is dozing/asleep, and
+         for the AlarmAudioEngine's PARTIAL_WAKE_LOCK that keeps the CPU
+         feeding the audio buffer while the screen is off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Lets the alarm channel vibrate. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- AlarmAudioService runs the custom fire-time tone as a foreground
+         service so the OS keeps the PROCESS alive while a show-when-locked
+         WakeUpScreen is occluded by the notification shade (the Android-14
+         keyguard Silence Bug — a process-scoped player alone died with the
+         reaped process). Android 14 (targetSdk 34) requires the typed
+         permission alongside the generic one. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <!-- Custom ringtone selection (Phase 1): read user-picked audio files.
          Granular media permission on Android 13+ (API 33+). file_picker's
@@ -140,6 +152,16 @@
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
             android:exported="false" />
+
+        <!-- Foreground service that owns FIRING-ALARM custom audio. type
+             mediaPlayback raises the process to foreground oom-priority so a
+             ringing alarm survives the keyguard occluding/destroying the
+             show-when-locked WakeUpScreen activity. Not exported — started
+             only by MainActivity (in-process) while it is foreground. -->
+        <service
+            android:name=".AlarmAudioService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- image_cropper (uCrop) crop UI, used by the Phase-6 OCR roster
              scanner's tight-crop step. Without this declaration uCrop throws

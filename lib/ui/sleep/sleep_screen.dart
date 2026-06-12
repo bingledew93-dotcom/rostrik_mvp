@@ -111,6 +111,7 @@ class _SleepHeroCard extends StatelessWidget {
     final Widget content = switch (plan.state) {
       SleepPlanState.none => const _NoPlanContent(),
       SleepPlanState.nightTransition => const _NightTransitionContent(),
+      SleepPlanState.restRecovery => const _RestRecoveryContent(),
       SleepPlanState.activeTarget =>
         _ActiveTargetContent(plan: plan, use24Hour: use24Hour),
     };
@@ -216,6 +217,56 @@ class _NightTransitionContent extends StatelessWidget {
           "It's a transition day — you have a rest day before nights, so "
           "there's no early alarm to chase. Bank extra rest now and let your "
           'body drift later tonight.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// State — next working shift is beyond the 36h planning horizon. Calm,
+/// non-prescriptive: no bedtime to chase, recovery is the message. Shares the
+/// label + headline + body rhythm of the other advisory states.
+class _RestRecoveryContent extends StatelessWidget {
+  const _RestRecoveryContent();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.spa_outlined,
+                color: theme.colorScheme.primary, size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'REST & RECOVERY',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.4,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'No early alarm to chase',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          "Your next shift is more than a day away, so there's no wake-up to "
+          'plan tonight. Sleep on your own clock and bank some recovery — '
+          'Rostrik will build your bedtime plan as it draws closer.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.4,

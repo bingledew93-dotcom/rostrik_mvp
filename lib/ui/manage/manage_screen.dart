@@ -9,9 +9,17 @@ import '../shift_editor_modal.dart';
 /// The roster **manipulation** hub (post the "Great Migration"). Viewing lives
 /// on the Timeline tab; this tab is purely for acting on the roster.
 ///
-/// Three action cards, UI-first: only "Generate Rotation" is wired (to the
-/// existing pattern-picker setup flow). "Add Custom Shift" and "Pause Schedule"
-/// are intentionally inert placeholders for upcoming phases.
+/// Three action cards, all live:
+///   * "Generate Rotation" → the pattern-picker setup flow (365-day
+///     materialisation, anchored cycle).
+///   * "Add Custom Shift" (Phase 3, ad-hoc shifts) → [showShiftEditorModal] —
+///     inserts a single, non-rotating shift (`cycleId == null`, so it is
+///     never touched by a cycle cascade-delete). Alarms attach themselves:
+///     the AlarmSyncService shift-stream reconcile schedules any matching
+///     follows-rotation rule automatically, and once the occurrence's fire
+///     date passes the trigger bookkeeping is purged — but the Shift record
+///     itself is immutable history and stays in Hive for the calendar view.
+///   * "Pause Schedule" → Holiday Mode ([AppPreferences.isSchedulePaused]).
 class ManageScreen extends StatelessWidget {
   const ManageScreen({super.key});
 

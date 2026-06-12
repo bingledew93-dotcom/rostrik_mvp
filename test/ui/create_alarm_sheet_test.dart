@@ -30,9 +30,9 @@ void main() {
     // the roster `List<Shift>` for the linked shift's start time — empty by
     // default, so the per-type fallback (Day → 07:00) applies.
     //
-    // No previewer is injected by default — the real one creates its
-    // AudioPlayer lazily (only on a tone tap), so tests that never tap a tone
-    // touch no audio plugin.
+    // No RingtoneChannel is injected by default — the real one is test-safe
+    // (every method no-ops off Android / without a native handler), so tests
+    // that never tap Play touch no audio at all.
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -68,13 +68,16 @@ void main() {
       expect(find.text('Linked shift'), findsOneWidget);
     });
 
-    testWidgets('one-time repeat hides the lead-mode + linked-shift sections',
+    testWidgets('one-time repeat hides the lead-time + linked-shift sections',
         (tester) async {
       await pumpSheet(tester);
       await tester.tap(find.text('One time'));
       await tester.pumpAndSettle();
       expect(find.text('Linked shift'), findsNothing);
-      expect(find.text('Custom'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('create-alarm-lead-duration')),
+        findsNothing,
+      );
       // One-time hero is its own picked clock time (default 07:00) in AM/PM.
       expect(find.text('07:00 AM'), findsOneWidget);
     });
@@ -90,33 +93,54 @@ void main() {
     });
   });
 
-  group('lead-time mode', () {
-    testWidgets('lead-mode segmented button only shows under follows-rotation',
+  group('lead-time mode (single duration selector)', () {
+    testWidgets('the duration selector only shows under follows-rotation',
         (tester) async {
       await pumpSheet(tester);
-      expect(find.text('Use default (60 min)'), findsOneWidget);
-      expect(find.text('Custom'), findsOneWidget);
+      // Seeded from the global lead (60 min) → "1h before shift start". The
+      // old "Use default vs Custom" sub-toggle is gone for good.
+      expect(
+        find.byKey(const ValueKey('create-alarm-lead-duration')),
+        findsOneWidget,
+      );
+      expect(find.text('1h before shift start'), findsOneWidget);
+      expect(find.textContaining('Use default'), findsNothing);
+      expect(find.text('Custom'), findsNothing);
 
       await tester.tap(find.text('One time'));
       await tester.pumpAndSettle();
-      expect(find.text('Use default (60 min)'), findsNothing);
-      expect(find.text('Custom'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('create-alarm-lead-duration')),
+        findsNothing,
+      );
     });
 
-    testWidgets('tapping "Custom" swaps the hero to the custom-offset clock',
+    testWidgets('picking a duration updates the hero, caption and button',
         (tester) async {
       await pumpSheet(tester);
-      // Default "use global" hero: 07:00 − 1h = 06:00.
+      // Seeded hero: Day default 07:00 − 1h global = 06:00.
       expect(find.text('06:00 AM'), findsOneWidget);
 
-      await tester.tap(find.text('Custom'));
+      // Open the duration dialog and drag the slider hard right — clamps to
+      // the 240-min max, a deterministic target for the assertion.
+      await tester.ensureVisible(
+          find.byKey(const ValueKey('create-alarm-lead-duration')));
+      await tester
+          .tap(find.byKey(const ValueKey('create-alarm-lead-duration')));
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('offset-picker-slider')),
+        const Offset(600, 0),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('offset-picker-ok')));
       await tester.pumpAndSettle();
 
-      // Default custom offset is 90 min → 07:00 − 1h30 = 05:30.
-      expect(find.text('05:30 AM'), findsOneWidget);
+      // 07:00 − 4h = 03:00; the duration echoes everywhere it's shown.
+      expect(find.text('03:00 AM'), findsOneWidget);
       expect(find.text('06:00 AM'), findsNothing);
-      // Offset still visible, demoted to the caption.
-      expect(find.textContaining('1h 30m before Day shifts'), findsOneWidget);
+      expect(find.textContaining('4h before Day shifts'), findsOneWidget);
+      expect(find.text('4h before shift start'), findsOneWidget);
     });
 
     testWidgets('the hero reflects the linked shift\'s ACTUAL roster start',
@@ -135,19 +159,17 @@ void main() {
       expect(find.text('05:00 AM'), findsOneWidget);
     });
 
-    testWidgets('the offset dialog shows the calculated target clock',
-        (tester) async {
+    testWidgets('tapping the hero opens the duration dialog with the target '
+        'clock', (tester) async {
       await pumpSheet(tester);
-      // Switch to custom so the hero becomes tappable, then open the dialog.
-      await tester.tap(find.text('Custom'));
-      await tester.pumpAndSettle();
+      // The hero is always tappable in lead-time mode now — no Custom gate.
       await tester.ensureVisible(
           find.byKey(const ValueKey('create-alarm-hero-clock')));
       await tester.tap(find.byKey(const ValueKey('create-alarm-hero-clock')));
       await tester.pumpAndSettle();
 
-      // Day default 07:00 − default custom offset 90 = 05:30. Scope to the
-      // dialog — the sheet hero behind it also reads 05:30 in custom mode.
+      // Day default 07:00 − seeded 60-min lead = 06:00. Scope to the dialog —
+      // the sheet hero behind it also reads 06:00.
       expect(
         find.byKey(const ValueKey('offset-picker-clock')),
         findsOneWidget,
@@ -155,10 +177,28 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(AlertDialog),
-          matching: find.text('05:30 AM'),
+          matching: find.text('06:00 AM'),
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('edit mode pre-populates the alarm\'s own lead duration',
+        (tester) async {
+      await pumpSheet(
+        tester,
+        initial: AppAlarm(
+          id: 'lead-edit',
+          minutesOfDay: 6 * 60,
+          label: 'Wake',
+          repeatType: AppAlarmRepeatType.followsRotation,
+          linkedShiftType: ShiftType.day,
+          relativeOffsetMinutes: 90,
+        ),
+      );
+      // 07:00 default Day start − 1h30 = 05:30, echoed on the button.
+      expect(find.text('05:30 AM'), findsOneWidget);
+      expect(find.text('1h 30m before shift start'), findsOneWidget);
     });
   });
 
@@ -180,8 +220,12 @@ void main() {
       expect(stored.enabled, isTrue);
     });
 
-    testWidgets('default lead-time mode stores a null offset (use global)',
+    testWidgets(
+        'Save persists the selected duration AS the absolute lead time',
         (tester) async {
+      // The untouched selector (seeded from the global 60-min lead) saves an
+      // EXPLICIT 60 — the engine simply fires `shiftStart − stored lead`, no
+      // "tracks the global default" sub-mode anymore.
       final repo = await pumpSheet(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
       await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
@@ -189,33 +233,41 @@ void main() {
 
       final stored = (await repo.getAll()).single;
       expect(stored.repeatType, AppAlarmRepeatType.followsRotation);
-      expect(stored.relativeOffsetMinutes, isNull,
-          reason: 'null offset means "use the global lead time"');
+      expect(stored.relativeOffsetMinutes, 60,
+          reason: 'the visible duration IS the lead time, stored as-is');
       expect(stored.linkedShiftType, ShiftType.day);
     });
 
-    testWidgets('Custom mode persists the per-alarm offset override',
+    testWidgets('a duration picked in the dialog persists on Save',
         (tester) async {
       final repo = await pumpSheet(tester);
-      await tester.tap(find.text('Custom'));
+      await tester.ensureVisible(
+          find.byKey(const ValueKey('create-alarm-lead-duration')));
+      await tester
+          .tap(find.byKey(const ValueKey('create-alarm-lead-duration')));
+      await tester.pumpAndSettle();
+      // Hard-right drag clamps at the 240-min max — deterministic.
+      await tester.drag(
+        find.byKey(const ValueKey('offset-picker-slider')),
+        const Offset(600, 0),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('offset-picker-ok')));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
       await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
       await tester.pumpAndSettle();
 
       final stored = (await repo.getAll()).single;
-      expect(stored.relativeOffsetMinutes, 90,
-          reason: 'default custom offset value should be persisted');
+      expect(stored.relativeOffsetMinutes, 240);
       expect(stored.linkedShiftType, ShiftType.day);
     });
 
     testWidgets('Save on a one-time alarm stores null link AND null offset',
         (tester) async {
-      // A user toggles Custom, then switches to One Time — the stored record
-      // must not carry a stale shift link or a confusing offset.
+      // Switching to One Time must not leave a stale shift link or a
+      // meaningless lead duration on the stored record.
       final repo = await pumpSheet(tester);
-      await tester.tap(find.text('Custom'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('One time'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
@@ -447,6 +499,108 @@ void main() {
         find.byKey(const ValueKey('create-alarm-vibrate')),
       );
       expect(tile.value, isTrue);
+    });
+  });
+
+  group('exact time mode', () {
+    testWidgets('default timing mode is Lead time (duration selector shown)',
+        (tester) async {
+      await pumpSheet(tester);
+      expect(
+        find.byKey(const ValueKey('create-alarm-timing-mode')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('create-alarm-lead-duration')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('create-alarm-exact-time')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('tapping "Exact time" swaps to the exact-time control + hero',
+        (tester) async {
+      await pumpSheet(tester);
+      // Lead-time default hero: 07:00 − 1h = 06:00.
+      expect(find.text('06:00 AM'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Exact time'));
+      await tester.tap(find.text('Exact time'));
+      await tester.pumpAndSettle();
+
+      // Duration selector gone; exact-time control + caption appear.
+      expect(
+        find.byKey(const ValueKey('create-alarm-lead-duration')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('create-alarm-exact-time')),
+        findsOneWidget,
+      );
+      // Default exact time 04:15 drives the hero and the caption.
+      expect(find.text('04:15 AM'), findsOneWidget);
+      expect(find.text('06:00 AM'), findsNothing);
+      expect(find.textContaining('Exact time · Day shifts'), findsOneWidget);
+    });
+
+    testWidgets('saving in exact mode persists the clock and a null offset',
+        (tester) async {
+      final repo = await pumpSheet(tester);
+      await tester.ensureVisible(find.text('Exact time'));
+      await tester.tap(find.text('Exact time'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
+      await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
+      await tester.pumpAndSettle();
+
+      final stored = (await repo.getAll()).single;
+      expect(stored.repeatType, AppAlarmRepeatType.followsRotation);
+      expect(stored.isExactTime, isTrue);
+      expect(stored.exactTimeMinutes, 4 * 60 + 15);
+      expect(stored.relativeOffsetMinutes, isNull,
+          reason: 'exact-time mode ignores the lead entirely');
+      expect(stored.linkedShiftType, ShiftType.day);
+    });
+
+    testWidgets('switching to One time clears exact-time state on save',
+        (tester) async {
+      final repo = await pumpSheet(tester);
+      await tester.ensureVisible(find.text('Exact time'));
+      await tester.tap(find.text('Exact time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('One time'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
+      await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
+      await tester.pumpAndSettle();
+
+      final stored = (await repo.getAll()).single;
+      expect(stored.repeatType, AppAlarmRepeatType.oneTime);
+      expect(stored.isExactTime, isFalse);
+      expect(stored.exactTimeMinutes, isNull);
+    });
+
+    testWidgets('edit mode pre-populates exact-time mode and its clock',
+        (tester) async {
+      await pumpSheet(
+        tester,
+        initial: AppAlarm(
+          id: 'exact-edit',
+          minutesOfDay: 6 * 60,
+          label: 'Wake',
+          repeatType: AppAlarmRepeatType.followsRotation,
+          linkedShiftType: ShiftType.night,
+          isExactTime: true,
+          exactTimeMinutes: 3 * 60 + 30, // 03:30
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey('create-alarm-exact-time')),
+        findsOneWidget,
+      );
+      expect(find.text('03:30 AM'), findsOneWidget);
     });
   });
 }

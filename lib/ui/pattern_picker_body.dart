@@ -152,6 +152,8 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
         hour: current.startMinutes ~/ 60,
         minute: current.startMinutes % 60,
       ),
+      // Default to the tap-to-type number pad (no dial dragging).
+      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() {
@@ -170,6 +172,8 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
         hour: current.endMinutes ~/ 60,
         minute: current.endMinutes % 60,
       ),
+      // Default to the tap-to-type number pad (no dial dragging).
+      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() {

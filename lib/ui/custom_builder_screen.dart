@@ -169,6 +169,8 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: minutesNow ~/ 60, minute: minutesNow % 60),
+      // Default to the tap-to-type number pad (no dial dragging).
+      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     final m = picked.hour * 60 + picked.minute;

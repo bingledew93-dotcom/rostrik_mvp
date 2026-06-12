@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -20,6 +21,7 @@ import '../data/repositories/hive_shift_repository.dart';
 import 'alarm_payload.dart';
 import 'local_notifications_alarm_scheduler.dart';
 import 'notification_action_dispatcher.dart';
+import 'pending_dismissal_guard.dart';
 
 /// Background isolate notification action handler.
 ///
@@ -36,6 +38,9 @@ import 'notification_action_dispatcher.dart';
 // trigger "adapter already registered" or duplicate-channel-init failures.
 // Reset implicitly on isolate teardown.
 bool _isolateInitDone = false;
+
+// Separate guard for the timezone bootstrap — see [_ensureTimezoneInit].
+bool _timezoneInitDone = false;
 
 /// Top-level entry point wired into [LocalNotificationsAlarmScheduler.init]
 /// as `onDidReceiveBackgroundNotificationResponse`. The OS invokes this when
@@ -80,6 +85,19 @@ Future<void> notificationBackgroundHandler(
     return;
   }
 
+  // NATIVE-STORE FAIL-SAFE — the FIRST real work this isolate does for a
+  // Dismiss, before the port lookup and long before the Hive boot chain.
+  // Pixel-9-class battery management reaps this headless engine fast enough
+  // to lose the slow-path Hive write; one path_provider hop plus a
+  // synchronous, flushed file write puts the dismissal in the kernel within
+  // milliseconds of Dart starting. Boot-time replay in main() turns it into
+  // the real `isAcknowledged` Hive state even if everything after this line
+  // never runs. Written on the fast path too — it also covers the race where
+  // the main isolate dies between the port send and ITS Hive write.
+  if (actionId == actionIdDismiss) {
+    await _markDismissalInNativeStore(payload);
+  }
+
   // FAST PATH: hand off to the main isolate if it is alive.
   final mainPort = ui.IsolateNameServer.lookupPortByName(alarmActionPortName);
   if (mainPort != null) {
@@ -101,6 +119,29 @@ Future<void> notificationBackgroundHandler(
     case actionIdDismiss:
       await _handleDismiss(payload);
       break;
+  }
+}
+
+/// Writes the dismissed shift's id to the native fail-safe ledger (see
+/// `pending_dismissal_guard.dart`) — deliberately the cheapest possible
+/// sequence: binding (idempotent, ms), ONE path_provider hop to resolve
+/// `filesDir`, then a synchronous flushed file write. No Hive, no timezone,
+/// no plugin beyond path_provider. Failures are swallowed: this is the
+/// parachute, and the primary Hive slow path still runs right after — a
+/// marker failure must never abort the real write attempt.
+Future<void> _markDismissalInNativeStore(String payload) async {
+  try {
+    final parsed = AlarmPayload.decode(payload);
+    if (parsed == null) return;
+    WidgetsFlutterBinding.ensureInitialized();
+    final dir = await getApplicationSupportDirectory();
+    markPendingDismissal(dir, parsed.shiftId);
+    debugPrint(
+      '[bg-isolate] dismissal marker written to native store for '
+      '${parsed.shiftId}',
+    );
+  } catch (e) {
+    debugPrint('[bg-isolate] pending-dismissal marker failed: $e');
   }
 }
 
@@ -157,11 +198,21 @@ Future<void> _ensureBackgroundIsolateInit() async {
   // in distinct in-memory caches per VM.
   await Hive.openBox('settings');
 
+  _isolateInitDone = true;
+}
+
+/// Timezone bootstrap, deliberately SEPARATE from [_ensureBackgroundIsolateInit]
+/// and called only by the snooze path (the lone consumer — `zonedSchedule`
+/// needs `tz.local`). Dismiss must never depend on it: the
+/// `flutter_timezone` platform-channel hop is the flakiest step in a headless
+/// engine, and when it threw BEFORE the dismiss write the write was lost —
+/// the "Zombie UI" bug where the database still thought the alarm was ringing.
+Future<void> _ensureTimezoneInit() async {
+  if (_timezoneInitDone) return;
   tz_data.initializeTimeZones();
   final tzInfo = await FlutterTimezone.getLocalTimezone();
   tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
-
-  _isolateInitDone = true;
+  _timezoneInitDone = true;
 }
 
 /// Marks the shift acknowledged in Hive and defensively cancels the OS
@@ -173,30 +224,7 @@ Future<void> _handleDismiss(String payload) async {
   if (parsed == null) return;
 
   await _ensureBackgroundIsolateInit();
-  final shiftBox = await Hive.openBox<Shift>(HiveShiftRepository.boxName);
-
-  final shift = shiftBox.get(parsed.shiftId);
-  if (shift == null) {
-    debugPrint(
-      '[bg-isolate] dismiss: shift ${parsed.shiftId} not found — '
-      'cancelling notification anyway',
-    );
-  } else {
-    // Also clear any pending snooze on this occurrence — the user has
-    // chosen to handle the alarm fully, not push it forward.
-    await shiftBox.put(
-      shift.id,
-      shift.copyWith(isAcknowledged: true, clearSnoozedUntil: true),
-    );
-    debugPrint('[bg-isolate] dismiss: marked ${shift.id} acknowledged');
-  }
-
-  // Auto-delete a fired one-time alarm marked auto-delete, at the dismissal
-  // instant — even here, in the killed-app path. The main isolate is dead (we
-  // took the slow path), so it re-reads the box from disk on next open; the
-  // record is simply gone. No-op unless the payload carried a rule id for an
-  // auto-delete one-time alarm.
-  await _maybeAutoDeleteAlarm(parsed.appAlarmId);
+  await performBackgroundDismissWrite(parsed);
 
   // `cancelNotification: true` on the action button means the OS has likely
   // already dismissed the heads-up by the time we get here, but a second
@@ -205,17 +233,67 @@ Future<void> _handleDismiss(String payload) async {
   await FlutterLocalNotificationsPlugin().cancel(id: parsed.notificationId);
 }
 
+/// The Hive side of the killed-app Dismiss, isolated from every platform
+/// channel so it is unit-testable against a real on-disk Hive and CANNOT be
+/// pre-empted by a flaky channel hop (the Zombie-UI regression): opens the
+/// shifts box, marks the occurrence `isAcknowledged` (clearing any pending
+/// snooze), flushes, and — in a `finally` — CLOSES the box. The close is
+/// load-bearing twice over:
+///   * durability — the acknowledged flag is guaranteed on disk even if the
+///     OS reaps this isolate the instant the handler returns;
+///   * no isolate contention — the file handle/lock is released, so a main
+///     isolate cold-booting moments later opens the same box cleanly instead
+///     of racing a still-open background handle.
+/// The main isolate is dead on this path (the fast path forwards to it when
+/// alive), so closing can never disturb a live UI.
+Future<void> performBackgroundDismissWrite(AlarmPayload parsed) async {
+  final shiftBox = await Hive.openBox<Shift>(HiveShiftRepository.boxName);
+  try {
+    final shift = shiftBox.get(parsed.shiftId);
+    if (shift == null) {
+      debugPrint(
+        '[bg-isolate] dismiss: shift ${parsed.shiftId} not found — '
+        'cancelling notification anyway',
+      );
+    } else {
+      // Also clear any pending snooze on this occurrence — the user has
+      // chosen to handle the alarm fully, not push it forward.
+      await shiftBox.put(
+        shift.id,
+        shift.copyWith(isAcknowledged: true, clearSnoozedUntil: true),
+      );
+      await shiftBox.flush();
+      debugPrint('[bg-isolate] dismiss: marked ${shift.id} acknowledged');
+    }
+  } finally {
+    await shiftBox.close();
+  }
+
+  // Auto-delete a fired one-time alarm marked auto-delete, at the dismissal
+  // instant — even here, in the killed-app path. The main isolate is dead (we
+  // took the slow path), so it re-reads the box from disk on next open; the
+  // record is simply gone. No-op unless the payload carried a rule id for an
+  // auto-delete one-time alarm.
+  await _maybeAutoDeleteAlarm(parsed.appAlarmId);
+}
+
 /// Killed-app counterpart of the foreground dispatcher's auto-delete: removes a
 /// fired one-time alarm marked auto-delete from the `alarms` box directly in
 /// this isolate. No-op when the payload had no rule id, the rule is gone, or it
-/// isn't an auto-delete one-time alarm.
+/// isn't an auto-delete one-time alarm. Same flush-and-close contract as the
+/// dismiss write — the box never outlives the call.
 Future<void> _maybeAutoDeleteAlarm(String appAlarmId) async {
   if (appAlarmId.isEmpty) return;
   final alarmBox = await Hive.openBox<AppAlarm>(HiveAppAlarmRepository.boxName);
-  final alarm = alarmBox.get(appAlarmId);
-  if (!shouldAutoDeleteOnDismiss(alarm)) return;
-  await alarmBox.delete(appAlarmId);
-  debugPrint('[bg-isolate] dismiss: auto-deleted alarm $appAlarmId');
+  try {
+    final alarm = alarmBox.get(appAlarmId);
+    if (!shouldAutoDeleteOnDismiss(alarm)) return;
+    await alarmBox.delete(appAlarmId);
+    await alarmBox.flush();
+    debugPrint('[bg-isolate] dismiss: auto-deleted alarm $appAlarmId');
+  } finally {
+    await alarmBox.close();
+  }
 }
 
 /// Writes `snoozedUntil = now + snooze_duration` to Hive and reschedules the same
@@ -230,9 +308,15 @@ Future<void> _handleSnooze(String payload) async {
   if (parsed == null) return;
 
   await _ensureBackgroundIsolateInit();
-  final shiftBox = await Hive.openBox<Shift>(HiveShiftRepository.boxName);
-  final shift = shiftBox.get(parsed.shiftId);
 
+  // Snooze duration is user-configurable via SettingsScreen; the bg
+  // isolate reads from its own opened copy of the same on-disk box. The
+  // default mirrors the historical hard-coded 9-minute snooze.
+  final int snoozeMins =
+      Hive.box('settings').get('snooze_duration', defaultValue: 1) as int;
+  final snoozedUntil = DateTime.now().add(Duration(minutes: snoozeMins));
+
+  final shift = await performBackgroundSnoozeWrite(parsed, snoozedUntil);
   if (shift == null) {
     debugPrint(
       '[bg-isolate] snooze: shift ${parsed.shiftId} not found — '
@@ -242,14 +326,10 @@ Future<void> _handleSnooze(String payload) async {
     return;
   }
 
-  // Snooze duration is user-configurable via SettingsScreen; the bg
-  // isolate reads from its own opened copy of the same on-disk box. The
-  // default mirrors the historical hard-coded 9-minute snooze.
-  final int snoozeMins =
-      Hive.box('settings').get('snooze_duration', defaultValue: 1) as int;
-  final snoozedUntil = DateTime.now().add(Duration(minutes: snoozeMins));
-  await shiftBox.put(shift.id, shift.copyWith(snoozedUntil: snoozedUntil));
-  debugPrint('[bg-isolate] snooze: ${shift.id} snoozedUntil=$snoozedUntil');
+  // Timezone is needed ONLY from here on (the zonedSchedule below) — by
+  // design it runs AFTER the Hive write, so a flaky flutter_timezone channel
+  // can no longer cost the persisted snooze state.
+  await _ensureTimezoneInit();
 
   // Reuse the same notification id so any subsequent reconcile from the
   // main isolate replaces idempotently. We still issue an explicit cancel
@@ -263,15 +343,14 @@ Future<void> _handleSnooze(String payload) async {
     title: _titleFor(shift),
     body: _bodyFor(shift),
     scheduledDate: tz.TZDateTime.from(snoozedUntil, tz.local),
-    // Decoded tone key (defaults to 'classic' for a legacy/bare payload) keeps
-    // the snoozed alarm on the user's chosen channel/sound in the killed-app
-    // path; the next main-isolate reconcile re-issues the canonical payload.
-    // A custom-ringtone alarm (payload carried a URI) re-snoozes onto the
-    // SILENT channel too, so the rescheduled fire also defers audio to the
-    // native player WakeUpScreen starts — consistent with the original.
+    // SILENT channel for every snooze reschedule — preset AND custom — matching
+    // the main scheduler: the foreground-service native player owns all alarm
+    // audio when the snoozed alarm fires (WakeUpScreen starts it), so the
+    // bundled tone must not ALSO play via FLAG_INSISTENT. The decoded soundKey
+    // still rides through (iOS sound + the bundled tone WakeUpScreen plays).
     notificationDetails: buildAlarmNotificationDetails(
       parsed.soundKey,
-      useSilentChannel: parsed.customRingtoneUri != null,
+      useSilentChannel: true,
     ),
     androidScheduleMode: AndroidScheduleMode.alarmClock,
     // Preserve the original `shiftId|notificationId` so a subsequent
@@ -281,6 +360,29 @@ Future<void> _handleSnooze(String payload) async {
     // until the next reconcile.
     payload: payload,
   );
+}
+
+/// The Hive side of the killed-app Snooze — same isolation, flush, and
+/// close-in-`finally` contract as [performBackgroundDismissWrite] (durability
+/// + lock release with a dead main isolate). Returns the UPDATED shift so the
+/// caller can build the rescheduled notification without re-opening the box,
+/// or null when the occurrence no longer exists.
+Future<Shift?> performBackgroundSnoozeWrite(
+  AlarmPayload parsed,
+  DateTime snoozedUntil,
+) async {
+  final shiftBox = await Hive.openBox<Shift>(HiveShiftRepository.boxName);
+  try {
+    final shift = shiftBox.get(parsed.shiftId);
+    if (shift == null) return null;
+    final updated = shift.copyWith(snoozedUntil: snoozedUntil);
+    await shiftBox.put(shift.id, updated);
+    await shiftBox.flush();
+    debugPrint('[bg-isolate] snooze: ${shift.id} snoozedUntil=$snoozedUntil');
+    return updated;
+  } finally {
+    await shiftBox.close();
+  }
 }
 
 // Mirrors `AlarmEngine._titleFor` / `_bodyFor`. The duplication is

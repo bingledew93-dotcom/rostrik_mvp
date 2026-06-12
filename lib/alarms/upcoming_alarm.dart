@@ -1,5 +1,6 @@
 import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
+import 'rotation_fire_time.dart';
 
 /// The single next follows-rotation alarm occurrence the Dashboard can offer to
 /// skip early. Carries the firing instant plus the rule + shift it belongs to,
@@ -23,11 +24,10 @@ class UpcomingAutomatedAlarm {
 /// without disarming the rule.
 ///
 /// Pure (no Flutter, no Provider) so it can be unit-tested with synthetic
-/// rosters + a fixed `now`. Deliberately mirrors the followsRotation fire-time
-/// math in `AlarmSyncService._doSync` — `shiftStart − (relativeOffsetMinutes ??
-/// globalLeadMinutes)`, DST-safe by folding the offset into the minute field —
-/// and its suppression rules, so what the Dashboard offers can never disagree
-/// with what the engine actually scheduled:
+/// rosters + a fixed `now`. Fire times come from the SAME `rotationAlarmFireAt`
+/// helper `AlarmSyncService` schedules with — covering both lead-time and
+/// exact-time modes — so what the Dashboard offers can never disagree with what
+/// the engine actually scheduled. It applies the same suppression rules too:
 ///   * only enabled alarms, only followsRotation with a non-null linkedShiftType;
 ///   * shift type must match the alarm's linkedShiftType;
 ///   * muted / acknowledged / already-skipped shifts are ignored (their alarm
@@ -56,20 +56,18 @@ UpcomingAutomatedAlarm? nextUpcomingAutomatedAlarm({
     final type = alarm.linkedShiftType;
     if (type == null) continue;
 
-    final leadMinutes = alarm.relativeOffsetMinutes ?? globalLeadMinutes;
-
     for (final s in shifts) {
       if (s.type != type) continue;
       if (s.isMuted) continue;
       if (s.isAcknowledged) continue;
       if (s.isAlarmSkipped) continue;
 
-      final fireAt = DateTime(
-        s.date.year,
-        s.date.month,
-        s.date.day,
-        s.startMinutes ~/ 60,
-        s.startMinutes % 60 - leadMinutes,
+      // Shared with AlarmSyncService so the offered skip can never show a clock
+      // the engine didn't arm — and it honours exact-time mode automatically.
+      final fireAt = rotationAlarmFireAt(
+        alarm: alarm,
+        shift: s,
+        globalLeadMinutes: globalLeadMinutes,
       );
 
       if (!fireAt.isAfter(now)) continue;

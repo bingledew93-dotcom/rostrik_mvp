@@ -14,6 +14,8 @@ void main() {
     bool enabled = true,
     int? relativeOffsetMinutes,
     AppAlarmRepeatType repeatType = AppAlarmRepeatType.followsRotation,
+    bool isExactTime = false,
+    int? exactTimeMinutes,
   }) =>
       AppAlarm(
         id: id,
@@ -23,6 +25,8 @@ void main() {
         enabled: enabled,
         linkedShiftType: linkedShiftType,
         relativeOffsetMinutes: relativeOffsetMinutes,
+        isExactTime: isExactTime,
+        exactTimeMinutes: exactTimeMinutes,
       );
 
   Shift shift({
@@ -66,6 +70,17 @@ void main() {
     expect(result, isNotNull);
     expect(result!.shift.id, 'd1');
     expect(result.fireAt, DateTime(2026, 6, 2, 6, 0));
+  });
+
+  test('an exact-time alarm reports its exact clock, not a lead offset', () {
+    // Day shift today at 07:00; exact-time alarm at 04:15 → fires 04:15 (4h15m
+    // out, in window). Must match the engine's exact-time fireAt, ignoring lead.
+    final result = run(
+      alarms: [rotation(isExactTime: true, exactTimeMinutes: 4 * 60 + 15)],
+      shifts: [shift(id: 'd1', date: now)],
+    );
+    expect(result, isNotNull);
+    expect(result!.fireAt, DateTime(2026, 6, 2, 4, 15));
   });
 
   test('returns null when the next fire is beyond the 12h window', () {

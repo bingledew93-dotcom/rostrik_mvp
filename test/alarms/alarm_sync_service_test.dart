@@ -75,6 +75,8 @@ void main() {
     bool isCriticalShift = false,
     String soundKey = 'classic',
     String? customRingtoneUri,
+    bool isExactTime = false,
+    int? exactTimeMinutes,
   }) =>
       AppAlarm(
         id: id,
@@ -90,6 +92,8 @@ void main() {
         ringtoneSource: customRingtoneUri == null
             ? RingtoneSource.classic
             : RingtoneSource.vault,
+        isExactTime: isExactTime,
+        exactTimeMinutes: exactTimeMinutes,
       );
 
   Shift mkShift({
@@ -274,6 +278,72 @@ void main() {
       await service.syncAlarms();
       expect(scheduler.scheduled.values.single.fireAt,
           DateTime(2026, 6, 4, 22, 0));
+    });
+  });
+
+  group('follows-rotation alarms (exact time)', () {
+    test('fires at the exact clock on the shift date, ignoring the lead',
+        () async {
+      // Day shift 2 Jun starts 07:00. An exact-time alarm at 04:15 must fire at
+      // 04:15 on that date — NOT 06:00 (07:00 − the 60-min global lead).
+      await shifts.upsert(
+        mkShift(id: 'd1', date: DateTime(2026, 6, 2), type: ShiftType.day),
+      );
+      await alarms.upsert(
+        followsRotation(isExactTime: true, exactTimeMinutes: 4 * 60 + 15),
+      );
+      await service.syncAlarms();
+      expect(scheduler.scheduled.values.single.fireAt,
+          DateTime(2026, 6, 2, 4, 15));
+    });
+
+    test('exact time wins even when a per-alarm offset is also present',
+        () async {
+      // A malformed-but-possible record carrying BOTH a 30-min offset and exact
+      // mode: exact-time takes precedence, so it fires at 04:15, not 06:30.
+      await shifts.upsert(
+        mkShift(id: 'd1', date: DateTime(2026, 6, 2), type: ShiftType.day),
+      );
+      await alarms.upsert(followsRotation(
+        isExactTime: true,
+        exactTimeMinutes: 4 * 60 + 15,
+        relativeOffsetMinutes: 30,
+      ));
+      await service.syncAlarms();
+      expect(scheduler.scheduled.values.single.fireAt,
+          DateTime(2026, 6, 2, 4, 15));
+    });
+
+    test('one OS alarm per matching shift, each at the same exact clock',
+        () async {
+      await shifts.upsert(
+        mkShift(id: 'd1', date: DateTime(2026, 6, 2), type: ShiftType.day),
+      );
+      await shifts.upsert(
+        mkShift(id: 'd2', date: DateTime(2026, 6, 5), type: ShiftType.day),
+      );
+      await alarms.upsert(
+        followsRotation(isExactTime: true, exactTimeMinutes: 5 * 60),
+      );
+      await service.syncAlarms();
+      final fireAts = scheduler.scheduled.values.map((e) => e.fireAt).toSet();
+      expect(fireAts, {
+        DateTime(2026, 6, 2, 5, 0),
+        DateTime(2026, 6, 5, 5, 0),
+      });
+    });
+
+    test('an exact time already past on today is filtered out', () async {
+      // Now is 05:00 on 1 Jun; a Day shift today with an exact time of 04:00 is
+      // already past, so nothing is scheduled for it.
+      await shifts.upsert(
+        mkShift(id: 'today', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await alarms.upsert(
+        followsRotation(isExactTime: true, exactTimeMinutes: 4 * 60),
+      );
+      await service.syncAlarms();
+      expect(scheduler.scheduled, isEmpty);
     });
   });
 
@@ -676,6 +746,171 @@ void main() {
       paused = false;
       await service.syncAlarms();
       expect(scheduler.scheduled, isNotEmpty);
+    });
+  });
+
+  group('ad-hoc shifts — immutable history, ephemeral triggers (Phase 3)', () {
+    test('an ad-hoc (cycle-less) shift arms its matching rotation alarm',
+        () async {
+      // mkShift never stamps a cycleId — exactly what the Manage tab's
+      // "Add Custom Shift" editor writes. The reconcile must treat it like
+      // any rostered shift: one OS alarm at shiftStart − lead.
+      await alarms.upsert(followsRotation());
+      await shifts.upsert(
+        mkShift(id: 'adhoc', date: DateTime(2026, 6, 2), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+
+      final scheduled = scheduler.scheduled.values.single;
+      expect(scheduled.fireAt, DateTime(2026, 6, 2, 6, 0));
+      expect(scheduled.payload, contains('adhoc'));
+    });
+
+    test('an ARCHIVED ad-hoc shift is excluded from the desired set even when '
+        'future-dated', () async {
+      // The self-cleaning sweep flips `isArchived` on expired ad-hoc shifts;
+      // the reconcile must skip them. Using a FUTURE date proves the guard is
+      // honoured independently of the `fireAt > now` time gate — an archived
+      // shift never arms an alarm regardless of when it falls.
+      await alarms.upsert(followsRotation());
+      await shifts.upsert(Shift(
+        id: 'archived',
+        date: DateTime(2026, 6, 2), // future relative to the 2026-06-01 clock
+        type: ShiftType.day,
+        startMinutes: 7 * 60,
+        endMinutes: 15 * 60,
+        isAdHoc: true,
+        isArchived: true,
+      ));
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled, isEmpty,
+          reason: 'archived shifts are out of the active desired set');
+      expect(idMap.keys, isEmpty,
+          reason: 'no trigger bookkeeping is allocated for an archived shift');
+      // …and the record is untouched — archiving never deletes.
+      expect(await shifts.getById('archived'), isNotNull);
+    });
+
+    test('a PAUSED shift is excluded from the desired set (no alarm fires)',
+        () async {
+      // Exception layer: the user marked this day off (sick/leave/holiday). The
+      // reconcile must skip it like the other suppressions — but keep the
+      // record (history).
+      await alarms.upsert(followsRotation());
+      await shifts.upsert(Shift(
+        id: 'paused',
+        date: DateTime(2026, 6, 2), // future relative to the 2026-06-01 clock
+        type: ShiftType.day,
+        startMinutes: 7 * 60,
+        endMinutes: 15 * 60,
+        isPaused: true,
+        pauseReason: 'Sick',
+      ));
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled, isEmpty,
+          reason: 'paused shifts never arm an alarm');
+      expect(idMap.keys, isEmpty);
+      expect(await shifts.getById('paused'), isNotNull,
+          reason: 'pausing never deletes the shift');
+    });
+
+    test('start time passes → trigger leaves the OS window; the Shift '
+        'record survives untouched', () async {
+      await alarms.upsert(followsRotation());
+      await shifts.upsert(
+        mkShift(id: 'adhoc', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+      expect(scheduler.scheduled, hasLength(1)); // armed at 06:00
+
+      // 08:00 — the 07:00 start has passed. The next reconcile must purge
+      // the trigger from the rolling window (no fireAt in the past is ever
+      // desired; the orphan pass cancels whatever the OS still holds)…
+      clock.set(DateTime(2026, 6, 1, 8, 0));
+      await service.syncAlarms();
+      expect(scheduler.scheduled, isEmpty,
+          reason: 'past trigger purged from the 14-day window');
+
+      // …but the shift itself is IMMUTABLE HISTORY — still in Hive for the
+      // calendar view. Nothing in the engine may ever delete a Shift.
+      expect(await shifts.getById('adhoc'), isNotNull,
+          reason: 'shifts are immutable history');
+    });
+
+    test('the id-map bookkeeping is released the day after the fire date '
+        '(queue-bloat purge)', () async {
+      await alarms.upsert(followsRotation());
+      await shifts.upsert(
+        mkShift(id: 'adhoc', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+      expect(idMap.has('fr@2026-06-01'), isTrue);
+
+      // Later the same day: the OS entry is already torn down, but the
+      // id-map entry keeps one day of slack (cross-midnight snooze edge).
+      clock.set(DateTime(2026, 6, 1, 8, 0));
+      await service.syncAlarms();
+      expect(idMap.has('fr@2026-06-01'), isTrue);
+
+      // Next day: the fire date is strictly past — entry released. Without
+      // this, the ledger grows by one row per alarm-occurrence forever.
+      clock.set(DateTime(2026, 6, 2, 5, 0));
+      await service.syncAlarms();
+      expect(idMap.has('fr@2026-06-01'), isFalse,
+          reason: 'ephemeral trigger bookkeeping must not outlive its date');
+      expect(await shifts.getById('adhoc'), isNotNull,
+          reason: 'the purge touches the id ledger ONLY, never the roster');
+    });
+
+    test('a backfilled PAST shift never arms a legacy alarm', () async {
+      // Payslip-verification backfill: the editor now allows dates up to a
+      // year back. A historical shift must be inert — the engine's shift
+      // window starts at `now`, so it never even enters the desired-set
+      // computation, and no id-map entry is allocated for it.
+      await alarms.upsert(followsRotation());
+      await shifts.upsert(
+        mkShift(id: 'old1', date: DateTime(2026, 5, 20), type: ShiftType.day),
+      );
+      await shifts.upsert(
+        // Yesterday — the nearest possible backfill, still strictly past.
+        mkShift(id: 'old2', date: DateTime(2026, 5, 31), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled, isEmpty,
+          reason: 'historical shifts must never resurrect alarms');
+      expect(idMap.keys, isEmpty,
+          reason: 'no trigger bookkeeping is ever allocated for the past');
+      // And the records themselves are untouched — immutable history.
+      expect(await shifts.getById('old1'), isNotNull);
+      expect(await shifts.getById('old2'), isNotNull);
+    });
+
+    test('the purge spares future-dated keys and unknown key shapes',
+        () async {
+      // A pre-Phase-5 plain-UUID key (no @date suffix) must be left alone —
+      // the purge only reasons about keys whose shape it understands.
+      await idMap.idFor('legacy-plain-shift-uuid');
+      await alarms.upsert(followsRotation());
+      await shifts.upsert(
+        mkShift(id: 's1', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await shifts.upsert(
+        mkShift(id: 's2', date: DateTime(2026, 6, 3), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+      expect(idMap.has('fr@2026-06-01'), isTrue);
+      expect(idMap.has('fr@2026-06-03'), isTrue);
+
+      clock.set(DateTime(2026, 6, 2, 5, 0));
+      await service.syncAlarms();
+
+      expect(idMap.has('fr@2026-06-01'), isFalse); // past → released
+      expect(idMap.has('fr@2026-06-03'), isTrue); // future → kept
+      expect(idMap.has('legacy-plain-shift-uuid'), isTrue,
+          reason: 'unknown key shapes are never purged');
     });
   });
 }

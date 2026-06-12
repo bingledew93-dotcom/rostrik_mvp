@@ -56,15 +56,23 @@ class _TemplateScreenState extends State<TemplateScreen> {
   }
 
   Future<void> _pickStartTime() async {
-    final picked =
-        await showTimePicker(context: context, initialTime: _startTime);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+      // Default to the tap-to-type number pad (no dial dragging).
+      initialEntryMode: TimePickerEntryMode.input,
+    );
     if (!mounted || picked == null) return;
     setState(() => _startTime = picked);
   }
 
   Future<void> _pickEndTime() async {
-    final picked =
-        await showTimePicker(context: context, initialTime: _endTime);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime,
+      // Default to the tap-to-type number pad (no dial dragging).
+      initialEntryMode: TimePickerEntryMode.input,
+    );
     if (!mounted || picked == null) return;
     setState(() => _endTime = picked);
   }

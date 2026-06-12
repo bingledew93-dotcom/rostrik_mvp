@@ -18,6 +18,10 @@ class Shift {
     this.snoozedUntil,
     this.cycleId,
     this.isAlarmSkipped = false,
+    this.isAdHoc = false,
+    this.isArchived = false,
+    this.isPaused = false,
+    this.pauseReason,
   })  : date = DateTime(date.year, date.month, date.day),
         assert(
           startMinutes >= 0 && startMinutes < 1440,
@@ -96,6 +100,61 @@ class Shift {
   @HiveField(10, defaultValue: false)
   final bool isAlarmSkipped;
 
+  // Phase-3 AD-HOC marker. True ONLY for single, non-rotating shifts inserted
+  // via the Manage tab's "Add Custom Shift" editor (`ShiftEditorModal`).
+  // Rotation shifts emitted by `ShiftGenerator` leave this false. This is the
+  // SOLE discriminator the self-cleaning archive sweep keys off — never
+  // `cycleId` — so a future cycle-less-but-not-ad-hoc shift can never be swept.
+  // `defaultValue: false` makes every pre-existing record (and every rotation
+  // shift) read back as non-ad-hoc.
+  @HiveField(11, defaultValue: false)
+  final bool isAdHoc;
+
+  // Archive tombstone for an EXPIRED ad-hoc shift. The init-time sweep
+  // (`archiveExpiredAdHocShifts`) flips this true once an ad-hoc shift's end is
+  // more than the grace window (24h) in the past. The Shift is NEVER deleted —
+  // shifts are immutable history; the calendar is the user's work record they
+  // verify payslips against, and ad-hoc shifts are explicitly backfillable a
+  // year into the past. An archived shift stays in Hive and still renders in
+  // the historical timeline; it is only excluded from the alarm engine's active
+  // desired-set computation (see AlarmSyncService). `defaultValue: false` keeps
+  // legacy records readable.
+  @HiveField(12, defaultValue: false)
+  final bool isArchived;
+
+  // EXCEPTION LAYER. When true the shift is PAUSED/CANCELLED for that day — the
+  // user isn't working it (sick, annual leave, public holiday, …). The shift
+  // STAYS on the calendar as a historical record (never deleted), rendered
+  // muted/struck-through, and `AlarmSyncService` skips it so no alarm fires.
+  // Like [isMuted] it suppresses scheduling, but it's a distinct, user-facing
+  // "day off" carrying a [pauseReason] rather than the silent per-occurrence
+  // mute. `defaultValue: false` keeps pre-exception-layer records readable.
+  @HiveField(13, defaultValue: false)
+  final bool isPaused;
+
+  // Optional reason shown beside the paused state — a preset ("Sick", "Annual
+  // Leave", "Public Holiday") or free text. Null when not paused, or paused
+  // without a stated reason. Nullable, so no `defaultValue` is needed.
+  @HiveField(14)
+  final String? pauseReason;
+
+  /// Whether this occurrence's alarm has already been HANDLED at [now] —
+  /// dismissed ([isAcknowledged]) or pushed forward by a still-active snooze
+  /// ([snoozedUntil] in the future).
+  ///
+  /// THE shared predicate between `WakeUpScreen`'s self-destruct rule and the
+  /// cold-boot wake-route gate in `main.dart`, so the two can never diverge: a
+  /// payload whose shift is handled must never (re)surface a wake screen — the
+  /// "Zombie UI" bug where a Dismiss from the notification panel (killed app)
+  /// stopped the audio but a later cold boot still routed to a dead
+  /// WakeUpScreen off the stale FSI payload.
+  ///
+  /// Deliberately EXCLUDES [isMuted] / [isAlarmSkipped]: those suppress future
+  /// *scheduling*, but if an alarm somehow fired anyway the wake screen is the
+  /// only dismiss surface and must not be gated away.
+  bool isAlarmHandledAt(DateTime now) =>
+      isAcknowledged || (snoozedUntil != null && snoozedUntil!.isAfter(now));
+
   bool get isOvernight => endMinutes <= startMinutes;
 
   int get durationMinutes => isOvernight
@@ -155,6 +214,11 @@ class Shift {
     bool clearSnoozedUntil = false,
     String? cycleId,
     bool? isAlarmSkipped,
+    bool? isAdHoc,
+    bool? isArchived,
+    bool? isPaused,
+    String? pauseReason,
+    bool clearPauseReason = false,
   }) =>
       Shift(
         id: id ?? this.id,
@@ -169,6 +233,14 @@ class Shift {
             clearSnoozedUntil ? null : (snoozedUntil ?? this.snoozedUntil),
         cycleId: cycleId ?? this.cycleId,
         isAlarmSkipped: isAlarmSkipped ?? this.isAlarmSkipped,
+        isAdHoc: isAdHoc ?? this.isAdHoc,
+        isArchived: isArchived ?? this.isArchived,
+        isPaused: isPaused ?? this.isPaused,
+        // `clearPauseReason: true` wipes the reason (un-pause / change of mind);
+        // without it `pauseReason: null` would be indistinguishable from "leave
+        // unchanged" — same idiom as `clearSnoozedUntil`.
+        pauseReason:
+            clearPauseReason ? null : (pauseReason ?? this.pauseReason),
       );
 
   @override
@@ -186,7 +258,11 @@ class Shift {
           isAcknowledged == other.isAcknowledged &&
           snoozedUntil == other.snoozedUntil &&
           cycleId == other.cycleId &&
-          isAlarmSkipped == other.isAlarmSkipped;
+          isAlarmSkipped == other.isAlarmSkipped &&
+          isAdHoc == other.isAdHoc &&
+          isArchived == other.isArchived &&
+          isPaused == other.isPaused &&
+          pauseReason == other.pauseReason;
 
   @override
   int get hashCode => Object.hash(
@@ -201,6 +277,10 @@ class Shift {
         snoozedUntil,
         cycleId,
         isAlarmSkipped,
+        isAdHoc,
+        isArchived,
+        isPaused,
+        pauseReason,
       );
 
   @override
@@ -209,5 +289,7 @@ class Shift {
       'start: $startMinutes, end: $endMinutes, note: $note, '
       'isMuted: $isMuted, isAcknowledged: $isAcknowledged, '
       'snoozedUntil: $snoozedUntil, cycleId: $cycleId, '
-      'isAlarmSkipped: $isAlarmSkipped)';
+      'isAlarmSkipped: $isAlarmSkipped, isAdHoc: $isAdHoc, '
+      'isArchived: $isArchived, isPaused: $isPaused, '
+      'pauseReason: $pauseReason)';
 }

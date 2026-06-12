@@ -16,6 +16,7 @@ import '../util/weekday_mask.dart';
 import 'alarm_payload.dart';
 import 'alarm_scheduler.dart';
 import 'notification_id_map.dart';
+import 'rotation_fire_time.dart';
 
 /// Payload sentinel for alarms with no linked shift (one-time alarms,
 /// future custom-repeat / bundle alarms). Replaces the shiftId field
@@ -57,12 +58,12 @@ bool _readSchedulePausedFromSettings() {
 ///     at the next future occurrence of `minutesOfDay` (today if still
 ///     in the future, else tomorrow).
 ///   * Follows-rotation alarms ([AppAlarmRepeatType.followsRotation]) →
-///     one OS alarm per matching shift in the rolling [horizon], fired at
-///     `shiftStart − leadTime`. The lead time is the alarm's
-///     `relativeOffsetMinutes` when set (a per-alarm OVERRIDE), else the
-///     global `AlarmSettings.leadTime` (the default). There is no
-///     absolute-clock-time mode — a fixed time can't track a moving shift.
-///     "Matching" means the shift's type equals the alarm's
+///     one OS alarm per matching shift in the rolling [horizon]. Two timing
+///     modes (see `rotationAlarmFireAt`): lead-time fires at `shiftStart −
+///     leadTime` (the alarm's `relativeOffsetMinutes` override, else the global
+///     `AlarmSettings.leadTime`); exact-time (`isExactTime`) fires at the
+///     alarm's absolute `exactTimeMinutes` on the shift's date, ignoring the
+///     lead entirely. "Matching" means the shift's type equals the alarm's
 ///     `linkedShiftType`; alarms with `null` `linkedShiftType` are
 ///     skipped as invalid configuration.
 ///
@@ -319,24 +320,31 @@ class AlarmSyncService {
             if (s.isAcknowledged) continue;
             if (s.isAlarmSkipped) continue;
 
-            // followsRotation alarms ALWAYS fire relative to the shift start —
-            // an absolute clock time can't track a shift that moves, which is
-            // the whole point of the app. The lead time is the per-alarm
-            // override when set, else the global default.
-            //
-            // DST-safe by construction: the offset is folded into the minute
-            // field and the DateTime constructor normalises the (possibly
-            // negative) result in LOCAL time. Unlike `Duration` subtraction,
-            // an offset that crosses midnight or a DST boundary lands on the
-            // correct local wall-clock time.
-            final leadMinutes =
-                alarm.relativeOffsetMinutes ?? globalLeadMinutes;
-            final normalFireAt = DateTime(
-              s.date.year,
-              s.date.month,
-              s.date.day,
-              s.startMinutes ~/ 60,
-              s.startMinutes % 60 - leadMinutes,
+            // EXCEPTION LAYER — the user paused/cancelled this day (sick,
+            // leave, holiday). Treated exactly like the other suppressions: no
+            // alarm is desired, so the orphan-cancel pass tears down any
+            // pending OS notification. The Shift stays in Hive (history); only
+            // its alarm is skipped.
+            if (s.isPaused) continue;
+
+            // Archived ad-hoc shift (the self-cleaning sweep flipped
+            // `isArchived` once its end was >24h past). Archived ⇒ excluded
+            // from the active desired set. In practice the `fireAt.isAfter(now)`
+            // gate below already drops it (an archived shift is always past),
+            // so this is the explicit-intent guard — and it correctly suppresses
+            // even a hypothetical future-dated archived shift.
+            if (s.isArchived) continue;
+
+            // Fire time for THIS occurrence — exact-time mode fires at the
+            // alarm's absolute clock time on the shift's date; lead-time mode
+            // fires at `shiftStart − lead` (per-alarm override, else global
+            // default). Both branches live in `rotationAlarmFireAt`, shared with
+            // the Dashboard preview so the two can never disagree, and are
+            // DST-safe by folding the offset into the minute field.
+            final normalFireAt = rotationAlarmFireAt(
+              alarm: alarm,
+              shift: s,
+              globalLeadMinutes: globalLeadMinutes,
             );
 
             // Snoozed-alarm resurrection. When the user taps Snooze,
@@ -420,6 +428,31 @@ class AlarmSyncService {
     _scheduledFireAt.removeWhere(
       (id, _) => !pending.contains(id) && !desired.containsKey(id),
     );
+
+    // Shifts are immutable history; ALARM TRIGGERS ARE EPHEMERAL. Once an
+    // occurrence's fire DATE has passed it can never re-enter the desired set
+    // (every branch above requires `fireAt.isAfter(now)`), so its id-map entry
+    // is dead weight — release it. This keeps the notification_ids ledger
+    // bounded by the rolling horizon instead of growing by one entry per
+    // alarm-occurrence forever (a year of one daily alarm would otherwise
+    // strand 365 rows). The Shift records themselves are NEVER touched here —
+    // they stay in Hive for the historical calendar view.
+    //
+    // Strictly-before-today (not before-now) deliberately leaves today's
+    // already-fired keys until tomorrow: the cross-midnight snooze edge keys
+    // its rescheduled fire on today's date, and one day of slack is bounded.
+    // Releasing can never collide with a pending OS notification — the
+    // counter never rewinds, so a re-allocated key gets a fresh id, and a
+    // past-dated id still pending is cancelled by the orphan pass above.
+    final todayKey = _dateKey(now);
+    await _idMap.releaseWhere((key) {
+      final at = key.lastIndexOf('@');
+      if (at < 0) return false; // unknown/legacy key shape — leave untouched
+      final dateKey = key.substring(at + 1);
+      if (!_isoDateKeyPattern.hasMatch(dateKey)) return false;
+      // Zero-padded ISO dates order lexicographically.
+      return dateKey.compareTo(todayKey) < 0;
+    });
 
     // Insert / replace. Three conditions decide whether we issue a
     // platform-channel call:
@@ -546,6 +579,10 @@ class AlarmSyncService {
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
+  /// Shape guard for the `@<date>` suffix the past-trigger purge parses out
+  /// of id-map keys — anything that isn't exactly a [_dateKey] is left alone.
+  static final RegExp _isoDateKeyPattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
   String _titleFor(AppAlarm a) => a.label.isEmpty ? 'Alarm' : a.label;
 
   String _bodyFor(AppAlarm a, DateTime fireAt) {
@@ -553,8 +590,10 @@ class AlarmSyncService {
     final mm = fireAt.minute.toString().padLeft(2, '0');
     final type = a.linkedShiftType;
     if (a.repeatType == AppAlarmRepeatType.followsRotation && type != null) {
-      // followsRotation is always relative now; the fireAt already encodes the
-      // (global or overridden) lead time, so just surface when it rings.
+      // The fireAt already encodes the timing mode (lead-time offset OR the
+      // exact clock time), so we just surface when it rings relative to the
+      // shift. "Before" reads correctly for both: an exact time the user picks
+      // is, in practice, ahead of the shift start.
       return 'Before your ${_typeLabel(type)} shift · $hh:$mm';
     }
     return 'Rings at $hh:$mm';

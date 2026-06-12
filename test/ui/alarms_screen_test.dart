@@ -59,6 +59,8 @@ void main() {
     int? relativeOffsetMinutes,
     int weekdaysBitmask = 0,
     bool autoDeleteAfterFiring = false,
+    bool isExactTime = false,
+    int? exactTimeMinutes,
   }) =>
       AppAlarm(
         id: id,
@@ -70,6 +72,8 @@ void main() {
         relativeOffsetMinutes: relativeOffsetMinutes,
         weekdaysBitmask: weekdaysBitmask,
         autoDeleteAfterFiring: autoDeleteAfterFiring,
+        isExactTime: isExactTime,
+        exactTimeMinutes: exactTimeMinutes,
       );
 
   group('empty state', () {
@@ -171,6 +175,68 @@ void main() {
       );
       expect(find.text('05:00 AM'), findsOneWidget);
     });
+
+    testWidgets(
+      'an exact-time card shows the EXACT clock, never the lead-time math',
+      (tester) async {
+        // Field bug regression (UI/engine desync): exact-time 04:15 on a Day
+        // shift starting 06:00 — the old hand-rolled `shiftStart − leadTime`
+        // (06:00 − 1h global) rendered 05:00 AM while the engine was correctly
+        // armed for 04:15. The card must read off the shared display helper.
+        await pumpAlarms(
+          tester,
+          seed: [
+            mk(
+              id: 'x',
+              minutesOfDay: 6 * 60,
+              label: 'Fixed wake',
+              linkedShiftType: ShiftType.day,
+              isExactTime: true,
+              exactTimeMinutes: 4 * 60 + 15,
+            ),
+          ],
+          shifts: [
+            Shift(
+              id: 'd1',
+              date: DateTime(2030, 1, 1),
+              type: ShiftType.day,
+              startMinutes: 6 * 60,
+              endMinutes: 14 * 60,
+            ),
+          ],
+        );
+        expect(find.text('04:15 AM'), findsOneWidget);
+        expect(find.text('05:00 AM'), findsNothing,
+            reason: 'the stale shiftStart − leadTime clock must be gone');
+        // Detail line drops the lead copy for the exact-time descriptor.
+        expect(find.text('Exact time · Day shifts'), findsOneWidget);
+        expect(find.textContaining('before Day shifts'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'an exact-time card with an (ignored) offset still shows the exact clock',
+      (tester) async {
+        // Belt-and-braces: a record carrying BOTH exact mode and a stale
+        // offset override renders the exact clock, mirroring engine precedence.
+        await pumpAlarms(
+          tester,
+          seed: [
+            mk(
+              id: 'x',
+              minutesOfDay: 6 * 60,
+              label: 'Fixed wake',
+              linkedShiftType: ShiftType.night,
+              relativeOffsetMinutes: 90,
+              isExactTime: true,
+              exactTimeMinutes: 20 * 60, // 08:00 PM, before the 22:00 default
+            ),
+          ],
+        );
+        expect(find.text('08:00 PM'), findsOneWidget);
+        expect(find.text('Exact time · Night shifts'), findsOneWidget);
+      },
+    );
 
     testWidgets('a weekly card shows its clock + the weekday summary',
         (tester) async {

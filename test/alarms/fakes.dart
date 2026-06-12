@@ -104,6 +104,9 @@ class FakeShiftRepository implements ShiftRepository {
   }
 
   @override
+  Future<List<Shift>> getAll() async => _shifts.values.toList();
+
+  @override
   Future<Shift?> getById(String id) async => _shifts[id];
 
   @override
@@ -226,6 +229,9 @@ class InMemoryNotificationIdMap implements NotificationIdMap {
   final Map<String, int> _map = {};
   int _counter = 0;
 
+  /// Read-only view of the live occurrence keys, for bloat-purge assertions.
+  Iterable<String> get keys => _map.keys;
+
   @override
   Future<int> idFor(String shiftId) async =>
       _map.putIfAbsent(shiftId, () => ++_counter);
@@ -233,6 +239,12 @@ class InMemoryNotificationIdMap implements NotificationIdMap {
   @override
   Future<void> release(String shiftId) async {
     _map.remove(shiftId);
+  }
+
+  @override
+  Future<void> releaseWhere(bool Function(String key) predicate) async {
+    // Counter is held outside the map, so no reserved key to shield here.
+    _map.removeWhere((k, _) => predicate(k));
   }
 
   @override

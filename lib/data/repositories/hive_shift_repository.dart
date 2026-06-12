@@ -19,6 +19,9 @@ class HiveShiftRepository implements ShiftRepository {
   Future<void> delete(String id) => _box.delete(id);
 
   @override
+  Future<List<Shift>> getAll() async => _box.values.toList();
+
+  @override
   Future<Shift?> getById(String id) async => _box.get(id);
 
   @override

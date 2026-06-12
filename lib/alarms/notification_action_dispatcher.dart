@@ -231,13 +231,23 @@ class NotificationActionDispatcher {
     final parsed = AlarmPayload.decode(payload);
     if (parsed == null) return;
 
-    // Stop native custom-ringtone audio first (see snooze) — the silent-channel
-    // alarm's tone is the native player's, not the OS notification's.
+    // Stop the native foreground-service alarm audio first — every alarm's
+    // tone (preset AND custom) is the service player's now, not the OS
+    // notification's.
     await _ringtone.stopPreview();
 
-    // Same rationale as snooze: kill the OS notification (and its
-    // FLAG_INSISTENT audio loop) before any DB work so the audio dies
-    // immediately on tap rather than waiting on the Hive write.
+    // Regression 2 — this is the EXTERNAL (notification-shade) dismiss path. A
+    // WakeUpScreen showing over the lock screen is occluded by the shade and
+    // never hits Dart's `resumed` hook, so it can stay stranded until a manual
+    // swipe. Tear it down NATIVELY the instant we handle the action: MainActivity
+    // finishes the wake task (guarded so it only fires when an alarm wake screen
+    // is actually up). No-op off Android / in tests. Done BEFORE the Hive write
+    // so the native finish wins the race against the Hive-stream self-destruct
+    // (which would otherwise flash MainLayout over the keyguard).
+    await _ringtone.finishWakeActivity();
+
+    // Same rationale as snooze: kill the OS notification before any DB work so
+    // nothing lingers in the shade.
     await _cancelOsNotification(parsed.notificationId);
 
     final shift = await shifts.getById(parsed.shiftId);

@@ -12,7 +12,7 @@ import '../data/models/shift_type.dart';
 import '../data/repositories/shift_repository.dart';
 import '../logic/cycle_resolver.dart';
 import '../state/app_preferences.dart';
-import 'calendar/infinite_calendar.dart';
+import 'calendar/shift_calendar.dart';
 import 'roster/shift_visuals.dart';
 import 'settings_screen.dart';
 import 'shift_format.dart';
@@ -22,11 +22,12 @@ import 'slide_to_confirm.dart';
 /// `MainLayout` chassis.
 ///
 /// Source of truth: `context.watch<List<Shift>>()` from `AppProviders`,
-/// which is a 1-year-window snapshot of the shift box. We pick the next
-/// upcoming non-OFF shift whose end has not passed yet (a shift in
-/// progress still counts as "current"). A 1-minute periodic timer
-/// triggers a rebuild so the countdown stays fresh; cancelled in
-/// `dispose()` so the timer never outlives the widget.
+/// which is a 1-year-window snapshot of the shift box. We feature the
+/// shift the user is currently on (start <= now < end) if one exists, and
+/// otherwise the soonest upcoming non-OFF shift — see `_findNext` for the
+/// two-tier rule. A 1-minute periodic timer triggers a rebuild so the
+/// countdown stays fresh; cancelled in `dispose()` so the timer never
+/// outlives the widget.
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onOpenTab});
 
@@ -118,7 +119,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (activeCycle != null) ...[
                     const SizedBox(height: 16),
                     _MyRotationTile(
-                      cycle: activeCycle,
                       shifts: shifts,
                       now: now,
                       onOpenTab: widget.onOpenTab,
@@ -158,19 +158,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return anchored.isEmpty ? null : anchored.first;
   }
 
-  /// The first shift in [shifts] (sorted by start instant) that is
-  /// non-OFF AND whose end has not passed [now]. A shift in progress
-  /// (now between its start and end) qualifies — "the user's current
-  /// shift" is the most useful thing to show.
+  /// The shift to feature on the hero card. Selected in two tiers so the
+  /// card always answers "where am I right now?" before "what's next?":
+  ///
+  ///   1. **In-progress** — a non-OFF shift whose window straddles [now]
+  ///      (`start <= now < end`). The user is physically on this shift, so it
+  ///      is shown even when its alarm was muted / acknowledged / snoozed:
+  ///      those are alarm-*scheduling* concerns, not *display* concerns.
+  ///      (Field bug, roster Day 7: dismissing the morning alarm sets
+  ///      `isAcknowledged`, which used to drop today's active shift here and
+  ///      jump the countdown to the next rotation block days away.)
+  ///   2. **Upcoming** — otherwise the soonest non-OFF shift whose start is
+  ///      still in the future. Here the mute/ack filter DOES apply (engine
+  ///      parity: a suppressed future shift isn't advertised as "next up").
+  ///      Once today's shift ends it stops being in-progress, so the card
+  ///      rolls forward to tomorrow — or the next working day when tomorrow
+  ///      is OFF, which naturally yields the multi-day countdown.
+  ///
+  /// A **paused** shift (`isPaused` — sick / leave / holiday) is skipped in
+  /// BOTH tiers: unlike mute/ack it means the user isn't working that day at
+  /// all, so it's never featured as in-progress nor advertised as next-up.
   static Shift? _findNext(List<Shift> shifts, DateTime now) {
+    // Tier 1: a shift currently under way wins outright, suppression flags
+    // notwithstanding. Earliest-starting one if (rarely) several overlap.
+    Shift? inProgress;
+    for (final s in shifts) {
+      if (s.type == ShiftType.off) continue;
+      // Paused (sick/leave/holiday) = NOT working — never featured, not even
+      // when `now` falls inside its window. This is the one flag that overrides
+      // Tier 1 (mute/ack don't, because the user is still physically present).
+      if (s.isPaused) continue;
+      final start = s.startDateTime;
+      if (start.isAfter(now)) continue; // hasn't started — Tier 2's job
+      if (!s.endDateTime.isAfter(now)) continue; // already ended
+      if (inProgress == null || start.isBefore(inProgress.startDateTime)) {
+        inProgress = s;
+      }
+    }
+    if (inProgress != null) return inProgress;
+
+    // Tier 2: soonest upcoming shift, respecting alarm suppression.
     Shift? best;
     DateTime? bestStart;
     for (final s in shifts) {
       if (s.type == ShiftType.off) continue;
+      if (s.isPaused) continue; // paused = not working → never "next up"
       if (s.isMuted) continue;
       if (s.isAcknowledged) continue;
-      if (!s.endDateTime.isAfter(now)) continue;
       final start = s.startDateTime;
+      if (!start.isAfter(now)) continue; // started/ended — handled in Tier 1
       if (bestStart == null || start.isBefore(bestStart)) {
         best = s;
         bestStart = start;
@@ -608,17 +644,16 @@ class _DismissUpcomingAlarmControlState
 /// Collapsed-by-default "My Rotation" section on the Dashboard. Consolidates
 /// the month calendar and an upcoming-shifts glance into one expandable tile so
 /// the home screen stays clean, with a jump to the full Roster tab. Embeds the
-/// existing [InfiniteCalendarView] and reuses the shared `visualFor` /
-/// `shift_format` helpers — no calendar/roster rendering is duplicated here.
+/// data-driven [ShiftCalendarView] (read-only here) and reuses the shared
+/// `visualFor` / `shift_format` helpers — no calendar/roster rendering is
+/// duplicated here.
 class _MyRotationTile extends StatelessWidget {
   const _MyRotationTile({
-    required this.cycle,
     required this.shifts,
     required this.now,
     this.onOpenTab,
   });
 
-  final ShiftCycle cycle;
   final List<Shift> shifts;
   final DateTime now;
   final void Function(int index)? onOpenTab;
@@ -656,10 +691,11 @@ class _MyRotationTile extends StatelessWidget {
         ),
         childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
         children: [
-          // Read-only month overview — the fully interactive day-tap sheet
-          // lives on the Calendar tab; here it's a glance.
-          InfiniteCalendarView(
-            cycle: cycle,
+          // Read-only month overview, bound to the SAME Hive shift stream as
+          // the Timeline (no `onDayTapped` → glance only; the interactive
+          // add/edit calendar lives on the Timeline tab).
+          ShiftCalendarView(
+            shifts: shifts,
             startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
           ),
           if (preview.isNotEmpty) ...[

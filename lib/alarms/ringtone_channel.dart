@@ -79,6 +79,8 @@ class RingtoneChannel {
     required RingtoneSource source,
     String? uri,
     bool vibrate = false,
+    bool asAlarm = false,
+    String? bundledResource,
   }) async {
     if (!Platform.isAndroid) return;
     try {
@@ -89,6 +91,19 @@ class RingtoneChannel {
         // alongside the audio (and cancels it on stop). The editor preview
         // passes false; a firing alarm passes the user's vibration setting.
         'vibrate': vibrate,
+        // FIRING-ALARM playback is lifecycle-immune on the native side: it runs
+        // in the foreground AlarmAudioService, which survives activity
+        // pause/stop/destroy (Android 14 finishes the occluded FSI activity
+        // when the shade covers the keyguard) and only an explicit
+        // [stopPreview] — Dismiss/Snooze — ends it. Editor previews stay false
+        // so they still die with the activity.
+        'asAlarm': asAlarm,
+        // PRESET internal tone: a `res/raw` name (from
+        // `AlarmSound.androidResource`). Non-null makes the native engine play
+        // the bundled tone — the route that puts EVERY fire-time alarm, preset
+        // or custom, on the protected foreground service. Null for a custom
+        // vault/system URI.
+        'bundledResource': bundledResource,
       });
     } on PlatformException catch (e) {
       debugPrint('[ringtone] previewRingtone failed: $e');
@@ -110,7 +125,30 @@ class RingtoneChannel {
     final source = uri.startsWith('content://')
         ? RingtoneSource.system
         : RingtoneSource.vault;
-    return previewRingtone(source: source, uri: uri, vibrate: vibrate);
+    // asAlarm: this IS the firing alarm — the native player must survive
+    // every activity lifecycle event until an explicit Dismiss/Snooze.
+    return previewRingtone(
+      source: source,
+      uri: uri,
+      vibrate: vibrate,
+      asAlarm: true,
+    );
+  }
+
+  /// Plays a PRESET internal tone as the FIRING alarm through the SAME
+  /// foreground service as custom tones — closing the regression where presets
+  /// rode FLAG_INSISTENT and were silenced when the lock-screen shade was
+  /// pulled. [androidResource] is the tone's `res/raw` name
+  /// (`AlarmSound.androidResource`). No-op off Android / in tests.
+  Future<void> playAlarmBundled(String androidResource, {bool vibrate = false}) {
+    return previewRingtone(
+      // source is ignored when bundledResource is set, but classic is the
+      // honest default.
+      source: RingtoneSource.classic,
+      vibrate: vibrate,
+      asAlarm: true,
+      bundledResource: androidResource,
+    );
   }
 
   /// Stops and releases the native player (preview OR a firing alarm tone — same
@@ -122,6 +160,22 @@ class RingtoneChannel {
       await _channel.invokeMethod<void>('stopPreview');
     } on PlatformException catch (e) {
       debugPrint('[ringtone] stopPreview failed: $e');
+    } on MissingPluginException {
+      // no-op.
+    }
+  }
+
+  /// Regression 2 — asks MainActivity to natively finish a WakeUpScreen left
+  /// stranded over the lock screen after an EXTERNAL (notification-shade)
+  /// dismiss. Called by the foreground dispatcher's dismiss path; a no-op
+  /// natively unless an alarm wake screen is actually showing. Off Android / in
+  /// tests this is a silent no-op (the platform channel isn't registered).
+  Future<void> finishWakeActivity() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('finishWakeActivity');
+    } on PlatformException catch (e) {
+      debugPrint('[ringtone] finishWakeActivity failed: $e');
     } on MissingPluginException {
       // no-op.
     }

@@ -48,6 +48,9 @@ AppAlarm _alarm({
   String? customRingtoneUri,
   String? customRingtoneName,
   RingtoneSource ringtoneSource = RingtoneSource.classic,
+  bool isExactTime = false,
+  int? exactTimeMinutes,
+  int? relativeOffsetMinutes,
 }) =>
     AppAlarm(
       id: 'a1',
@@ -57,6 +60,9 @@ AppAlarm _alarm({
       customRingtoneUri: customRingtoneUri,
       customRingtoneName: customRingtoneName,
       ringtoneSource: ringtoneSource,
+      isExactTime: isExactTime,
+      exactTimeMinutes: exactTimeMinutes,
+      relativeOffsetMinutes: relativeOffsetMinutes,
     );
 
 void main() {
@@ -89,6 +95,108 @@ void main() {
       );
       expect(classic == vault, isFalse);
       expect(classic.hashCode == vault.hashCode, isFalse);
+    });
+  });
+
+  group('AppAlarm — Lead Time vs Exact Time (model)', () {
+    test('defaults: lead-time mode, null exact time', () {
+      final a = _alarm();
+      expect(a.isExactTime, isFalse);
+      expect(a.exactTimeMinutes, isNull);
+    });
+
+    test('copyWith sets exact-time mode + the clock', () {
+      final updated = _alarm().copyWith(isExactTime: true, exactTimeMinutes: 255);
+      expect(updated.isExactTime, isTrue);
+      expect(updated.exactTimeMinutes, 255);
+      expect(updated.label, 'Wake'); // others preserved
+    });
+
+    test('copyWith clearExactTime resets the clock to null', () {
+      final exact = _alarm(isExactTime: true, exactTimeMinutes: 255);
+      final cleared = exact.copyWith(isExactTime: false, clearExactTime: true);
+      expect(cleared.isExactTime, isFalse);
+      expect(cleared.exactTimeMinutes, isNull);
+    });
+
+    test('equality + hashCode include the timing fields', () {
+      final lead = _alarm();
+      final exact = _alarm(isExactTime: true, exactTimeMinutes: 255);
+      expect(lead == exact, isFalse);
+      expect(lead.hashCode == exact.hashCode, isFalse);
+    });
+
+    test('a valid minute-of-day exact time is accepted; out-of-range asserts',
+        () {
+      expect(() => _alarm(exactTimeMinutes: 0), returnsNormally);
+      expect(() => _alarm(exactTimeMinutes: 1439), returnsNormally);
+      expect(() => _alarm(exactTimeMinutes: 1440), throwsA(isA<AssertionError>()));
+      expect(() => _alarm(exactTimeMinutes: -1), throwsA(isA<AssertionError>()));
+    });
+  });
+
+  group('AppAlarm.displayFireClockMinutes — the UI display source of truth',
+      () {
+    // Day shift starting 07:00; global lead 60 min throughout.
+    const shiftStart = 7 * 60;
+    const globalLead = 60;
+
+    int clock(AppAlarm a) => a.displayFireClockMinutes(
+          shiftStartMinutes: shiftStart,
+          globalLeadMinutes: globalLead,
+        );
+
+    test('lead-time mode on the global default: shiftStart − globalLead', () {
+      expect(clock(_alarm()), 6 * 60); // 07:00 − 1h = 06:00
+    });
+
+    test('lead-time mode with a per-alarm override: shiftStart − override',
+        () {
+      expect(clock(_alarm(relativeOffsetMinutes: 90)), 5 * 60 + 30); // 05:30
+    });
+
+    test('exact-time mode returns the exact clock, ignoring EVERY lead', () {
+      // Field bug regression: exact 04:15 must render 04:15, never the
+      // shiftStart − lead hand-math (05:30/06:00).
+      final a = _alarm(
+        isExactTime: true,
+        exactTimeMinutes: 4 * 60 + 15,
+        relativeOffsetMinutes: 90,
+      );
+      expect(clock(a), 4 * 60 + 15);
+    });
+
+    test('malformed exact-time record (null clock) falls back to lead math',
+        () {
+      // Same defensive rule as the engine's rotationAlarmFireAt — a wrong-but-
+      // safe clock beats a crash, and BOTH must pick the same fallback.
+      final a = _alarm(isExactTime: true, relativeOffsetMinutes: 90);
+      expect(clock(a), 5 * 60 + 30);
+    });
+
+    test('a lead crossing midnight wraps to the previous evening clock', () {
+      // 00:30 shift, 90-min lead → 23:00 (display-only wrap; the engine owns
+      // the date-anchored instant).
+      final a = _alarm(relativeOffsetMinutes: 90);
+      expect(
+        a.displayFireClockMinutes(
+          shiftStartMinutes: 30,
+          globalLeadMinutes: globalLead,
+        ),
+        23 * 60,
+      );
+    });
+
+    test('activeExactTimeMinutes gates the mode exactly like the engine', () {
+      expect(_alarm().activeExactTimeMinutes, isNull);
+      expect(
+        _alarm(isExactTime: true, exactTimeMinutes: 255).activeExactTimeMinutes,
+        255,
+      );
+      // isExactTime without a clock → lead-time mode, not a crash.
+      expect(_alarm(isExactTime: true).activeExactTimeMinutes, isNull);
+      // A stored clock without the mode flag stays dormant.
+      expect(_alarm(exactTimeMinutes: 255).activeExactTimeMinutes, isNull);
     });
   });
 
@@ -178,6 +286,34 @@ void main() {
       expect(read.customRingtoneUri, isNull);
       expect(read.customRingtoneName, isNull);
       expect(read.ringtoneSource, RingtoneSource.classic);
+    });
+
+    test('round-trips an exact-time alarm (fields 15-16)', () async {
+      final read = await roundTrip(
+        _alarm(isExactTime: true, exactTimeMinutes: 4 * 60 + 15),
+        writeWith: AppAlarmAdapter(),
+      );
+      expect(read.isExactTime, isTrue);
+      expect(read.exactTimeMinutes, 4 * 60 + 15);
+    });
+
+    test('a lead-time alarm round-trips with isExactTime false / null clock',
+        () async {
+      final read = await roundTrip(_alarm(), writeWith: AppAlarmAdapter());
+      expect(read.isExactTime, isFalse);
+      expect(read.exactTimeMinutes, isNull);
+    });
+
+    test('a legacy record (no fields 15-16) defaults to lead-time mode',
+        () async {
+      // The legacy writer stops at field 11, so even though the source object
+      // carries an exact time, the real adapter must read it back as lead-time.
+      final read = await roundTrip(
+        _alarm(isExactTime: true, exactTimeMinutes: 255),
+        writeWith: _LegacyAppAlarmAdapter(),
+      );
+      expect(read.isExactTime, isFalse);
+      expect(read.exactTimeMinutes, isNull);
     });
   });
 }

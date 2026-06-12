@@ -111,6 +111,8 @@ class ShiftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final visual = visualFor(shift.type);
+    final paused = shift.isPaused;
+    final muted = theme.colorScheme.onSurfaceVariant;
 
     return Dismissible(
       key: ValueKey(shift.id),
@@ -138,44 +140,78 @@ class ShiftCard extends StatelessWidget {
       onDismissed: (_) {
         context.read<ShiftRepository>().delete(shift.id);
       },
-      child: Card(
-        margin: const EdgeInsets.symmetric(
-          horizontal: _cardHorizontalMargin,
-          vertical: _cardVerticalMargin,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: visual.color.withValues(alpha: 0.18),
-                foregroundColor: visual.color,
-                child: Icon(visual.icon),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      formatShiftDate(shift.date),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${shiftTypeLabel(shift.type)} · '
-                      '${_timeRange(shift, AppPreferences.use24HourOf(context))}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+      // Paused shifts read as "not working that day": dimmed + struck-through,
+      // with a Paused badge — but kept in the list as a record (never
+      // auto-removed; the alarm engine just skips them).
+      child: Opacity(
+        opacity: paused ? 0.6 : 1.0,
+        child: Card(
+          margin: const EdgeInsets.symmetric(
+            horizontal: _cardHorizontalMargin,
+            vertical: _cardVerticalMargin,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor:
+                      (paused ? Colors.grey : visual.color).withValues(alpha: 0.18),
+                  foregroundColor: paused ? Colors.grey : visual.color,
+                  child: Icon(paused ? Icons.pause : visual.icon),
                 ),
-              ),
-            ],
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatShiftDate(shift.date),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          decoration:
+                              paused ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${shiftTypeLabel(shift.type)} · '
+                        '${_timeRange(shift, AppPreferences.use24HourOf(context))}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: muted,
+                          decoration:
+                              paused ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      if (paused) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.do_not_disturb_on_outlined,
+                                size: 14, color: muted),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                shift.pauseReason == null
+                                    ? 'Paused'
+                                    : 'Paused · ${shift.pauseReason}',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: muted,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

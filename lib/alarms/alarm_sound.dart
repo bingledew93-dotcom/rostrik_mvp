@@ -7,19 +7,20 @@
 ///     copies the WAVs into the iOS `Library/Sounds` folder at startup.
 ///   * `buildAlarmNotificationDetails(soundKey)` — selects the channel +
 ///     iOS sound filename for a firing alarm.
-///   * The create/edit sheet's tone selector + `AlarmSoundPreviewer`.
+///   * The create/edit sheet's tone selector (Ringtone row).
 ///   * `AlarmPayload` — the chosen tone rides the notification payload so the
 ///     killed-app snooze reschedule keeps it.
 ///
 /// **Audio ownership:** the OS plays alarm audio (Android channel sound looped
 /// by FLAG_INSISTENT; iOS notification sound), NOT the Flutter UI. The app only
-/// *selects* which OS resource to use. The in-app previewer is the one place
-/// audio plays inside the process, and it is unrelated to the firing path.
+/// *selects* which OS resource to use. The sole in-process player is the
+/// native Kotlin `MediaPlayer` behind `RingtoneChannel` (custom-tone preview +
+/// fire-time playback) — there is no Flutter-side audio engine.
 ///
 /// **Format (Option 1, WAV-everywhere):** every tone is a 16-bit PCM WAV at
 /// 44.1 kHz, present in two places — see `assets/sounds/README.md`:
-///   * `assets/sounds/<key>.wav` — the master, used for the in-app preview
-///     (audioplayers) AND copied to iOS `Library/Sounds` at runtime.
+///   * `assets/sounds/<key>.wav` — the master, copied to iOS `Library/Sounds`
+///     at runtime.
 ///   * `android/app/src/main/res/raw/<androidResource>.wav` — the Android
 ///     notification-channel sound (resolved by name, no extension).
 library;
@@ -57,8 +58,7 @@ class AlarmSound {
   final String label;
 
   /// Full Flutter asset path (`assets/sounds/<key>.wav`). Used by
-  /// `rootBundle.load` for the iOS `Library/Sounds` copy and — with the
-  /// `assets/` prefix stripped — by the audioplayers `AssetSource` preview.
+  /// `rootBundle.load` for the iOS `Library/Sounds` copy.
   final String assetPath;
 
   /// `res/raw` resource name on Android, WITHOUT extension or path — Android

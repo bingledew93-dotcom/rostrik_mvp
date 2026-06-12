@@ -367,9 +367,10 @@ class _SlideToConfirmDeleteState extends State<_SlideToConfirmDelete> {
 }
 
 /// Card headline — the calculated FIRING CLOCK TIME (AM/PM), the hero. One-time
-/// alarms ring at their absolute time; follows-rotation alarms ring at the
-/// linked shift's start (read from [shifts], default-fallback otherwise) minus
-/// the lead (per-alarm override, else [globalLeadMinutes]). The offset moves to
+/// alarms ring at their absolute time; follows-rotation alarms render through
+/// [AppAlarm.displayFireClockMinutes] — the single source of truth shared with
+/// the engine's fire-time math — so the card respects exact-time mode and can
+/// never show a clock the engine didn't arm. The offset moves to
 /// [_alarmDetailLine].
 String _alarmHeadline(
   AppAlarm a,
@@ -382,20 +383,26 @@ String _alarmHeadline(
       a.repeatType == AppAlarmRepeatType.weekly) {
     return formatClock(a.minutesOfDay, use24Hour: use24Hour);
   }
-  final lead = a.relativeOffsetMinutes ?? globalLeadMinutes;
   // linkedShiftType is non-null for any alarm created via the sheet; a stray
   // null (invalid config, never scheduled) falls back to a Day anchor so the
   // card still renders a clock rather than crashing.
   final type = a.linkedShiftType ?? ShiftType.day;
   final shiftStart =
       resolveShiftStartMinutes(shifts, type, now: DateTime.now());
-  return formatClock(fireClockMinutes(shiftStart, lead), use24Hour: use24Hour);
+  return formatClock(
+    a.displayFireClockMinutes(
+      shiftStartMinutes: shiftStart,
+      globalLeadMinutes: globalLeadMinutes,
+    ),
+    use24Hour: use24Hour,
+  );
 }
 
-/// Card detail line — the demoted offset label, e.g. "1h 30m before Day
-/// shifts". For an alarm on the global default, a "· default" marker signals
-/// the offset tracks the Settings value. One-time alarms keep a simple
-/// descriptor.
+/// Card detail line — the demoted timing label. Lead-time mode: "1h 30m before
+/// Day shifts" (a "· default" marker when the offset tracks the Settings
+/// value). Exact-time mode: "Exact time · Day shifts" — same copy as the
+/// create sheet's caption, since no lead applies. One-time alarms keep a
+/// simple descriptor.
 String _alarmDetailLine(AppAlarm a, int globalLeadMinutes) {
   if (a.repeatType == AppAlarmRepeatType.oneTime) {
     return a.autoDeleteAfterFiring
@@ -408,6 +415,11 @@ String _alarmDetailLine(AppAlarm a, int globalLeadMinutes) {
   final shift = a.linkedShiftType == null
       ? 'your shift'
       : '${shiftTypeLabel(a.linkedShiftType!)} shifts';
+  // Same mode gate the fire-time math uses, so a malformed exact-time record
+  // (null clock) correctly reads as the lead-time line it actually fires on.
+  if (a.activeExactTimeMinutes != null) {
+    return 'Exact time · $shift';
+  }
   if (a.relativeOffsetMinutes == null) {
     return '${formatLeadOffset(globalLeadMinutes)} before $shift · default';
   }

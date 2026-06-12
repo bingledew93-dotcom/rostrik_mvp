@@ -9,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-import 'alarm_payload.dart';
 import 'alarm_scheduler.dart';
 import 'alarm_sound.dart';
 import 'notification_action_dispatcher.dart';
@@ -485,15 +484,16 @@ class LocalNotificationsAlarmScheduler implements AlarmScheduler {
       title: title,
       body: body,
       scheduledDate: tzFireAt,
-      // Single source of truth: the payload's customRingtoneUri (encoded by
-      // AlarmSyncService from the global AlarmSettings) decides whether this
-      // alarm is custom. If so, route it to the SILENT channel so the bundled
-      // tone doesn't play over the native audio WakeUpScreen will start — the
-      // SAME payload also reaches WakeUpScreen, so the channel choice and the
-      // wake-screen audio can never disagree. No reconcile/ledger change.
+      // EVERY fire-time alarm now rides the SILENT channel — preset AND custom.
+      // The foreground-service native player owns all alarm audio (started by
+      // WakeUpScreen), so FLAG_INSISTENT must NOT also play or we'd get double
+      // audio. This is the regression fix: presets used to ride the per-tone
+      // FLAG_INSISTENT channel, which the lock-screen shade pull silenced on
+      // Android 14. (iOS is unaffected — its notification still carries the
+      // tone via `sound:`; it has no foreground service.)
       notificationDetails: buildAlarmNotificationDetails(
         soundKey,
-        useSilentChannel: AlarmPayload.decode(payload)?.customRingtoneUri != null,
+        useSilentChannel: true,
       ),
       androidScheduleMode: AndroidScheduleMode.alarmClock,
       payload: payload,

@@ -38,6 +38,89 @@ class _LegacyShiftAdapter extends TypeAdapter<Shift> {
   }
 }
 
+/// Stand-in for the pre-archive ShiftAdapter (typeId 1, 11 fields — through
+/// `isAlarmSkipped`, before `isAdHoc`/`isArchived` existed). Lets us write a
+/// record in the pre-Phase-3-archive binary shape and verify the real adapter's
+/// `defaultValue: false` fallback for fields 11 + 12 on read.
+class _PreArchiveShiftAdapter extends TypeAdapter<Shift> {
+  @override
+  final typeId = 1;
+
+  @override
+  Shift read(BinaryReader reader) => throw UnimplementedError();
+
+  @override
+  void write(BinaryWriter writer, Shift obj) {
+    writer
+      ..writeByte(11) // 11 fields — no isAdHoc (11) / isArchived (12) bytes
+      ..writeByte(0)
+      ..write(obj.id)
+      ..writeByte(1)
+      ..write(obj.date)
+      ..writeByte(2)
+      ..write(obj.type)
+      ..writeByte(3)
+      ..write(obj.startMinutes)
+      ..writeByte(4)
+      ..write(obj.endMinutes)
+      ..writeByte(5)
+      ..write(obj.note)
+      ..writeByte(6)
+      ..write(obj.isMuted)
+      ..writeByte(7)
+      ..write(obj.isAcknowledged)
+      ..writeByte(8)
+      ..write(obj.snoozedUntil)
+      ..writeByte(9)
+      ..write(obj.cycleId)
+      ..writeByte(10)
+      ..write(obj.isAlarmSkipped);
+  }
+}
+
+/// Stand-in for the pre-exception-layer ShiftAdapter (typeId 1, 13 fields —
+/// through `isArchived`, before `isPaused`/`pauseReason` existed). Verifies the
+/// real adapter's `defaultValue` / null fallback for fields 13 + 14 on read.
+class _PrePauseShiftAdapter extends TypeAdapter<Shift> {
+  @override
+  final typeId = 1;
+
+  @override
+  Shift read(BinaryReader reader) => throw UnimplementedError();
+
+  @override
+  void write(BinaryWriter writer, Shift obj) {
+    writer
+      ..writeByte(13) // 13 fields — no isPaused (13) / pauseReason (14) bytes
+      ..writeByte(0)
+      ..write(obj.id)
+      ..writeByte(1)
+      ..write(obj.date)
+      ..writeByte(2)
+      ..write(obj.type)
+      ..writeByte(3)
+      ..write(obj.startMinutes)
+      ..writeByte(4)
+      ..write(obj.endMinutes)
+      ..writeByte(5)
+      ..write(obj.note)
+      ..writeByte(6)
+      ..write(obj.isMuted)
+      ..writeByte(7)
+      ..write(obj.isAcknowledged)
+      ..writeByte(8)
+      ..write(obj.snoozedUntil)
+      ..writeByte(9)
+      ..write(obj.cycleId)
+      ..writeByte(10)
+      ..write(obj.isAlarmSkipped)
+      ..writeByte(11)
+      ..write(obj.isAdHoc)
+      ..writeByte(12)
+      ..write(obj.isArchived);
+  }
+}
+
 void main() {
   late Directory tempDir;
   late Box<Shift> box;
@@ -170,6 +253,122 @@ void main() {
           await reopened.deleteFromDisk();
         } finally {
           // Leave the registry in the same state every other test expects.
+          Hive.registerAdapter(ShiftAdapter(), override: true);
+        }
+      },
+    );
+  });
+
+  group('getAll', () {
+    test('returns every shift in the box regardless of date', () async {
+      await repo.upsert(_shift(id: 'a', date: DateTime(2024, 1, 1)));
+      await repo.upsert(_shift(id: 'b', date: DateTime(2026, 5, 1)));
+      await repo.upsert(_shift(id: 'c', date: DateTime(2027, 12, 31)));
+      final ids = (await repo.getAll()).map((s) => s.id).toSet();
+      expect(ids, {'a', 'b', 'c'});
+    });
+
+    test('returns an empty list for an empty box', () async {
+      expect(await repo.getAll(), isEmpty);
+    });
+  });
+
+  group('isAdHoc / isArchived', () {
+    test('round-trips isAdHoc=true / isArchived=true', () async {
+      final s = _shift(id: 'adhoc').copyWith(isAdHoc: true, isArchived: true);
+      await repo.upsert(s);
+      final loaded = await repo.getById('adhoc');
+      expect(loaded!.isAdHoc, isTrue);
+      expect(loaded.isArchived, isTrue);
+    });
+
+    test('flags survive close/reopen', () async {
+      final boxName = box.name;
+      await repo.upsert(
+        _shift(id: 'persist').copyWith(isAdHoc: true, isArchived: true),
+      );
+
+      await box.close();
+      box = await Hive.openBox<Shift>(boxName);
+      repo = HiveShiftRepository(box);
+
+      final loaded = await repo.getById('persist');
+      expect(loaded!.isAdHoc, isTrue);
+      expect(loaded.isArchived, isTrue);
+    });
+
+    test(
+      'records written before fields 11/12 existed default to false',
+      () async {
+        // Reproduce the pre-archive 11-field binary shape, then read back with
+        // the real adapter to exercise the `fields[11]/[12] == null ? false`
+        // fallback behind @HiveField(11/12, defaultValue: false).
+        final boxName = 'shifts_prearchive_${boxCounter++}';
+
+        Hive.registerAdapter(_PreArchiveShiftAdapter(), override: true);
+        final legacyBox = await Hive.openBox<Shift>(boxName);
+        await legacyBox.put(
+          'pre-archive',
+          _shift(id: 'pre-archive', note: 'written before ad-hoc archiving'),
+        );
+        await legacyBox.close();
+
+        Hive.registerAdapter(ShiftAdapter(), override: true);
+        try {
+          final reopened = await Hive.openBox<Shift>(boxName);
+          final loaded = reopened.get('pre-archive');
+          expect(loaded, isNotNull);
+          expect(loaded!.isAdHoc, isFalse);
+          expect(loaded.isArchived, isFalse);
+          // Earlier fields untouched — the read advanced cleanly past the two
+          // absent bytes rather than corrupting field 10 and below.
+          expect(loaded.id, 'pre-archive');
+          expect(loaded.note, 'written before ad-hoc archiving');
+          expect(loaded.isAlarmSkipped, isFalse);
+          await reopened.deleteFromDisk();
+        } finally {
+          Hive.registerAdapter(ShiftAdapter(), override: true);
+        }
+      },
+    );
+  });
+
+  group('isPaused / pauseReason', () {
+    test('round-trips isPaused=true + pauseReason', () async {
+      await repo.upsert(
+        _shift(id: 'p').copyWith(isPaused: true, pauseReason: 'Sick'),
+      );
+      final loaded = await repo.getById('p');
+      expect(loaded!.isPaused, isTrue);
+      expect(loaded.pauseReason, 'Sick');
+    });
+
+    test(
+      'records written before fields 13/14 existed default to false/null',
+      () async {
+        final boxName = 'shifts_prepause_${boxCounter++}';
+
+        Hive.registerAdapter(_PrePauseShiftAdapter(), override: true);
+        final legacyBox = await Hive.openBox<Shift>(boxName);
+        await legacyBox.put(
+          'pre-pause',
+          _shift(id: 'pre-pause', note: 'written before the exception layer'),
+        );
+        await legacyBox.close();
+
+        Hive.registerAdapter(ShiftAdapter(), override: true);
+        try {
+          final reopened = await Hive.openBox<Shift>(boxName);
+          final loaded = reopened.get('pre-pause');
+          expect(loaded, isNotNull);
+          expect(loaded!.isPaused, isFalse);
+          expect(loaded.pauseReason, isNull);
+          // Earlier fields untouched — read advanced cleanly past the 2 absent
+          // bytes (incl. field 12 / isArchived, which still reads false).
+          expect(loaded.note, 'written before the exception layer');
+          expect(loaded.isArchived, isFalse);
+          await reopened.deleteFromDisk();
+        } finally {
           Hive.registerAdapter(ShiftAdapter(), override: true);
         }
       },

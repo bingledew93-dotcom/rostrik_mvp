@@ -103,6 +103,8 @@ class _DraftRosterReviewViewState extends State<_DraftRosterReviewView> {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
+      // Default to the tap-to-type number pad (no dial dragging).
+      initialEntryMode: TimePickerEntryMode.input,
     );
     if (picked == null) return;
     final minutes = picked.hour * 60 + picked.minute;

@@ -1,22 +1,17 @@
 package com.example.rostrik_mvp
 
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.util.Log
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 /**
  * Lock-screen bypass + alarm routing for FullScreenIntent.
@@ -64,16 +59,26 @@ class MainActivity : FlutterActivity() {
         // contract between Kotlin and Dart.
         private const val METHOD_GET_INITIAL_PAYLOAD = "getInitialAlarmPayload"
         private const val METHOD_ALARM_FIRED = "alarmFired"
+        private const val METHOD_GET_PENDING_DISMISSALS = "getPendingDismissals"
+        private const val METHOD_CLEAR_PENDING_DISMISSALS = "clearPendingDismissals"
+        private const val METHOD_RELINQUISH_LOCK_SCREEN = "relinquishLockScreen"
+        private const val METHOD_FINISH_WAKE_ACTIVITY = "finishWakeActivity"
+
+        // Native dismiss fail-safe ledger — one shift id per line, written by
+        // the background Dart engine's FIRST instruction on a killed-app
+        // Dismiss (synchronous flushed write, survives the OS reaping the
+        // engine before its Hive boot completes). Lives in `filesDir`, which
+        // is exactly where path_provider maps Dart's
+        // `getApplicationSupportDirectory()` on Android — the one directory
+        // both sides reach with zero extra plumbing. Read + cleared HERE,
+        // natively and synchronously, when Dart's boot gate asks. Name must
+        // stay in lock-step with `pendingDismissalsFileName` in
+        // `lib/alarms/pending_dismissal_guard.dart`.
+        private const val PENDING_DISMISSALS_FILE = "pending_dismissals"
 
         // flutter_local_notifications stores the schedule's `payload`
         // string under this extra key in the PendingIntent it builds.
         private const val EXTRA_PAYLOAD = "payload"
-
-        // RingtoneSource.index values — MUST match the Dart enum order in
-        // `lib/data/models/alarm_settings.dart` (classic, vault, system).
-        private const val SOURCE_CLASSIC = 0
-        private const val SOURCE_VAULT = 1
-        private const val SOURCE_SYSTEM = 2
 
         // startActivityForResult request code for the system ringtone picker.
         // FlutterActivity extends the FRAMEWORK android.app.Activity (NOT an
@@ -81,25 +86,46 @@ class MainActivity : FlutterActivity() {
         // unavailable here — we use the classic request-code path, routed
         // through [onActivityResult].
         private const val RINGTONE_PICKER_REQUEST = 0x52494E47 // "RING"
+
+        // RingtoneSource.index values — MUST match the Dart enum order in
+        // `lib/data/models/ringtone_source.dart` (classic, vault, system).
+        // Re-exported from the engine so the channel handler can default it.
+        private const val SOURCE_CLASSIC = AlarmAudioEngine.SOURCE_CLASSIC
     }
 
     private var alarmChannel: MethodChannel? = null
     private var ringtoneChannel: MethodChannel? = null
 
+    // -----------------------------------------------------------------------
+    // ALARM AUDIO OWNERSHIP (Android-14 keyguard Silence-Bug fix):
+    //   * FIRING ALARM playback lives in [AlarmAudioService], a foreground
+    //     service. A process-scoped static player was NOT enough — it dies
+    //     with the process, and the process is reaped when a show-when-locked
+    //     activity is occluded by the shade on the lock screen. Only a
+    //     foreground service pins the process. Alarm audio therefore stops
+    //     ONLY via an explicit Dismiss/Snooze (`stopPreview` → stopService) or
+    //     process death — NEVER a window/activity lifecycle event. DO NOT add
+    //     onPause/onStop/onWindowFocusChanged audio handling.
+    //   * EDITOR PREVIEW ("Play Now") stays in-activity via [previewEngine] —
+    //     it is inherently foreground (the user is in the editor) and never
+    //     reaches the lock screen, so it doesn't need the service and SHOULD
+    //     die with the activity. Same [AlarmAudioEngine], same fallback ladder.
+    // -----------------------------------------------------------------------
+    private val previewEngine: AlarmAudioEngine by lazy {
+        AlarmAudioEngine(applicationContext)
+    }
+
+    /** True while THIS activity holds the lock-screen lease for a live alarm
+     *  (applied on an alarm launch, relinquished when the WakeUpScreen is
+     *  gone). Used to scope [finishWakeActivityIfAlarmActive] to "an alarm
+     *  wake screen is actually showing" — so a stray notification dismiss
+     *  during normal app use can never finish the app. */
+    private var lockScreenBypassActive = false
+
     /// In-flight `pickSystemRingtone` reply, held while the system picker
     /// Activity is up and completed from [onActivityResult]. Only one pick can
     /// be in flight at a time (re-entrant calls are rejected).
     private var pendingRingtoneResult: MethodChannel.Result? = null
-
-    /// Preview player for the Phase-2a "Play Now" harness. A plain looping
-    /// [MediaPlayer] (no foreground service — preview is foreground, on-demand)
-    /// that runs the same resolve-and-fallback logic the fire-time engine will.
-    private var previewPlayer: MediaPlayer? = null
-
-    /// Active haptic vibrator while a custom tone is playing WITH vibration on.
-    /// Held so it survives an audio fallback (releasing the player must NOT stop
-    /// the buzz) and is cancelled by [stopPreviewPlayer] / onDestroy.
-    private var vibrator: Vibrator? = null
 
     /// Payload captured by [onCreate] before the Dart side could ask
     /// for it. Cleared atomically the first time
@@ -125,6 +151,29 @@ class MainActivity : FlutterActivity() {
                     Log.d(TAG, "$METHOD_GET_INITIAL_PAYLOAD → ${payload ?: "<null>"}")
                     result.success(payload)
                 }
+                // Native dismiss fail-safe: hand Dart the killed-app
+                // dismissals the background engine recorded before the OS
+                // reaped it. Plain synchronous file reads — the ledger is a
+                // handful of UUID lines at most.
+                METHOD_GET_PENDING_DISMISSALS -> {
+                    result.success(readPendingDismissals())
+                }
+                // Cleared only AFTER Dart confirms the Hive replay landed —
+                // crash in between re-replays (idempotently) next boot.
+                METHOD_CLEAR_PENDING_DISMISSALS -> {
+                    clearPendingDismissals()
+                    result.success(null)
+                }
+                // WakeUpScreen's dispose: the alarm is over, fully relinquish
+                // the lock screen (showWhenLocked / turnScreenOn /
+                // KEEP_SCREEN_ON). Without this a stranded instance in the
+                // Recents task kept drawing over the keyguard after an
+                // external dismissal. Re-armed by [applyLockScreenBypass] on
+                // the next alarm launch.
+                METHOD_RELINQUISH_LOCK_SCREEN -> {
+                    relinquishLockScreenBypass()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -144,12 +193,40 @@ class MainActivity : FlutterActivity() {
                 }
                 "previewRingtone" -> {
                     val source = call.argument<Int>("source") ?: SOURCE_CLASSIC
+                    val uri = call.argument<String>("uri")
                     val vibrate = call.argument<Boolean>("vibrate") ?: false
-                    previewRingtone(source, call.argument<String>("uri"), vibrate)
+                    // A PRESET internal tone arrives as a res/raw name; null for
+                    // a custom vault/system tone.
+                    val bundledResource = call.argument<String>("bundledResource")
+                    // `asAlarm` routes the playback: a FIRING ALARM (preset OR
+                    // custom) goes to the foreground service (survives the
+                    // keyguard/activity teardown); an editor preview plays
+                    // in-activity.
+                    val asAlarm = call.argument<Boolean>("asAlarm") ?: false
+                    if (asAlarm) {
+                        startAlarmAudioService(source, uri, vibrate, bundledResource)
+                    } else {
+                        previewEngine.play(source, uri, vibrate, bundledResource)
+                    }
                     result.success(null)
                 }
                 "stopPreview" -> {
-                    stopPreviewPlayer()
+                    // Dismiss/Snooze (or any teardown) stops BOTH possible
+                    // sources: the in-activity preview AND the alarm service.
+                    // stopService is safe from any state and a no-op if the
+                    // service isn't running — no background-start restriction.
+                    previewEngine.stop()
+                    stopService(Intent(this, AlarmAudioService::class.java))
+                    result.success(null)
+                }
+                // Regression 2 — the foreground dispatcher's EXTERNAL dismiss
+                // (a Dismiss tapped in the notification shade) calls this so the
+                // stranded WakeUpScreen, occluded by the shade and never hitting
+                // resumed, is torn down NATIVELY — no dependence on the Dart
+                // ticker or a manual shade swipe. No-op unless an alarm wake
+                // screen is actually showing (guarded by the lock-screen lease).
+                METHOD_FINISH_WAKE_ACTIVITY -> {
+                    finishWakeActivityIfAlarmActive()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -159,34 +236,37 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Lock-screen bypass for the Activity ONLY — we want the
-        // WakeUpScreen to render on top of the keyguard, but we
-        // deliberately do NOT call `requestDismissKeyguard` here.
-        // Forcing the keyguard to dismiss would pop a biometric/PIN
-        // prompt over the FSI Activity, which is the exact UX
-        // regression we are fixing. The user can authenticate
-        // themselves if they want to interact with WakeUpScreen
-        // (slide-to-dismiss); otherwise the action buttons on the
-        // public-visibility notification still work from the lock
-        // screen, no auth required.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
-        }
 
         // COLD-LAUNCH: buffer only. We deliberately do NOT call
         // invokeMethod here — Dart `main()` hasn't run yet, so the
         // channel handler isn't attached on the Dart side and the call
         // would be silently dropped. Dart will pull via
         // [METHOD_GET_INITIAL_PAYLOAD] once it's ready.
+        //
+        // ZOMBIE-UI GUARD: when the task is relaunched from recents, Android
+        // REDELIVERS the original FullScreenIntent — payload extra and all —
+        // hours after the alarm fired and was dismissed from the shade. A
+        // history-redelivered payload must never be buffered as a live alarm
+        // (Dart additionally verifies against Hive, but the stale extra is
+        // best refused at the source).
         val payload = intent.getStringExtra(EXTRA_PAYLOAD)
-        if (payload != null) {
+        val fromHistory =
+            (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (payload != null && fromHistory) {
+            Log.d(
+                TAG,
+                "onCreate: '$EXTRA_PAYLOAD' present but the intent was " +
+                    "redelivered from recents history — ignoring stale alarm payload",
+            )
+        } else if (payload != null) {
+            // Live alarm cold-launch: take the lock-screen lease (render over
+            // the keyguard + wake the screen) — ONLY here, not for an ordinary
+            // launcher start, so `lockScreenBypassActive` precisely tracks "an
+            // alarm wake screen is up." We deliberately do NOT
+            // `requestDismissKeyguard` — that would pop a biometric/PIN prompt
+            // over the FSI. The public-visibility notification's action buttons
+            // cover the no-auth dismiss/snooze paths.
+            applyLockScreenBypass()
             Log.d(TAG, "onCreate buffering alarm payload for pull: $payload")
             pendingPayload = payload
         } else {
@@ -209,6 +289,13 @@ class MainActivity : FlutterActivity() {
         // a defensive belt for the unlikely path where onNewIntent fires
         // before configureFlutterEngine has set up the channel (e.g. a
         // re-entrant launch during engine teardown).
+        //
+        // Same recents-history guard as onCreate: a warm relaunch from the
+        // task switcher can also redeliver the original alarm intent.
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) {
+            Log.d(TAG, "onNewIntent: intent from recents history — ignoring payload")
+            return
+        }
         val payload = intent.getStringExtra(EXTRA_PAYLOAD)
         if (payload == null) {
             Log.d(
@@ -219,6 +306,11 @@ class MainActivity : FlutterActivity() {
             return
         }
         Log.d(TAG, "onNewIntent pushing alarm payload: $payload")
+        // RE-ARM the lock-screen bypass for this fresh alarm. A previous
+        // WakeUpScreen teardown relinquished the flags on this same Activity
+        // instance — without re-applying, the SECOND alarm's wake screen
+        // would render behind the keyguard instead of over it.
+        applyLockScreenBypass()
         val channel = alarmChannel
         if (channel != null) {
             channel.invokeMethod(METHOD_ALARM_FIRED, payload)
@@ -227,10 +319,119 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Lock-screen bypass lifecycle (Zombie-UI, final piece). The bypass is a
+    // PER-ALARM lease, not a permanent Activity property: applied on every
+    // alarm launch (onCreate + the onNewIntent warm path above), and fully
+    // relinquished when Dart reports the WakeUpScreen is gone — so a
+    // stranded task in Recents can never keep drawing over the keyguard.
+    // ---------------------------------------------------------------------
+
+    /** Grants the wake screen its lock-screen lease: render over the
+     *  keyguard and wake the display. Runtime calls mirror the manifest's
+     *  `showWhenLocked` / `turnScreenOn` for pre-O_MR1 API paths. */
+    private fun applyLockScreenBypass() {
+        lockScreenBypassActive = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+    }
+
+    /** Revokes the lease: clears showWhenLocked / turnScreenOn (modern API
+     *  setters AND the legacy window flags) plus FLAG_KEEP_SCREEN_ON, so the
+     *  app completely relinquishes the lock screen the moment the wake
+     *  screen is disposed. */
+    private fun relinquishLockScreenBypass() {
+        lockScreenBypassActive = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
+        } else {
+            @Suppress("DEPRECATION")
+            window.clearFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        Log.d(TAG, "lock-screen bypass relinquished")
+    }
+
+    /** Regression 2 — native teardown of a WakeUpScreen stranded over the lock
+     *  screen after an EXTERNAL (notification-shade) dismiss. While occluded by
+     *  the shade the activity never hits Dart's `resumed` hook, so the ledger
+     *  poll/self-destruct can lag until a manual swipe. The foreground
+     *  dispatcher's dismiss calls this the instant it handles the action: stop
+     *  the alarm service, drop the lock-screen lease, and finish the task so
+     *  the keyguard is revealed immediately. Guarded by [lockScreenBypassActive]
+     *  so it can ONLY fire while an alarm wake screen is up — a stray dismiss
+     *  during normal app use is a no-op. */
+    private fun finishWakeActivityIfAlarmActive() {
+        if (!lockScreenBypassActive) {
+            Log.d(TAG, "finishWakeActivity: no alarm wake screen active — ignoring")
+            return
+        }
+        Log.d(TAG, "finishWakeActivity: tearing down stranded wake screen")
+        stopService(Intent(this, AlarmAudioService::class.java))
+        relinquishLockScreenBypass()
+        finishAndRemoveTask()
+    }
+
     override fun onDestroy() {
-        // Never let a preview tone outlive the editor screen.
-        stopPreviewPlayer()
+        // Stop the EDITOR PREVIEW — it must die with the activity. A FIRING
+        // ALARM is NOT touched here: it lives in [AlarmAudioService] (a
+        // foreground service), so the keyguard occluding/destroying this
+        // activity can no longer silence it. The alarm ends only on an
+        // explicit Dismiss/Snooze (`stopPreview` → stopService) or process
+        // death. (THIS is the Silence-Bug fix — do not reintroduce any alarm
+        // audio teardown on a lifecycle callback.)
+        previewEngine.stop()
         super.onDestroy()
+    }
+
+    // ---------------------------------------------------------------------
+    // Native dismiss fail-safe ledger (Zombie-UI hardening, round 2).
+    // The killed-app Dismiss writes `filesDir/pending_dismissals` from the
+    // background Dart engine's first instruction; these synchronous helpers
+    // are the OTHER half of the contract — Dart's boot gate reads and clears
+    // through the alarm-routing channel before trusting Hive.
+    // ---------------------------------------------------------------------
+
+    /** Reads the ledger: trimmed, blanks dropped, de-duplicated (a rapid
+     *  double-tap appends twice; the Hive replay must ack once). Any failure
+     *  reads as "nothing pending" — a corrupt ledger must never block boot. */
+    private fun readPendingDismissals(): List<String> {
+        return try {
+            val file = File(filesDir, PENDING_DISMISSALS_FILE)
+            if (!file.exists()) {
+                emptyList()
+            } else {
+                file.readLines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "pending-dismissals read failed", e)
+            emptyList()
+        }
+    }
+
+    /** Deletes the ledger. Best-effort: a failed delete just means the next
+     *  boot replays the same ids into Hive again, which is idempotent. */
+    private fun clearPendingDismissals() {
+        try {
+            File(filesDir, PENDING_DISMISSALS_FILE).delete()
+        } catch (e: Exception) {
+            Log.w(TAG, "pending-dismissals clear failed", e)
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -313,165 +514,34 @@ class MainActivity : FlutterActivity() {
     }
 
     // ---------------------------------------------------------------------
-    // Phase 2a — native preview engine (the Phase-2b fire-time player, run
-    // on-demand). Resolve the chosen source, and on ANY failure fall through
-    // to the bundled classic tone so a preview is never silent.
+    // Fire-time alarm audio — delegated to the foreground [AlarmAudioService]
+    // so it survives the lock-screen activity teardown (the Silence Bug). The
+    // resolve-and-fallback engine itself lives in [AlarmAudioEngine], shared
+    // verbatim with the in-activity editor preview.
     // ---------------------------------------------------------------------
 
-    private fun previewRingtone(sourceIndex: Int, uri: String?, vibrate: Boolean) {
-        stopPreviewPlayer()
-        // Start the haptic loop BEFORE audio so it accompanies whatever rings —
-        // including the classic/RingtoneManager fallbacks below (which release
-        // the player but deliberately do NOT cancel vibration).
-        if (vibrate) startVibration()
-        val player = MediaPlayer()
-        previewPlayer = player
-        try {
-            configureAlarmPlayer(player)
-            // Mid-stream failures (media-server death, codec stall) surface here,
-            // not at prepare() — fall back rather than dying silently.
-            player.setOnErrorListener { _, what, extra ->
-                Log.w(TAG, "preview MediaPlayer error what=$what extra=$extra → classic")
-                fallbackToClassic()
-                true
-            }
-            when (sourceIndex) {
-                SOURCE_VAULT ->
-                    player.setDataSource(
-                        requireNotNull(uri) { "vault source needs a path" },
-                    )
-                SOURCE_SYSTEM ->
-                    player.setDataSource(
-                        applicationContext,
-                        Uri.parse(requireNotNull(uri) { "system source needs a uri" }),
-                    )
-                else -> setClassicDataSource(player) // SOURCE_CLASSIC
-            }
-            // SYNCHRONOUS prepare: a bad path / revoked content:// throws HERE,
-            // before start(), so the catch can fall back with no audible gap.
-            player.prepare()
-            player.start()
-        } catch (e: Exception) {
-            Log.w(TAG, "preview resolve failed (${e.message}) → classic fallback", e)
-            fallbackToClassic()
+    /** Starts (or restarts) fire-time alarm playback in the foreground service.
+     *  Launched while THIS activity is foreground (the FSI just brought it up),
+     *  so the Android-12+ background-foreground-service-launch restriction is
+     *  satisfied. `startForegroundService` on O+; the service calls
+     *  `startForeground` immediately in `onStartCommand`. */
+    private fun startAlarmAudioService(
+        source: Int,
+        uri: String?,
+        vibrate: Boolean,
+        bundledResource: String?,
+    ) {
+        val intent = Intent(this, AlarmAudioService::class.java).apply {
+            action = AlarmAudioService.ACTION_PLAY
+            putExtra(AlarmAudioService.EXTRA_SOURCE, source)
+            putExtra(AlarmAudioService.EXTRA_URI, uri)
+            putExtra(AlarmAudioService.EXTRA_VIBRATE, vibrate)
+            putExtra(AlarmAudioService.EXTRA_BUNDLED_RESOURCE, bundledResource)
         }
-    }
-
-    /** Last-resort audio: the bundled `classic_alarm`, then the device's default
-     *  alarm ringtone. The user is never left in silence. Releases the failed
-     *  player but NOT the vibrator — a swap of audio source must keep any active
-     *  haptic loop running. */
-    private fun fallbackToClassic() {
-        releasePlayer()
-        val player = MediaPlayer()
-        previewPlayer = player
-        try {
-            configureAlarmPlayer(player)
-            setClassicDataSource(player)
-            player.prepare()
-            player.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "classic fallback failed → system default alarm tone", e)
-            previewPlayer = null
-            try {
-                RingtoneManager.getRingtone(
-                    applicationContext,
-                    RingtoneManager.getActualDefaultRingtoneUri(
-                        applicationContext,
-                        RingtoneManager.TYPE_ALARM,
-                    ),
-                )?.play()
-            } catch (e2: Exception) {
-                Log.e(TAG, "even the default alarm ringtone failed", e2)
-            }
-        }
-    }
-
-    private fun configureAlarmPlayer(player: MediaPlayer) {
-        player.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build(),
-        )
-        player.isLooping = true
-    }
-
-    /** Points [player] at `res/raw/classic_alarm`. The AssetFileDescriptor is
-     *  closed right after setDataSource (MediaPlayer dups the fd), before the
-     *  caller's prepare(). */
-    private fun setClassicDataSource(player: MediaPlayer) {
-        val afd = resources.openRawResourceFd(R.raw.classic_alarm)
-        try {
-            player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-        } finally {
-            afd.close()
-        }
-    }
-
-    /** Full stop: release the audio player AND cancel any haptic loop. Used by
-     *  the channel `stopPreview`, onDestroy, and the start of a new play. */
-    private fun stopPreviewPlayer() {
-        releasePlayer()
-        stopVibration()
-    }
-
-    /** Stops + releases the [MediaPlayer] only, leaving the vibrator untouched
-     *  (so an audio fallback can swap players without dropping the buzz). */
-    private fun releasePlayer() {
-        val player = previewPlayer ?: return
-        previewPlayer = null
-        try {
-            if (player.isPlaying) player.stop()
-        } catch (e: IllegalStateException) {
-            // already stopped/uninitialised — fine.
-        }
-        try {
-            player.release()
-        } catch (e: Exception) {
-            Log.w(TAG, "preview player release failed", e)
-        }
-    }
-
-    /** Starts a continuous, aggressive looping vibration (buzz 1s / pause 1s,
-     *  repeating). Resolves the [Vibrator] across API levels. Best-effort — a
-     *  device without a vibrator, or a failure, must never break the alarm. */
-    private fun startVibration() {
-        stopVibration()
-        val v = resolveVibrator() ?: return
-        if (!v.hasVibrator()) return
-        vibrator = v
-        val pattern = longArrayOf(0, 1000, 1000) // delay, on, off — index 0 loops
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                v.vibrate(VibrationEffect.createWaveform(pattern, 0))
-            } else {
-                @Suppress("DEPRECATION")
-                v.vibrate(pattern, 0)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "startVibration failed", e)
-        }
-    }
-
-    private fun stopVibration() {
-        val v = vibrator ?: return
-        vibrator = null
-        try {
-            v.cancel()
-        } catch (e: Exception) {
-            Log.w(TAG, "vibrator cancel failed", e)
-        }
-    }
-
-    private fun resolveVibrator(): Vibrator? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE)
-                as? VibratorManager
-            vm?.defaultVibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
         } else {
-            @Suppress("DEPRECATION")
-            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            startService(intent)
         }
     }
 }

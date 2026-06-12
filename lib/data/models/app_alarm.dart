@@ -43,13 +43,20 @@ enum AppAlarmRepeatType {
 /// Lifetime: created on the AlarmsScreen, edited via the create/edit sheet,
 /// deleted via swipe-or-button.
 ///
-/// **Lead-time model (followsRotation):** an alarm NEVER fires at an absolute
-/// clock time — the whole point is that it tracks the shift start, so an exact
-/// time that can't adapt when the shift moves is an anti-pattern. Instead the
-/// fire time is `shiftStart − leadTime`, where `leadTime` is:
-///   * the per-alarm [relativeOffsetMinutes] when it is set (an OVERRIDE), or
-///   * the global [AlarmSettings.leadTime] when [relativeOffsetMinutes] is null
-///     (the PRIMARY default — the single source of truth for standard alarms).
+/// **Timing model (followsRotation):** a follows-rotation alarm has two mutually
+/// exclusive timing modes, selected by [isExactTime]:
+///   * **Lead-time (default, `isExactTime == false`):** fire at
+///     `shiftStart − leadTime`, where `leadTime` is the per-alarm
+///     [relativeOffsetMinutes] when set (an OVERRIDE), else the global
+///     [AlarmSettings.leadTime] (the PRIMARY default). This tracks the shift —
+///     move the shift and the alarm follows.
+///   * **Exact-time (`isExactTime == true`):** fire at the absolute
+///     [exactTimeMinutes] on each matching shift's DATE, ignoring the lead time
+///     entirely. Still roster-anchored (it only rings on days the linked shift
+///     occurs) but pinned to a fixed wall-clock time the user chose.
+///
+/// The fire-time arithmetic for BOTH modes lives in one place —
+/// `rotationAlarmFireAt` — so the engine and the Dashboard preview never drift.
 @HiveType(typeId: 6)
 class AppAlarm {
   AppAlarm({
@@ -67,6 +74,8 @@ class AppAlarm {
     this.customRingtoneUri,
     this.customRingtoneName,
     this.ringtoneSource = RingtoneSource.classic,
+    this.isExactTime = false,
+    this.exactTimeMinutes,
   })  : assert(
           minutesOfDay >= 0 && minutesOfDay < 1440,
           'minutesOfDay must be 0..1439',
@@ -75,6 +84,11 @@ class AppAlarm {
           relativeOffsetMinutes == null || relativeOffsetMinutes > 0,
           'relativeOffsetMinutes, when set, must be positive — a zero/negative '
           'offset would fire at or after the shift starts, defeating the point',
+        ),
+        assert(
+          exactTimeMinutes == null ||
+              (exactTimeMinutes >= 0 && exactTimeMinutes < 1440),
+          'exactTimeMinutes, when set, must be a valid minute-of-day (0..1439)',
         );
 
   @HiveField(0)
@@ -189,6 +203,60 @@ class AppAlarm {
   @HiveField(14)
   final RingtoneSource ringtoneSource;
 
+  /// Exact-time mode for a followsRotation alarm. When true the alarm fires at
+  /// the absolute [exactTimeMinutes] on each matching shift's date instead of
+  /// `shiftStart − leadTime` — the lead time (global default AND any
+  /// [relativeOffsetMinutes] override) is ignored. Default false (lead-time
+  /// mode); legacy records (no field 15) read back false via the adapter.
+  /// Meaningless for weekly / oneTime alarms (they already fire at an absolute
+  /// [minutesOfDay]); the create sheet only ever sets it on followsRotation.
+  @HiveField(15, defaultValue: false)
+  final bool isExactTime;
+
+  /// The absolute fire time (minute-of-day, 0..1439) for an [isExactTime]
+  /// followsRotation alarm — e.g. `255` for 04:15. Null in lead-time mode (and
+  /// on legacy records, no field 16). When [isExactTime] is true but this is
+  /// null, the fire-time math falls back to lead-time mode rather than crashing.
+  @HiveField(16)
+  final int? exactTimeMinutes;
+
+  /// The exact-time fire clock when exact-time mode is ACTIVE and well-formed,
+  /// else null (= lead-time mode). This is the single mode-decision gate shared
+  /// by the engine (`rotationAlarmFireAt`) and every UI projection
+  /// ([displayFireClockMinutes]) — including the defensive malformed-record
+  /// rule ([isExactTime] true but a null clock falls back to lead-time math
+  /// rather than crashing) — so the engine and the display can never disagree
+  /// about WHICH mode an alarm is in.
+  int? get activeExactTimeMinutes => isExactTime ? exactTimeMinutes : null;
+
+  /// The lead applied in lead-time mode: this alarm's [relativeOffsetMinutes]
+  /// override when set, else the caller's [globalLeadMinutes] default.
+  int leadMinutesWith(int globalLeadMinutes) =>
+      relativeOffsetMinutes ?? globalLeadMinutes;
+
+  /// The clock face (minute-of-day, 0..1439) this follows-rotation alarm will
+  /// RING for a shift starting at [shiftStartMinutes] — the single display
+  /// source of truth for every UI text widget (Alarms-tab card hero, create
+  /// sheet, etc.). Respects [isExactTime]: returns [exactTimeMinutes] in
+  /// exact-time mode, else `shiftStart − lead` wrapped across midnight (a
+  /// 90-min lead before a 00:30 shift renders 23:00).
+  ///
+  /// Display projection ONLY — the authoritative date-anchored instant the OS
+  /// is armed with comes from `rotationAlarmFireAt`, which shares
+  /// [activeExactTimeMinutes] / [leadMinutesWith] so the two stay in lock-step.
+  /// (Field bug this fixes: an exact-time 04:15 alarm was armed correctly but
+  /// cards still rendered the old `shiftStart − leadTime` hand-math → 05:00.)
+  int displayFireClockMinutes({
+    required int shiftStartMinutes,
+    required int globalLeadMinutes,
+  }) {
+    final exact = activeExactTimeMinutes;
+    if (exact != null) return exact;
+    final raw =
+        (shiftStartMinutes - leadMinutesWith(globalLeadMinutes)) % 1440;
+    return raw < 0 ? raw + 1440 : raw;
+  }
+
   /// `clearLinkedShiftType` / `clearRelativeOffset` let a caller reset a field
   /// back to `null` — without them, passing `null` is indistinguishable from
   /// "leave unchanged". `clearRelativeOffset` is how the create/edit sheet
@@ -210,6 +278,9 @@ class AppAlarm {
     String? customRingtoneUri,
     String? customRingtoneName,
     RingtoneSource? ringtoneSource,
+    bool? isExactTime,
+    int? exactTimeMinutes,
+    bool clearExactTime = false,
   }) =>
       AppAlarm(
         id: id ?? this.id,
@@ -231,6 +302,10 @@ class AppAlarm {
         customRingtoneUri: customRingtoneUri ?? this.customRingtoneUri,
         customRingtoneName: customRingtoneName ?? this.customRingtoneName,
         ringtoneSource: ringtoneSource ?? this.ringtoneSource,
+        isExactTime: isExactTime ?? this.isExactTime,
+        exactTimeMinutes: clearExactTime
+            ? null
+            : (exactTimeMinutes ?? this.exactTimeMinutes),
       );
 
   @override
@@ -251,7 +326,9 @@ class AppAlarm {
           autoDeleteAfterFiring == other.autoDeleteAfterFiring &&
           customRingtoneUri == other.customRingtoneUri &&
           customRingtoneName == other.customRingtoneName &&
-          ringtoneSource == other.ringtoneSource;
+          ringtoneSource == other.ringtoneSource &&
+          isExactTime == other.isExactTime &&
+          exactTimeMinutes == other.exactTimeMinutes;
 
   @override
   int get hashCode => Object.hash(
@@ -269,6 +346,8 @@ class AppAlarm {
         customRingtoneUri,
         customRingtoneName,
         ringtoneSource,
+        isExactTime,
+        exactTimeMinutes,
       );
 
   @override
@@ -282,7 +361,8 @@ class AppAlarm {
       'autoDeleteAfterFiring: $autoDeleteAfterFiring, '
       'customRingtoneUri: $customRingtoneUri, '
       'customRingtoneName: $customRingtoneName, '
-      'ringtoneSource: $ringtoneSource)';
+      'ringtoneSource: $ringtoneSource, '
+      'isExactTime: $isExactTime, exactTimeMinutes: $exactTimeMinutes)';
 }
 
 /// Whether the alarm [a] should be permanently deleted from Hive the instant it

@@ -60,6 +60,7 @@ void main() {
     required int endMin,
     bool isMuted = false,
     bool isAcknowledged = false,
+    bool isPaused = false,
   }) =>
       Shift(
         id: id,
@@ -69,6 +70,7 @@ void main() {
         endMinutes: endMin,
         isMuted: isMuted,
         isAcknowledged: isAcknowledged,
+        isPaused: isPaused,
       );
 
   group('empty state', () {
@@ -199,6 +201,76 @@ void main() {
       expect(find.text('Day shift'), findsNothing);
     });
 
+    testWidgets('a PAUSED future shift is skipped — hero shows the next active',
+        (tester) async {
+      // Paused Day starts sooner; active Night later. The user isn't working
+      // the paused day, so the hero must skip it and feature Night.
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final tomorrow = today.add(const Duration(days: 1));
+      await pumpDashboard(
+        tester,
+        shifts: [
+          mk(
+            id: 'paused-day',
+            date: tomorrow,
+            type: ShiftType.day,
+            startMin: 6 * 60,
+            endMin: 14 * 60,
+            isPaused: true,
+          ),
+          mk(
+            id: 'active-night',
+            date: tomorrow,
+            type: ShiftType.night,
+            startMin: 22 * 60,
+            endMin: 6 * 60,
+          ),
+        ],
+      );
+
+      expect(find.text('Night shift'), findsOneWidget);
+      expect(find.text('Day shift'), findsNothing);
+    });
+
+    testWidgets('a PAUSED in-progress shift is NOT featured (rolls forward)',
+        (tester) async {
+      // Unlike mute/ack, a paused shift the user is "inside" must NOT show as
+      // in-progress — they took the day off. The hero rolls to the next active.
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final startMin = (now.hour * 60 + now.minute) - 30;
+      final endMin = (now.hour * 60 + now.minute) + 30;
+      if (startMin < 0 || endMin >= 1440) {
+        return; // midnight-boundary guard, as in the in-progress tests
+      }
+
+      await pumpDashboard(
+        tester,
+        shifts: [
+          mk(
+            id: 'paused-live',
+            date: today,
+            type: ShiftType.day,
+            startMin: startMin,
+            endMin: endMin,
+            isPaused: true,
+          ),
+          mk(
+            id: 'next-night',
+            date: today.add(const Duration(days: 2)),
+            type: ShiftType.night,
+            startMin: 22 * 60,
+            endMin: 6 * 60,
+          ),
+        ],
+      );
+
+      expect(find.text('Night shift'), findsOneWidget);
+      expect(find.text('Day shift'), findsNothing);
+      expect(find.text('IN PROGRESS'), findsNothing);
+    });
+
     testWidgets(
       'a currently-in-progress shift shows "Ends in" + IN PROGRESS chip',
       (tester) async {
@@ -230,6 +302,59 @@ void main() {
         );
 
         expect(find.text('Day shift'), findsOneWidget);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is Text && (w.data?.startsWith('Ends in ') ?? false),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('IN PROGRESS'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'an acknowledged in-progress shift still shows (Day-7 field bug)',
+      (tester) async {
+        // Regression: on Day 7 the user dismissed the morning alarm, which sets
+        // isAcknowledged on TODAY's shift. The hero must still feature it
+        // ("Ends in …" / IN PROGRESS) instead of rolling the countdown forward
+        // to the next rotation block days away. isAcknowledged/isMuted are
+        // alarm-suppression flags and must NOT hide a shift the user is on.
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final startMin = (now.hour * 60 + now.minute) - 30;
+        final endMin = (now.hour * 60 + now.minute) + 30;
+        if (startMin < 0 || endMin >= 1440) {
+          return; // Midnight boundary — same guard as the in-progress test.
+        }
+
+        await pumpDashboard(
+          tester,
+          shifts: [
+            // Acknowledged AND muted, yet currently under way.
+            mk(
+              id: 'live-acked',
+              date: today,
+              type: ShiftType.day,
+              startMin: startMin,
+              endMin: endMin,
+              isAcknowledged: true,
+              isMuted: true,
+            ),
+            // The next rotation block, 8 days out — must NOT win while the
+            // user is still on the active shift.
+            mk(
+              id: 'far-night',
+              date: today.add(const Duration(days: 8)),
+              type: ShiftType.night,
+              startMin: 22 * 60,
+              endMin: 6 * 60,
+            ),
+          ],
+        );
+
+        expect(find.text('Day shift'), findsOneWidget);
+        expect(find.text('Night shift'), findsNothing);
         expect(
           find.byWidgetPredicate(
             (w) => w is Text && (w.data?.startsWith('Ends in ') ?? false),

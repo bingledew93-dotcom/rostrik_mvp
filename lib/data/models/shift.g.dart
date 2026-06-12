@@ -28,13 +28,17 @@ class ShiftAdapter extends TypeAdapter<Shift> {
       snoozedUntil: fields[8] as DateTime?,
       cycleId: fields[9] as String?,
       isAlarmSkipped: fields[10] == null ? false : fields[10] as bool,
+      isAdHoc: fields[11] == null ? false : fields[11] as bool,
+      isArchived: fields[12] == null ? false : fields[12] as bool,
+      isPaused: fields[13] == null ? false : fields[13] as bool,
+      pauseReason: fields[14] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Shift obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(15)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -56,7 +60,15 @@ class ShiftAdapter extends TypeAdapter<Shift> {
       ..writeByte(9)
       ..write(obj.cycleId)
       ..writeByte(10)
-      ..write(obj.isAlarmSkipped);
+      ..write(obj.isAlarmSkipped)
+      ..writeByte(11)
+      ..write(obj.isAdHoc)
+      ..writeByte(12)
+      ..write(obj.isArchived)
+      ..writeByte(13)
+      ..write(obj.isPaused)
+      ..writeByte(14)
+      ..write(obj.pauseReason);
   }
 
   @override
