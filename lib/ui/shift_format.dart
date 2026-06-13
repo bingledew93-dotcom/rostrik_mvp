@@ -23,6 +23,18 @@ const _monthsFull = [
 String formatMonthYearHeader(DateTime date) =>
     '${_monthsFull[date.month - 1].toUpperCase()} ${date.year}';
 
+/// Human alarm lead-time label: "0 min" / "45 min" / "1 h" / "1 h 30 min".
+/// Single source for both the Settings slider and the onboarding lead-time
+/// dropdown so the two surfaces can never phrase the same duration differently.
+String formatLeadTime(int totalMinutes) {
+  if (totalMinutes == 0) return '0 min';
+  final h = totalMinutes ~/ 60;
+  final m = totalMinutes % 60;
+  if (h == 0) return '$m min';
+  if (m == 0) return '$h h';
+  return '$h h $m min';
+}
+
 /// 24-hour zero-padded — matches roster card subtitle for consistency.
 String formatHhmm(int minutesOfDay) {
   final h = (minutesOfDay ~/ 60).toString().padLeft(2, '0');

@@ -457,14 +457,9 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-String _formatLeadTime(int totalMinutes) {
-  if (totalMinutes == 0) return '0 min';
-  final h = totalMinutes ~/ 60;
-  final m = totalMinutes % 60;
-  if (h == 0) return '$m min';
-  if (m == 0) return '$h h';
-  return '$h h $m min';
-}
+// Delegates to the shared formatter in shift_format.dart so the slider and the
+// onboarding lead-time dropdown stay phrased identically.
+String _formatLeadTime(int totalMinutes) => formatLeadTime(totalMinutes);
 
 /// "WORK HISTORY" entry point — opens the [WorkHistoryScreen] where completed
 /// ad-hoc shifts are listed and exported as CSV for payslip verification.

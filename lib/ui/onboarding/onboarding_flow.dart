@@ -78,7 +78,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Widget _buildStep() {
     switch (_step) {
       case 0:
-        return WelcomeScreen(onContinue: _next);
+        // Skip jumps straight to the dashboard via the shared completion
+        // path: it flips `onboarding_complete` so we don't re-prompt, and
+        // lands on MainLayout. No roster/alarms are generated — the user
+        // can build them later from Manage + Settings.
+        return WelcomeScreen(onContinue: _next, onSkip: _complete);
       case 1:
         return PermissionsScreen(
           onBack: _back,
@@ -102,7 +106,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       default:
         // Unreachable — _step is clamped 0..3. Defensive fallback so
         // the build doesn't return null on a programming error.
-        return WelcomeScreen(onContinue: _next);
+        return WelcomeScreen(onContinue: _next, onSkip: _complete);
     }
   }
 
