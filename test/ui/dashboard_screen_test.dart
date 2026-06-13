@@ -448,6 +448,23 @@ void main() {
       );
     });
 
+    testWidgets('a PAUSED shift does NOT surface the early-skip',
+        (tester) async {
+      // The consolidation fix: the legacy upcoming-alarm helper didn't know
+      // about isPaused, so a sick/leave day still offered a skip for an alarm
+      // the engine won't fire. The unified projector ignores paused shifts, so
+      // the control must be absent.
+      await pumpDashboard(
+        tester,
+        shifts: [soonShift().copyWith(isPaused: true, pauseReason: 'Sick')],
+        alarms: [dayAlarm()],
+      );
+      expect(
+        find.byKey(const ValueKey('dismiss-upcoming-button')),
+        findsNothing,
+      );
+    });
+
     testWidgets('tap reveals the slide-to-confirm bar (no bare-tap skip)',
         (tester) async {
       await pumpDashboard(

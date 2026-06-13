@@ -5,6 +5,7 @@ import '../../data/models/shift.dart';
 import '../../data/models/shift_type.dart';
 import '../../data/repositories/shift_repository.dart';
 import '../../state/app_preferences.dart';
+import '../shift_editor_modal.dart';
 import '../shift_format.dart';
 import 'shift_filter.dart';
 import 'shift_visuals.dart';
@@ -146,13 +147,22 @@ class ShiftCard extends StatelessWidget {
       child: Opacity(
         opacity: paused ? 0.6 : 1.0,
         child: Card(
+          clipBehavior: Clip.antiAlias,
           margin: const EdgeInsets.symmetric(
             horizontal: _cardHorizontalMargin,
             vertical: _cardVerticalMargin,
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Row(
+          child: InkWell(
+            // Tap-to-edit — opens the SAME editor the calendar uses, so a shift
+            // can be paused or modified straight from the list.
+            onTap: () => showShiftEditorModal(
+              context,
+              initialDate: shift.date,
+              existing: shift,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
               children: [
                 CircleAvatar(
                   backgroundColor:
@@ -212,6 +222,7 @@ class ShiftCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

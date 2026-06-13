@@ -369,6 +369,118 @@ void main() {
     });
   });
 
+  group('Next Alarm hero', () {
+    Shift dayTomorrow() {
+      final t = DateTime.now().add(const Duration(days: 1));
+      return Shift(
+        id: 'd1',
+        date: DateTime(t.year, t.month, t.day),
+        type: ShiftType.day,
+        startMinutes: 7 * 60,
+        endMinutes: 15 * 60,
+      );
+    }
+
+    testWidgets('shows the next rotation ring + the linked shift', (tester) async {
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Wake',
+            linkedShiftType: ShiftType.day,
+          ),
+        ],
+        shifts: [dayTomorrow()],
+      );
+      final hero = find.byKey(const ValueKey('alarms-next-hero'));
+      expect(hero, findsOneWidget);
+      expect(find.descendant(of: hero, matching: find.text('NEXT ALARM')),
+          findsOneWidget);
+      expect(
+        find.descendant(of: hero, matching: find.textContaining('for your Day shift')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('falls back to a calm state with no upcoming rotation alarm',
+        (tester) async {
+      // A rotation alarm but no roster → nothing in range to ring.
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Wake',
+            linkedShiftType: ShiftType.day,
+          ),
+        ],
+      );
+      expect(find.text('No upcoming shift alarm'), findsOneWidget);
+    });
+  });
+
+  group('color strip + Next ring line', () {
+    testWidgets('each card has a shift-type color strip', (tester) async {
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Wake',
+            linkedShiftType: ShiftType.day,
+          ),
+        ],
+      );
+      expect(find.byKey(const ValueKey('alarm-strip-a')), findsOneWidget);
+    });
+
+    testWidgets('a Next ring line is shown for an in-range rotation alarm',
+        (tester) async {
+      final t = DateTime.now().add(const Duration(days: 1));
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Wake',
+            linkedShiftType: ShiftType.day,
+          ),
+        ],
+        shifts: [
+          Shift(
+            id: 'd1',
+            date: DateTime(t.year, t.month, t.day),
+            type: ShiftType.day,
+            startMinutes: 7 * 60,
+            endMinutes: 15 * 60,
+          ),
+        ],
+      );
+      expect(find.textContaining('Next ring: Tomorrow at'), findsOneWidget);
+    });
+
+    testWidgets('a disabled alarm shows the off state', (tester) async {
+      await pumpAlarms(
+        tester,
+        seed: [
+          mk(
+            id: 'a',
+            minutesOfDay: 6 * 60,
+            label: 'Wake',
+            enabled: false,
+            linkedShiftType: ShiftType.day,
+          ),
+        ],
+      );
+      expect(find.textContaining("won't ring"), findsOneWidget);
+    });
+  });
+
   group('tap-to-edit', () {
     testWidgets('tapping a card opens the edit sheet pre-populated',
         (tester) async {

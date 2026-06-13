@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../alarms/upcoming_alarm.dart';
+import '../alarms/alarm_projection.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
@@ -73,11 +73,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Early-bird skip: the single next roster-automated alarm due within 12h.
     // When present, the dashboard offers a one-occurrence skip that leaves the
     // master alarm rule armed (see `_DismissUpcomingAlarmControl`).
-    final upcoming = nextUpcomingAutomatedAlarm(
+    final upcoming = nextRotationRing(
       alarms: alarms,
       shifts: shifts,
       globalLeadMinutes: globalLeadMinutes,
       now: now,
+      // The early-skip is a "you woke before your alarm" affordance — keep the
+      // original 12h look-ahead. Same projector the engine + Alarms tab use,
+      // so it now inherently ignores paused / archived / muted shifts.
+      horizon: const Duration(hours: 12),
       isSchedulePaused: AppPreferences.isSchedulePausedOf(context),
     );
 
@@ -573,7 +577,9 @@ class _RotationPositionCard extends StatelessWidget {
 class _DismissUpcomingAlarmControl extends StatefulWidget {
   const _DismissUpcomingAlarmControl({required this.upcoming});
 
-  final UpcomingAutomatedAlarm upcoming;
+  /// A follows-rotation ring from the unified projector — its [AlarmRing.shift]
+  /// is always non-null (rotation rings carry their shift).
+  final AlarmRing upcoming;
 
   @override
   State<_DismissUpcomingAlarmControl> createState() =>
@@ -590,7 +596,7 @@ class _DismissUpcomingAlarmControlState
     // the tree, so reading context post-await would race with disposal.
     final shifts = context.read<ShiftRepository>();
     await shifts.upsert(
-      widget.upcoming.shift.copyWith(isAlarmSkipped: true),
+      widget.upcoming.shift!.copyWith(isAlarmSkipped: true),
     );
   }
 

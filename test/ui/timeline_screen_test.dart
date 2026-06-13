@@ -189,6 +189,17 @@ void main() {
       expect(find.textContaining('Paused'), findsOneWidget);
       expect(find.byKey(const ValueKey('shift-card-p')), findsOneWidget);
     });
+
+    testWidgets('tapping a shift card opens the edit editor (same as calendar)',
+        (tester) async {
+      await pumpTimeline(tester, shifts: [dayShift(id: 'a')]);
+
+      await tester.tap(find.byKey(const ValueKey('shift-card-a')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShiftEditorModal), findsOneWidget);
+      expect(find.text('Edit shift'), findsOneWidget);
+    });
   });
 
   group('month view — data-driven + interactive', () {

@@ -93,13 +93,14 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
 
   void _addBlock() {
     setState(() {
-      // New blocks default to the previous block's `endDayIndex` so the
-      // split-shift flow is one tap (Add Block → adjust time → done).
-      // Sequential rotations still cost one extra stepper tap per block
-      // to advance the day, which is acceptable. Empty list → day 0.
+      // New blocks default to the day AFTER the previous block's end, so
+      // building a sequential rotation is friction-free (Block 1 = Day 1 →
+      // Block 2 = Day 2 → …). Clamped to the cycle's last day, so once you
+      // reach the end it stops advancing; a same-day split shift is then one
+      // stepper tap back. Empty list → Day 1 (index 0).
       final defaultDayIndex = _blocks.isEmpty
           ? 0
-          : _blocks.last.endDayIndex.clamp(0, _cycleLengthDays - 1);
+          : (_blocks.last.endDayIndex + 1).clamp(0, _cycleLengthDays - 1);
       _blocks.add(ShiftBlock(
         type: ShiftType.day,
         startDayIndex: defaultDayIndex,
