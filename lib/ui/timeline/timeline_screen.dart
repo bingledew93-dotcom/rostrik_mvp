@@ -167,11 +167,20 @@ class _TimelineMonthBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shifts = context.watch<List<Shift>>();
-    return ShiftCalendarView(
-      shifts: shifts,
-      startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
-      onDayTapped: (date, shiftsOnDate) =>
-          _onDayTapped(context, date, shiftsOnDate),
+    // Calendar at its natural height up top; the color legend fills the dead
+    // space below the grid (pushed to the bottom by the Spacer).
+    return Column(
+      children: [
+        ShiftCalendarView(
+          shifts: shifts,
+          startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
+          onDayTapped: (date, shiftsOnDate) =>
+              _onDayTapped(context, date, shiftsOnDate),
+        ),
+        const Spacer(),
+        const ShiftCalendarLegend(),
+        const SizedBox(height: 8),
+      ],
     );
   }
 

@@ -22,6 +22,7 @@ class ShiftCalendarView extends StatefulWidget {
     required this.shifts,
     this.onDayTapped,
     this.startWeekOnMonday = true,
+    this.compact = false,
   });
 
   /// The Hive shift list (same instance the List view watches). The index is
@@ -36,6 +37,11 @@ class ShiftCalendarView extends StatefulWidget {
   /// First grid column: Monday when true, Sunday when false. `table_calendar`
   /// owns the weekday-header / leading-offset math off this flag.
   final bool startWeekOnMonday;
+
+  /// Compact density for the Dashboard's read-only mini-calendar tile: a
+  /// shorter row height with proportionally tighter cell padding, smaller day
+  /// numbers and thinner bars, so the grid stays crisp when scaled down.
+  final bool compact;
 
   @override
   State<ShiftCalendarView> createState() => _ShiftCalendarViewState();
@@ -102,7 +108,8 @@ class _ShiftCalendarViewState extends State<ShiftCalendarView> {
       firstDay: DateTime(1900),
       lastDay: DateTime(2100, 12, 31),
       calendarFormat: CalendarFormat.month,
-      rowHeight: 60,
+      rowHeight: widget.compact ? 46 : 60,
+      daysOfWeekHeight: widget.compact ? 18 : 16,
       startingDayOfWeek: widget.startWeekOnMonday
           ? StartingDayOfWeek.monday
           : StartingDayOfWeek.sunday,
@@ -122,14 +129,26 @@ class _ShiftCalendarViewState extends State<ShiftCalendarView> {
         // An empty SizedBox is the documented way to suppress the default dot
         // marker (a null builder falls back to the dot).
         markerBuilder: (_, _, _) => const SizedBox.shrink(),
-        defaultBuilder: (ctx, day, _) =>
-            _CalendarCell(day: day, shifts: _shiftsOn(day), state: _CellState.normal),
-        todayBuilder: (ctx, day, _) =>
-            _CalendarCell(day: day, shifts: _shiftsOn(day), state: _CellState.today),
-        outsideBuilder: (ctx, day, _) =>
-            _CalendarCell(day: day, shifts: _shiftsOn(day), state: _CellState.outside),
-        selectedBuilder: (ctx, day, _) =>
-            _CalendarCell(day: day, shifts: _shiftsOn(day), state: _CellState.selected),
+        defaultBuilder: (ctx, day, _) => _CalendarCell(
+            day: day,
+            shifts: _shiftsOn(day),
+            state: _CellState.normal,
+            compact: widget.compact),
+        todayBuilder: (ctx, day, _) => _CalendarCell(
+            day: day,
+            shifts: _shiftsOn(day),
+            state: _CellState.today,
+            compact: widget.compact),
+        outsideBuilder: (ctx, day, _) => _CalendarCell(
+            day: day,
+            shifts: _shiftsOn(day),
+            state: _CellState.outside,
+            compact: widget.compact),
+        selectedBuilder: (ctx, day, _) => _CalendarCell(
+            day: day,
+            shifts: _shiftsOn(day),
+            state: _CellState.selected,
+            compact: widget.compact),
       ),
     );
   }
@@ -142,11 +161,13 @@ class _CalendarCell extends StatelessWidget {
     required this.day,
     required this.shifts,
     required this.state,
+    required this.compact,
   });
 
   final DateTime day;
   final List<Shift> shifts;
   final _CellState state;
+  final bool compact;
 
   /// Cap the stacked bars so a freak multi-shift day can't overflow the cell.
   static const _maxBars = 3;
@@ -162,36 +183,50 @@ class _CalendarCell extends StatelessWidget {
       _ => theme.colorScheme.onSurface,
     };
 
-    final dayNumberStyle = theme.textTheme.bodyMedium?.copyWith(
+    // Proportional metrics — the compact (Dashboard tile) variant tightens
+    // every dimension together so the grid stays crisp when scaled down.
+    final dayNumberStyle =
+        (compact ? theme.textTheme.bodySmall : theme.textTheme.bodyMedium)
+            ?.copyWith(
       color: dayNumberColor,
       fontWeight: state == _CellState.today ? FontWeight.w800 : FontWeight.w500,
     );
+    final cellMargin = EdgeInsets.all(compact ? 1.5 : 2);
+    final numberPad = compact
+        ? const EdgeInsets.fromLTRB(4, 1, 4, 0)
+        : const EdgeInsets.fromLTRB(6, 2, 6, 0);
+    final barsPad = compact
+        ? const EdgeInsets.fromLTRB(2, 0, 2, 2)
+        : const EdgeInsets.fromLTRB(2, 0, 2, 4);
+    final barHeight = compact ? 4.0 : 5.0;
+    final barGap = compact ? 1.5 : 2.0;
+    final cellRadius = compact ? 6.0 : 8.0;
 
     final cellDecoration = switch (state) {
       _CellState.selected => BoxDecoration(
           color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(cellRadius),
         ),
       _CellState.today => BoxDecoration(
           border: Border.all(
             color: theme.colorScheme.primary.withValues(alpha: 0.55),
             width: 1.5,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(cellRadius),
         ),
       _ => null,
     };
 
     return Container(
       key: ValueKey('shift-calendar-cell-${day.year}-${day.month}-${day.day}'),
-      margin: const EdgeInsets.all(2),
+      margin: cellMargin,
       decoration: cellDecoration,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(6, 2, 6, 0),
+            padding: numberPad,
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text('${day.day}', style: dayNumberStyle),
@@ -200,17 +235,19 @@ class _CalendarCell extends StatelessWidget {
           // Strictly data-driven: bars only when Hive has shift(s) for this day.
           if (shifts.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(2, 0, 2, 4),
+              padding: barsPad,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final s in shifts.take(_maxBars))
                     Padding(
-                      padding: const EdgeInsets.only(top: 2),
+                      padding: EdgeInsets.only(top: barGap),
                       child: _TypeBar(
                         type: s.type,
                         dimmed: state == _CellState.outside,
                         paused: s.isPaused,
+                        isAdHoc: s.isAdHoc,
+                        height: barHeight,
                       ),
                     ),
                 ],
@@ -229,25 +266,126 @@ class _TypeBar extends StatelessWidget {
     required this.type,
     required this.dimmed,
     required this.paused,
+    required this.isAdHoc,
+    required this.height,
   });
 
   final ShiftType type;
   final bool dimmed;
   final bool paused;
+  final bool isAdHoc;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final visual = visualFor(type);
     // Paused day → muted grey, low-opacity bar so it reads as "not working"
     // at a glance while still marking that something is on the calendar.
     final color = paused ? Colors.grey : visual.color;
+    // Ad-hoc (overtime) shifts get an accent outline so picked-up overtime
+    // pops against the rostered bars — matches the legend's "Ad-Hoc" chip.
+    final border = (isAdHoc && !paused)
+        ? Border.all(color: scheme.primary, width: 1)
+        : null;
     final bar = Container(
-      height: 5,
+      height: height,
       decoration: BoxDecoration(
         color: color.withValues(alpha: paused ? 0.4 : 0.9),
         borderRadius: BorderRadius.circular(3),
+        border: border,
       ),
     );
     return dimmed ? Opacity(opacity: 0.45, child: bar) : bar;
+  }
+}
+
+/// Horizontal color-key for the calendar bars — decodes the palette for tired
+/// eyes. Colocated with [_TypeBar] so the chip colours stay in lock-step with
+/// what the grid actually draws. Wraps on narrow widths.
+class ShiftCalendarLegend extends StatelessWidget {
+  const ShiftCalendarLegend({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+    return Padding(
+      key: const ValueKey('calendar-legend'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: [
+          _LegendChip(
+            color: visualFor(ShiftType.day).color,
+            label: 'Day',
+            labelStyle: labelStyle,
+          ),
+          _LegendChip(
+            color: visualFor(ShiftType.afternoon).color,
+            label: 'Afternoon',
+            labelStyle: labelStyle,
+          ),
+          _LegendChip(
+            color: visualFor(ShiftType.night).color,
+            label: 'Night',
+            labelStyle: labelStyle,
+          ),
+          _LegendChip(
+            color: Colors.transparent,
+            borderColor: scheme.primary,
+            label: 'Ad-Hoc',
+            labelStyle: labelStyle,
+          ),
+          _LegendChip(
+            color: Colors.grey.withValues(alpha: 0.4),
+            label: 'Paused / Leave',
+            labelStyle: labelStyle,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendChip extends StatelessWidget {
+  const _LegendChip({
+    required this.color,
+    required this.label,
+    required this.labelStyle,
+    this.borderColor,
+  });
+
+  final Color color;
+  final Color? borderColor;
+  final String label;
+  final TextStyle? labelStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: color == Colors.transparent ? 0 : 0.9),
+            borderRadius: BorderRadius.circular(4),
+            border: borderColor != null
+                ? Border.all(color: borderColor!, width: 1.5)
+                : null,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: labelStyle),
+      ],
+    );
   }
 }

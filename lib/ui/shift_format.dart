@@ -13,6 +13,16 @@ const _months = [
 String formatShiftDate(DateTime date) =>
     '${_weekdays[date.weekday - 1]}, ${_months[date.month - 1]} ${date.day}';
 
+const _monthsFull = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/// "JUNE 2026" — the upper-cased month + year used as the Timeline list's
+/// sticky section header.
+String formatMonthYearHeader(DateTime date) =>
+    '${_monthsFull[date.month - 1].toUpperCase()} ${date.year}';
+
 /// 24-hour zero-padded — matches roster card subtitle for consistency.
 String formatHhmm(int minutesOfDay) {
   final h = (minutesOfDay ~/ 60).toString().padLeft(2, '0');

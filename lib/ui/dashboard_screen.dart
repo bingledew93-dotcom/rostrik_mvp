@@ -703,6 +703,9 @@ class _MyRotationTile extends StatelessWidget {
           ShiftCalendarView(
             shifts: shifts,
             startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
+            // Compact density so the mini-calendar scales crisply into the
+            // dashboard tile (tighter rows, smaller day numbers + bars).
+            compact: true,
           ),
           if (preview.isNotEmpty) ...[
             const SizedBox(height: 4),

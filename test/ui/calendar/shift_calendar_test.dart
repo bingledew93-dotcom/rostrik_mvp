@@ -52,6 +52,26 @@ void main() {
     return taps;
   }
 
+  testWidgets('renders in compact mode (dashboard tile) without overflow',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShiftCalendarView(
+            shifts: [shift(id: 's15', date: dayInMonth(15))],
+            onDayTapped: (_, _) {},
+            compact: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Builds + lays out the keyed cell with the tighter metrics (a RenderFlex
+    // overflow would have thrown during pump).
+    expect(find.byType(ShiftCalendarView), findsOneWidget);
+    expect(find.byKey(cellKey(dayInMonth(15))), findsOneWidget);
+  });
+
   testWidgets('tapping a day with a Hive shift reports that shift', (tester) async {
     final s = shift(id: 's15', date: dayInMonth(15));
     final taps = await pumpCalendar(tester, shifts: [s]);

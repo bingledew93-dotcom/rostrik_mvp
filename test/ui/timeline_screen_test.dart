@@ -7,6 +7,7 @@ import 'package:rostrik_mvp/data/models/shift_type.dart';
 import 'package:rostrik_mvp/data/repositories/shift_repository.dart';
 import 'package:rostrik_mvp/ui/calendar/shift_calendar.dart';
 import 'package:rostrik_mvp/ui/shift_editor_modal.dart';
+import 'package:rostrik_mvp/ui/shift_format.dart';
 import 'package:rostrik_mvp/ui/timeline/timeline_screen.dart';
 
 import '../alarms/fakes.dart';
@@ -190,6 +191,35 @@ void main() {
       expect(find.byKey(const ValueKey('shift-card-p')), findsOneWidget);
     });
 
+    testWidgets('groups shifts under a sticky month header', (tester) async {
+      await pumpTimeline(tester, shifts: [dayShift(id: 'd')]);
+      expect(find.text(formatMonthYearHeader(futureDate)), findsOneWidget);
+    });
+
+    testWidgets('OFF days render as a slim row (no card); working shifts as cards',
+        (tester) async {
+      await pumpTimeline(
+        tester,
+        shifts: [dayShift(id: 'd'), offShift(id: 'o')],
+      );
+      // Working shift → a Card; OFF day → slim row with no card chrome.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('shift-card-d')),
+          matching: find.byType(Card),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('shift-card-o')),
+          matching: find.byType(Card),
+        ),
+        findsNothing,
+      );
+      expect(find.text('Rest day'), findsOneWidget);
+    });
+
     testWidgets('tapping a shift card opens the edit editor (same as calendar)',
         (tester) async {
       await pumpTimeline(tester, shifts: [dayShift(id: 'a')]);
@@ -242,6 +272,16 @@ void main() {
 
       expect(find.byType(ShiftEditorModal), findsOneWidget);
       expect(find.text('Edit shift'), findsOneWidget);
+    });
+
+    testWidgets('shows the color legend below the grid', (tester) async {
+      await pumpTimeline(tester, shifts: [dayShift()]);
+      await tester.tap(find.text('Month View'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('calendar-legend')), findsOneWidget);
+      expect(find.text('Paused / Leave'), findsOneWidget);
+      expect(find.text('Ad-Hoc'), findsOneWidget);
     });
   });
 }
