@@ -33,10 +33,14 @@ void main() {
     expect(find.text('Keep alarms alive'), findsOneWidget);
     // The "why" — vendor app-killers.
     expect(find.textContaining('background apps'), findsOneWidget);
-    // The numbered recovery steps (the chip numbers).
+    // The numbered recovery steps (the chip numbers) — now five, incl. the
+    // Android-hibernation auto-revoke warning.
     expect(find.text('1'), findsOneWidget);
-    expect(find.text('4'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
     expect(find.textContaining('Unrestricted'), findsWidgets);
+    // The hibernation step names the OEM toggle variants the user must disable.
+    expect(find.textContaining('Pause app activity'), findsOneWidget);
+    expect(find.textContaining('Remove permissions'), findsOneWidget);
     // Both actions present.
     expect(find.byKey(const ValueKey('battery-go-to-settings')), findsOneWidget);
     expect(find.text('Not now'), findsOneWidget);

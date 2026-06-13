@@ -13,10 +13,23 @@ class HiveAppAlarmRepository implements AppAlarmRepository {
   final Box<AppAlarm> _box;
 
   @override
-  Future<void> upsert(AppAlarm alarm) => _box.put(alarm.id, alarm);
+  Future<void> upsert(AppAlarm alarm) async {
+    await _box.put(alarm.id, alarm);
+    // Force the write to disk before resolving. Hive's put completes once the
+    // frame is queued/written to the OS, but an aggressive OEM process-reap can
+    // still drop an un-flushed frame — flushing here guarantees a created/edited
+    // alarm survives an immediate kill. Writes are infrequent, so the fsync cost
+    // is irrelevant.
+    await _box.flush();
+  }
 
   @override
-  Future<void> delete(String id) => _box.delete(id);
+  Future<void> delete(String id) async {
+    await _box.delete(id);
+    // Same durability guarantee as upsert: a deleted alarm must not resurrect
+    // after a kill-before-flush. Idempotent — deleting an unknown id is a no-op.
+    await _box.flush();
+  }
 
   @override
   Future<AppAlarm?> getById(String id) async => _box.get(id);

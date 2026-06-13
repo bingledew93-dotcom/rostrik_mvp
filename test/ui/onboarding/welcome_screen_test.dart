@@ -1,29 +1,54 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:provider/provider.dart';
-import 'package:rostrik_mvp/data/models/alarm_settings.dart';
-import 'package:rostrik_mvp/data/repositories/alarm_settings_repository.dart';
+import 'package:rostrik_mvp/state/app_preferences.dart';
 import 'package:rostrik_mvp/ui/onboarding/welcome_screen.dart';
 
-import '../../alarms/fakes.dart';
-
 void main() {
-  Future<FakeAlarmSettingsRepository> pumpWelcome(
+  late Directory tempDir;
+  late Box box;
+  late AppPreferences prefs;
+  var boxCounter = 0;
+
+  setUpAll(() async {
+    tempDir = await Directory.systemTemp.createTemp('rostrik_welcome_test_');
+    Hive.init(tempDir.path);
+  });
+
+  // Open the Hive box + build AppPreferences in setUp (OUTSIDE the widget
+  // tester zone). Opening a box with `await` inside testWidgets would deadlock:
+  // real file I/O isn't pumped under the tester's controlled clock.
+  setUp(() async {
+    box = await Hive.openBox('welcome_settings_${boxCounter++}');
+    prefs = AppPreferences(box);
+  });
+
+  tearDown(() async {
+    prefs.dispose();
+    await box.deleteFromDisk();
+  });
+
+  tearDownAll(() async {
+    await Hive.close();
+    if (tempDir.existsSync()) await tempDir.delete(recursive: true);
+  });
+
+  /// Pumps the Welcome screen over the real [AppPreferences] (built in setUp)
+  /// so the instant-save toggles can be asserted end to end. pump (not
+  /// pumpAndSettle): the bundled hero Image.asset keeps an image stream pending
+  /// in the headless test — the copy, keys and toggles all render on the first
+  /// frame, which is all we assert.
+  Future<void> pumpWelcome(
     WidgetTester tester, {
     VoidCallback? onContinue,
     VoidCallback? onSkip,
-    AlarmSettings settings = AlarmSettings.defaults,
   }) async {
-    final repo = FakeAlarmSettingsRepository();
-    await repo.write(settings);
-    addTearDown(repo.dispose);
-
     await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          Provider<AlarmSettingsRepository>.value(value: repo),
-          Provider<AlarmSettings>.value(value: settings),
-        ],
+      ChangeNotifierProvider<AppPreferences>.value(
+        value: prefs,
         child: MaterialApp(
           home: WelcomeScreen(
             onContinue: onContinue ?? () {},
@@ -32,9 +57,20 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-    return repo;
+    await tester.pump();
   }
+
+  testWidgets('shows the new value-prop copy', (tester) async {
+    await pumpWelcome(tester);
+    expect(
+      find.text('The smart alarm clock built for shift workers.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('follow your rotating roster'),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('shows Get Started and a Skip / Set up later exit',
       (tester) async {
@@ -57,28 +93,38 @@ void main() {
     expect(started, isTrue);
   });
 
-  testWidgets('lead-time dropdown defaults to the persisted value (1 h)',
+  testWidgets('Quick Preferences render with the persisted defaults',
       (tester) async {
-    await pumpWelcome(tester); // defaults = 60 min
-    expect(find.byKey(const ValueKey('welcome-lead-time-dropdown')),
-        findsOneWidget);
-    // The closed field shows the formatted default.
-    expect(find.text('1 h'), findsOneWidget);
+    await pumpWelcome(tester); // defaults: 12h, week starts Monday
+    expect(
+      find.byKey(const ValueKey('welcome-pref-timeformat')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('welcome-pref-weekstart')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('picking a lead time persists it to the settings repo',
-      (tester) async {
-    final repo = await pumpWelcome(tester);
+  testWidgets('toggling the clock format instantly saves 24h', (tester) async {
+    await pumpWelcome(tester);
+    expect(prefs.use24HourTime, isFalse);
 
-    // Open the dropdown menu, then choose 30 min (absent from the closed field).
-    await tester.tap(find.byKey(const ValueKey('welcome-lead-time-dropdown')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('30 min').last);
-    await tester.pumpAndSettle();
+    // runAsync so the toggle's real Hive write completes (and doesn't leave a
+    // pending I/O future that stalls the tester).
+    await tester.runAsync(() => tester.tap(find.text('24h')));
+    await tester.pump();
 
-    final persisted = await repo.read();
-    expect(persisted.leadTime, const Duration(minutes: 30));
-    // The field now reflects the new selection.
-    expect(find.text('30 min'), findsOneWidget);
+    expect(prefs.use24HourTime, isTrue);
+  });
+
+  testWidgets('toggling the week start instantly saves Sunday', (tester) async {
+    await pumpWelcome(tester);
+    expect(prefs.startWeekOnMonday, isTrue);
+
+    await tester.runAsync(() => tester.tap(find.text('Sun')));
+    await tester.pump();
+
+    expect(prefs.startWeekOnMonday, isFalse);
   });
 }

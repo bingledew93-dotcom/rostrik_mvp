@@ -507,4 +507,61 @@ void main() {
       );
     });
   });
+
+  group('delete', () {
+    // Beta-blocker regression: deleting an alarm must drop the row ENTIRELY
+    // (no stranded "blank tile") AND call repo.delete so the record is gone for
+    // good. The stream-driven list is the removal path; this exercises it end
+    // to end through the slide-to-confirm gesture.
+    testWidgets('delete → slide-to-confirm removes the card from the list',
+        (tester) async {
+      final repo = await pumpAlarms(
+        tester,
+        seed: [
+          mk(id: 'a', minutesOfDay: 6 * 60, label: 'Wake Up'),
+        ],
+      );
+      expect(find.byKey(const ValueKey('alarm-card-a')), findsOneWidget);
+
+      // Reveal the slide-to-confirm bar.
+      await tester.tap(find.byKey(const ValueKey('alarm-delete-icon-a')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('alarm-delete-cancel-a')),
+        findsOneWidget,
+      );
+
+      // Drag the handle (the only delete_outline icon now on screen) past the
+      // commit threshold; the drag-end fires repo.delete.
+      await tester.drag(
+        find.byIcon(Icons.delete_outline),
+        const Offset(600, 0),
+      );
+      await tester.pumpAndSettle();
+
+      // Repo deletion fired, stream re-emitted, the card is gone (not blank),
+      // and the now-empty list falls back to the empty state.
+      expect(repo.callLog, contains('delete:a'));
+      expect(await repo.getById('a'), isNull);
+      expect(find.byKey(const ValueKey('alarm-card-a')), findsNothing);
+      expect(find.text('No alarms yet.'), findsOneWidget);
+    });
+
+    testWidgets('cancelling the confirm bar keeps the alarm', (tester) async {
+      final repo = await pumpAlarms(
+        tester,
+        seed: [
+          mk(id: 'a', minutesOfDay: 6 * 60, label: 'Wake Up'),
+        ],
+      );
+
+      await tester.tap(find.byKey(const ValueKey('alarm-delete-icon-a')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('alarm-delete-cancel-a')));
+      await tester.pumpAndSettle();
+
+      expect(repo.callLog, isNot(contains('delete:a')));
+      expect(find.byKey(const ValueKey('alarm-card-a')), findsOneWidget);
+    });
+  });
 }

@@ -31,6 +31,10 @@ const List<String> _batterySteps = <String>[
   'Tap Battery (or "App battery usage").',
   'Choose Unrestricted (not "Optimised" or "Restricted").',
   'If you see "Allow background activity", switch it on too.',
+  // Critical for long gaps between shifts: Android hibernates rarely-opened apps
+  // and auto-revokes their permissions, which silently disarms every alarm.
+  'Turn OFF "Pause app activity if unused" (or "Remove permissions if app is '
+      'unused") so Android can’t revoke alarm permissions while you’re away.',
 ];
 
 class _BatterySurvivalDialog extends StatelessWidget {

@@ -321,6 +321,12 @@ class _AlarmCardState extends State<_AlarmCard> {
     // and reading context post-await would race with disposal.
     final repo = context.read<AppAlarmRepository>();
     await repo.delete(widget.alarm.id);
+    // Anti-stick guard: on a successful delete this card unmounts and the
+    // setState no-ops (mounted == false). If a delete were ever a no-op, the
+    // card resets to its normal row instead of being stranded in the committed
+    // slide-to-confirm state (the reported "blank tile"). Defensive — the
+    // stream rebuild is still the primary removal path.
+    if (mounted) setState(() => _confirming = false);
   }
 
   void _onCancel() {
@@ -573,7 +579,16 @@ class _SlideToConfirmDeleteState extends State<_SlideToConfirmDelete> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LayoutBuilder(
+    // Tight-height SizedBox around the LayoutBuilder is load-bearing: this row
+    // renders inside the card's IntrinsicHeight, which queries its children's
+    // intrinsic height. A bare LayoutBuilder can't answer that — in debug it
+    // throws, in release the intrinsic height resolves to 0 and the confirm row
+    // collapses into a blank, unusable tile (the field-reported delete bug). The
+    // tight SizedBox lets IntrinsicHeight short-circuit to _trackHeight without
+    // descending into the LayoutBuilder.
+    return SizedBox(
+      height: _trackHeight,
+      child: LayoutBuilder(
       builder: (context, constraints) {
         final trackWidth = constraints.maxWidth;
         final maxX = trackWidth - _handleSize - (_handleInset * 2);
@@ -622,6 +637,7 @@ class _SlideToConfirmDeleteState extends State<_SlideToConfirmDelete> {
           ),
         );
       },
+      ),
     );
   }
 }

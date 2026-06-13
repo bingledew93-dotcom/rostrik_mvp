@@ -92,7 +92,7 @@ class _BrandingFooter extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Reliable alarms for shift workers',
+            'Alarms built outside the 9–5',
             style: theme.textTheme.labelSmall?.copyWith(
               color: muted.withValues(alpha: 0.45),
             ),
