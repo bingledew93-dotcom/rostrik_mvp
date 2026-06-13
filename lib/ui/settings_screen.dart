@@ -46,8 +46,58 @@ class SettingsScreen extends StatelessWidget {
             _PreferencesSection(),
             Divider(height: 32),
             _FactoryResetSection(),
+            _BrandingFooter(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Subtle brand sign-off at the very bottom of Settings: a dimmed logo + muted
+/// wordmark. Deliberately low-contrast — it's a quiet mark, not a CTA, so it
+/// reads as "you've reached the end" without competing with the live controls
+/// above. Uses the same asset + errorBuilder fallback as the WelcomeScreen
+/// hero, so it degrades to the alarm glyph if the logo is ever missing.
+class _BrandingFooter extends StatelessWidget {
+  const _BrandingFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      key: const ValueKey('settings-branding-footer'),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+      child: Column(
+        children: [
+          Opacity(
+            opacity: 0.30,
+            child: Image.asset(
+              'assets/images/rostrik_logo.png',
+              height: 44,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) =>
+                  Icon(Icons.alarm, size: 32, color: muted),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'ROSTRIK',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: muted.withValues(alpha: 0.55),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Reliable alarms for shift workers',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: muted.withValues(alpha: 0.45),
+            ),
+          ),
+        ],
       ),
     );
   }
