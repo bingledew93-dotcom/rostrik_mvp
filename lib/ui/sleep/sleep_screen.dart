@@ -57,19 +57,30 @@ class SleepScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
+            // BETA LOCKDOWN: the reminders / wind-down / sounds backend is a
+            // Phase-2 item, so the controls below are shown (so testers see the
+            // plan) but disabled — wrapped in [_LockedControl], which fades them
+            // and routes any tap to the "coming soon" snackbar.
+            const _BetaLimitationBanner(),
+            const SizedBox(height: 16),
             _SleepHeroCard(plan: plan, use24Hour: use24Hour),
             const SizedBox(height: 28),
             const _SectionHeader('REMINDERS'),
             const SizedBox(height: 4),
-            _RemindersSection(plan: plan, prefs: prefs, use24Hour: use24Hour),
+            _LockedControl(
+              child:
+                  _RemindersSection(plan: plan, prefs: prefs, use24Hour: use24Hour),
+            ),
             const SizedBox(height: 28),
             const _SectionHeader('WIND-DOWN DURATION'),
             const SizedBox(height: 12),
-            _WindDownDurationChips(selectedMinutes: prefs.windDownMinutes),
+            _LockedControl(
+              child: _WindDownDurationChips(selectedMinutes: prefs.windDownMinutes),
+            ),
             const SizedBox(height: 28),
             const _SectionHeader('SLEEP SOUNDS'),
             const SizedBox(height: 12),
-            const _SleepSoundsGrid(),
+            const _LockedControl(child: _SleepSoundsGrid()),
           ],
         ),
       ),
@@ -93,6 +104,102 @@ class _SectionHeader extends StatelessWidget {
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
       ),
+    );
+  }
+}
+
+// ─── Beta lockdown ──────────────────────────────────────────────────────────
+
+/// Shown whenever a gated Sleep control is tapped while the Phase-2 backend is
+/// still under construction.
+const String _kComingSoonMessage =
+    'Coming soon! We are perfecting the alarm engine first.';
+
+void _showComingSoon(BuildContext context) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(const SnackBar(content: Text(_kComingSoonMessage)));
+}
+
+/// Premium "under construction" banner pinned at the top of the Sleep tab. It
+/// uses the brand orange so it reads as an intentional status, not an error.
+class _BetaLimitationBanner extends StatelessWidget {
+  const _BetaLimitationBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('sleep-beta-banner'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: kRostrikOrange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kRostrikOrange.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.construction, color: kRostrikOrange, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Beta Limitation',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: kRostrikOrange,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Sleep & Wind-down intelligence is currently under '
+                  'construction for Phase 2.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Wraps a not-yet-functional control: fades it (so it reads as disabled) and
+/// IgnorePointers its inner gestures, then lays a transparent tap-catcher over
+/// the whole thing so ANY tap surfaces the "coming soon" snackbar instead of
+/// silently doing nothing.
+class _LockedControl extends StatelessWidget {
+  const _LockedControl({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Opacity(
+          opacity: 0.45,
+          child: IgnorePointer(child: child),
+        ),
+        Positioned.fill(
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => _showComingSoon(context),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -419,8 +526,9 @@ class _RemindersSection extends StatelessWidget {
                 : "A nudge when it's time to head to bed",
           ),
           value: prefs.bedtimeReminderEnabled,
-          onChanged: (v) =>
-              context.read<AppPreferences>().setBedtimeReminderEnabled(v),
+          // Disabled for the beta — onChanged:null renders the greyed switch;
+          // the [_LockedControl] overlay catches taps and shows the snackbar.
+          onChanged: null,
         ),
         SwitchListTile(
           key: const ValueKey('sleep-winddown-reminder-toggle'),
@@ -432,8 +540,7 @@ class _RemindersSection extends StatelessWidget {
                 : 'An earlier heads-up to start winding down',
           ),
           value: prefs.windDownReminderEnabled,
-          onChanged: (v) =>
-              context.read<AppPreferences>().setWindDownReminderEnabled(v),
+          onChanged: null,
         ),
       ],
     );
@@ -461,8 +568,9 @@ class _WindDownDurationChips extends StatelessWidget {
           selected: selected,
           showCheckmark: false,
           selectedColor: kRostrikOrange,
-          onSelected: (_) =>
-              context.read<AppPreferences>().setWindDownMinutes(m),
+          // Disabled for the beta — onSelected:null greys the chip; the
+          // [_LockedControl] overlay catches taps and shows the snackbar.
+          onSelected: null,
           labelStyle: theme.textTheme.labelLarge?.copyWith(
             color: selected ? Colors.black : theme.colorScheme.onSurface,
             fontWeight: FontWeight.w600,
@@ -494,8 +602,9 @@ class _SleepSoundsGrid extends StatelessWidget {
   }
 }
 
-/// A premium, tappable sound tile. The audio engine is a Phase-2 item, so a tap
-/// just surfaces the gated-feature snackbar (no asset playback yet).
+/// A premium sound tile. The audio engine is a Phase-2 item; the whole grid is
+/// wrapped in [_LockedControl], so this is a pure visual — taps are caught by
+/// the overlay and routed to the "coming soon" snackbar.
 class _SoundCard extends StatelessWidget {
   const _SoundCard({required this.icon, required this.label});
 
@@ -507,35 +616,24 @@ class _SoundCard extends StatelessWidget {
     final theme = Theme.of(context);
     return AspectRatio(
       aspectRatio: 1,
-      child: Material(
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Audio engine requires Wi-Fi asset download. '
-                  'Coming in Phase 2.',
-                ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: theme.colorScheme.primary, size: 30),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
             ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: theme.colorScheme.primary, size: 30),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
