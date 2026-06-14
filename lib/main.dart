@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'alarms/alarm_payload.dart';
 import 'alarms/alarm_sync_service.dart';
@@ -10,10 +11,12 @@ import 'alarms/notification_action_dispatcher.dart';
 import 'alarms/pending_dismissal_guard.dart';
 import 'data/repositories/shift_repository.dart';
 import 'data/storage/local_storage.dart';
+import 'legal/legal.dart';
 import 'logic/adhoc_archive.dart';
 import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
 import 'ui/app_theme.dart';
+import 'ui/legal_consent_screen.dart';
 import 'ui/main_layout.dart';
 import 'ui/onboarding/onboarding_flow.dart';
 import 'ui/wake_up_screen.dart';
@@ -167,12 +170,21 @@ void main() async {
     );
   }
 
+  // LEGAL CONSENT GATE — read the accepted legal version from
+  // shared_preferences (the source of truth the consent screen writes). If it
+  // doesn't match the version currently in force, the app routes through
+  // [LegalConsentScreen] before onboarding or the dashboard. Read here (async,
+  // pre-runApp) so RostrikApp can decide its home synchronously.
+  final sharedPrefs = await SharedPreferences.getInstance();
+  final legalAccepted =
+      sharedPrefs.getString(kAcceptedLegalVersionKey) == kCurrentLegalVersion;
+
   runApp(AppProviders(
     storage: storage,
     scheduler: scheduler,
     // UI display preferences ride the already-opened generic 'settings' box.
     preferences: AppPreferences(Hive.box('settings')),
-    child: const RostrikApp(),
+    child: RostrikApp(legalAccepted: legalAccepted),
   ));
 
   // If we pulled an FSI payload, push WakeUpScreen on top of the
@@ -338,7 +350,11 @@ Future<void> _requestAlarmPermissions(
 }
 
 class RostrikApp extends StatelessWidget {
-  const RostrikApp({super.key});
+  const RostrikApp({super.key, required this.legalAccepted});
+
+  /// Whether the user has already accepted the current legal version. When
+  /// false the home is gated behind [LegalConsentScreen].
+  final bool legalAccepted;
 
   @override
   Widget build(BuildContext context) {
@@ -377,13 +393,43 @@ class RostrikApp extends StatelessWidget {
       // onboarding is theoretically possible if an old alarm fires
       // during a re-onboarding — degraded but not broken; WakeUpScreen
       // just pushes over the onboarding stack.)
-      home: Hive.box('settings').get(
-        onboardingCompleteKey,
-        defaultValue: false,
-      ) as bool
-          ? const MainLayout()
-          : const OnboardingFlow(),
+      home: _RootGate(legalAccepted: legalAccepted),
     );
+  }
+}
+
+/// The root routing gate. The LEGAL gate sits in front of the onboarding gate:
+/// until the current legal version is accepted, nothing else is reachable. On
+/// acceptance the consent screen has already persisted the version to
+/// shared_preferences, so [_legalAccepted] flips locally and the onboarding /
+/// dashboard gate takes over in place — no navigation needed.
+class _RootGate extends StatefulWidget {
+  const _RootGate({required this.legalAccepted});
+
+  final bool legalAccepted;
+
+  @override
+  State<_RootGate> createState() => _RootGateState();
+}
+
+class _RootGateState extends State<_RootGate> {
+  late bool _legalAccepted = widget.legalAccepted;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_legalAccepted) {
+      return LegalConsentScreen(
+        onAccepted: () => setState(() => _legalAccepted = true),
+      );
+    }
+    // First-launch onboarding gate: read the synchronously-available
+    // `onboarding_complete` flag off the already-open `settings` box.
+    return Hive.box('settings').get(
+      onboardingCompleteKey,
+      defaultValue: false,
+    ) as bool
+        ? const MainLayout()
+        : const OnboardingFlow();
   }
 }
 

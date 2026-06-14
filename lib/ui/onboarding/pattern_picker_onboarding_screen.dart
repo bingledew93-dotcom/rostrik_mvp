@@ -38,8 +38,8 @@ class PatternPickerOnboardingScreen extends StatelessWidget {
     await navigator.push(
       MaterialPageRoute(
         builder: (_) => ArmEngineScreen(
+          // ArmEngineScreen pops itself (with roster rollback) on back.
           onArmComplete: () => _complete(context),
-          onBack: navigator.pop,
         ),
       ),
     );

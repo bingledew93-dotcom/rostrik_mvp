@@ -56,8 +56,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await navigator.push(
       MaterialPageRoute(
         builder: (_) => ArmEngineScreen(
+          // ArmEngineScreen pops itself (with roster rollback) on back.
           onArmComplete: _complete,
-          onBack: navigator.pop,
         ),
       ),
     );

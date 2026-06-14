@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../alarms/alarm_scheduler.dart';
 import '../data/models/alarm_settings.dart';
@@ -8,6 +9,7 @@ import '../data/models/shift_cycle.dart';
 import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
+import '../legal/legal.dart';
 import '../logic/cycle_service.dart';
 import '../state/app_preferences.dart';
 import 'onboarding/onboarding_flow.dart';
@@ -46,10 +48,67 @@ class SettingsScreen extends StatelessWidget {
             _PreferencesSection(),
             Divider(height: 32),
             _FactoryResetSection(),
+            Divider(height: 32),
+            _LegalAboutSection(),
             _BrandingFooter(),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "LEGAL & ABOUT" — Privacy Policy + Terms of Use tiles that open the external
+/// docs via url_launcher. Sits just above the footer so the legal links are the
+/// last thing in Settings, mirroring the consent the user gave at first launch.
+class _LegalAboutSection extends StatelessWidget {
+  const _LegalAboutSection();
+
+  Future<void> _open(BuildContext context, String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not open the link.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'LEGAL & ABOUT',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        ListTile(
+          key: const ValueKey('settings-privacy-policy'),
+          leading: const Icon(Icons.privacy_tip_outlined),
+          title: const Text('Privacy Policy'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _open(context, kPrivacyPolicyUrl),
+        ),
+        ListTile(
+          key: const ValueKey('settings-terms-of-use'),
+          leading: const Icon(Icons.description_outlined),
+          title: const Text('Terms of Use'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _open(context, kTermsOfUseUrl),
+        ),
+      ],
     );
   }
 }

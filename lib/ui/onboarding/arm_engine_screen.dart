@@ -31,15 +31,11 @@ class ArmEngineScreen extends StatefulWidget {
   const ArmEngineScreen({
     super.key,
     required this.onArmComplete,
-    this.onBack,
   });
 
   /// Invoked once after alarms are seeded. The flow flips the completion flag
   /// and routes to the Dashboard here.
   final Future<void> Function() onArmComplete;
-
-  /// Optional back affordance (returns to the pattern picker).
-  final VoidCallback? onBack;
 
   @override
   State<ArmEngineScreen> createState() => _ArmEngineScreenState();
@@ -52,6 +48,9 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
 
   bool _loading = true;
   bool _arming = false;
+  // Guards the back-rollback path against re-entry (a second tap / gesture while
+  // the cascade-delete is in flight) so we can never pop twice.
+  bool _backing = false;
   List<ShiftType> _workTypes = const [];
   String? _cycleLabel;
   DateTime? _anchor;
@@ -131,19 +130,29 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
 
   /// Back out of arming: cascade-delete the just-generated cycle (and its
   /// shifts + any pending OS alarms) so re-selecting a template doesn't stack a
-  /// duplicate roster, THEN invoke the injected pop. Wired to BOTH the AppBar
-  /// button and the system back-gesture (via PopScope), since the gesture would
-  /// otherwise bypass this cleanup entirely. No-op while arming.
+  /// duplicate roster, THEN dismiss the route. Wired to BOTH the AppBar button
+  /// and the system back-gesture (via a `canPop: false` PopScope), since the
+  /// gesture would otherwise bypass this cleanup entirely.
+  ///
+  /// The PopScope vetoes the implicit pop, so we MUST pop explicitly here once
+  /// the async cleanup resolves — the previous version handed off to an injected
+  /// callback that the still-`canPop:false` route swallowed, leaving the screen
+  /// stuck behind a spinner (the "death wheel"). Capturing the navigator before
+  /// the await and gating on `mounted` keeps the context use safe; `_backing`
+  /// blocks a second tap from popping twice.
   Future<void> _handleBack() async {
-    if (_arming) return;
-    final onBack = widget.onBack;
-    if (onBack == null) return;
+    if (_arming || _backing) return;
+    setState(() => _backing = true);
+    final navigator = Navigator.of(context);
+    final cycleService = context.read<CycleService>();
     final cycle = _cycle;
     if (cycle != null) {
-      await context.read<CycleService>().deleteCycle(cycle.id);
-      if (mounted) setState(() => _cycle = null); // idempotent on a double-tap
+      await cycleService.deleteCycle(cycle.id);
     }
-    onBack();
+    if (!mounted) return;
+    // Direct pop (not maybePop) so PopScope's canPop:false veto doesn't apply —
+    // this is the explicit dismissal the gesture/button asked for.
+    navigator.pop();
   }
 
   Future<void> _arm() async {
@@ -168,9 +177,10 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return PopScope(
-      // Intercept the system back-gesture so it runs the roster rollback too.
-      // When there's no back affordance (defensive / tests), allow a normal pop.
-      canPop: widget.onBack == null,
+      // Always intercept: the back-gesture must run the roster rollback, then
+      // _handleBack pops explicitly. canPop stays false so the implicit pop
+      // never races the cleanup.
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         _handleBack();
@@ -178,12 +188,10 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
       child: Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        leading: widget.onBack == null
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _arming ? null : () => _handleBack(),
-              ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: (_arming || _backing) ? null : _handleBack,
+        ),
         title: const Text('Arm your alarms'),
         bottom: const OnboardingProgressBar(step: 3),
       ),

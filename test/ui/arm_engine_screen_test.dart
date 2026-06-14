@@ -46,7 +46,10 @@ void main() {
     List<ShiftCycle> cycles = const [],
     AlarmSettings settings = AlarmSettings.defaults,
     required void Function() onArm,
-    void Function()? onBack,
+    // When true, ArmEngineScreen is reached by PUSHING from a host route (so
+    // its self-pop on back has somewhere to go); the test taps 'open-arm-engine'
+    // to enter it. Default false → ArmEngineScreen is the home directly.
+    bool pushed = false,
   }) async {
     final shiftRepo = FakeShiftRepository();
     for (final s in shifts) {
@@ -80,10 +83,9 @@ void main() {
           Provider<CycleService>.value(value: cycleService),
         ],
         child: MaterialApp(
-          home: ArmEngineScreen(
-            onArmComplete: () async => onArm(),
-            onBack: onBack,
-          ),
+          home: pushed
+              ? _ArmHost(onArmComplete: () async => onArm())
+              : ArmEngineScreen(onArmComplete: () async => onArm()),
         ),
       ),
     );
@@ -200,11 +202,11 @@ void main() {
   });
 
   group('back-nav rollback', () {
-    testWidgets('backing out cascade-deletes the just-generated roster',
+    testWidgets('backing out rolls back the roster AND dismisses the screen',
         (tester) async {
-      var backed = false;
       final h = await pumpArm(
         tester,
+        pushed: true,
         shifts: [
           shift('d', ShiftType.day, cycleId: 'c1'),
           shift('o', ShiftType.off, dayOffset: 1, cycleId: 'c1'),
@@ -221,17 +223,47 @@ void main() {
           ),
         ],
         onArm: () {},
-        onBack: () => backed = true,
       );
 
+      // Enter the Arm-Engine screen from the host route.
+      await tester.tap(find.byKey(const ValueKey('open-arm-engine')));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArmEngineScreen), findsOneWidget);
+
+      // Tap back: cascade rollback, then an explicit Navigator.pop.
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
 
-      // The generated cycle + its shifts are rolled back, then onBack fires —
-      // so re-selecting a template starts from a clean slate.
+      // The screen actually dismisses (no "death wheel"), and the generated
+      // cycle + its shifts are rolled back so a re-pick starts clean.
+      expect(find.byType(ArmEngineScreen), findsNothing);
       expect(await h.cycles.getAll(), isEmpty);
       expect(await h.shifts.getByCycleId('c1'), isEmpty);
-      expect(backed, isTrue);
     });
   });
+}
+
+/// Host route used by the back-nav test: a button that PUSHES ArmEngineScreen,
+/// so the screen's self-pop on back has a route to return to.
+class _ArmHost extends StatelessWidget {
+  const _ArmHost({required this.onArmComplete});
+
+  final Future<void> Function() onArmComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ElevatedButton(
+          key: const ValueKey('open-arm-engine'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ArmEngineScreen(onArmComplete: onArmComplete),
+            ),
+          ),
+          child: const Text('open'),
+        ),
+      ),
+    );
+  }
 }

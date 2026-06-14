@@ -1,46 +1,52 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Required for AlarmManager.setAlarmClock-quality scheduling on Android 12+.
          Without this, flutter_local_notifications silently downgrades to inexact. -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- Lets the alarm fire as a full-screen intent that wakes the lockscreen. -->
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission
+        android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <!-- Android 13+ runtime permission for displaying notifications at all. -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Needed by both BootReceivers (the plugin's AND Rostrik's own) to
          re-arm pending alarms after reboot. Without it, every scheduled
          alarm is silently dropped on power-cycle.
          RECEIVE_BOOT_COMPLETED is sufficient for ACTION_BOOT_COMPLETED
          and ACTION_LOCKED_BOOT_COMPLETED on all supported Android
          versions — there is no separate "locked boot" permission. -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission
+        android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- Required so the alarm can fire while the device is dozing/asleep, and
          for the AlarmAudioEngine's PARTIAL_WAKE_LOCK that keeps the CPU
          feeding the audio buffer while the screen is off. -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission
+        android:name="android.permission.WAKE_LOCK"/>
     <!-- Lets the alarm channel vibrate. -->
-    <uses-permission android:name="android.permission.VIBRATE" />
-
+    <uses-permission
+        android:name="android.permission.VIBRATE"/>
     <!-- AlarmAudioService runs the custom fire-time tone as a foreground
          service so the OS keeps the PROCESS alive while a show-when-locked
          WakeUpScreen is occluded by the notification shade (the Android-14
          keyguard Silence Bug — a process-scoped player alone died with the
          reaped process). Android 14 (targetSdk 34) requires the typed
          permission alongside the generic one. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-
+        android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <!-- Custom ringtone selection (Phase 1): read user-picked audio files.
          Granular media permission on Android 13+ (API 33+). file_picker's
          document-picker flow works without it, but it's declared so broader
          audio reads are available and the requested capability is explicit. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_AUDIO"/>
     <!-- Pre-Android-13 fallback. Capped at API 32 so it is NOT requested on
          33+, where READ_MEDIA_AUDIO supersedes it and a broad storage grant
          would be denied anyway — i.e. it degrades gracefully on newer OSes. -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
     <application
         android:label="rostrik_mvp"
         android:name="${applicationName}"
@@ -55,7 +61,6 @@
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
-            android:screenOrientation="portrait"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"
@@ -66,15 +71,13 @@
                  while the Flutter UI initializes. After that, this theme continues
                  to determine the Window background behind the Flutter UI. -->
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-
         <!-- Re-schedules pending alarms after a device reboot. The plugin's
              merged manifest already declares this, but we list it explicitly
              so the manifest is self-documenting and survives plugin upgrades
@@ -90,13 +93,16 @@
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action
+                    android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action
+                    android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action
+                    android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action
+                    android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
-
         <!-- Rostrik's own boot-recovery receiver, INTENTIONALLY independent
              of the FLN one above. Enqueues AlarmSyncWorker, which spins up
              a headless Flutter engine and runs syncAlarms() against the
@@ -128,19 +134,22 @@
             android:exported="true"
             android:directBootAware="true">
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action
+                    android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action
+                    android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+                <action
+                    android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action
+                    android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action
+                    android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
-
         <!-- Receiver the OS dispatches to when a scheduled alarm fires. -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
-            android:exported="false" />
-
+            android:exported="false"/>
         <!-- Receiver the OS dispatches to when the user taps a notification
              ACTION BUTTON (Snooze / Dismiss). Required because our actions
              use showsUserInterface:false — Android delivers the tap as a
@@ -151,8 +160,7 @@
              completely dead from the Flutter side. -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
-            android:exported="false" />
-
+            android:exported="false"/>
         <!-- Foreground service that owns FIRING-ALARM custom audio. type
              mediaPlayback raises the process to foreground oom-priority so a
              ringing alarm survives the keyguard occluding/destroying the
@@ -161,8 +169,7 @@
         <service
             android:name=".AlarmAudioService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
-
+            android:foregroundServiceType="mediaPlayback"/>
         <!-- image_cropper (uCrop) crop UI, used by the Phase-6 OCR roster
              scanner's tight-crop step. Without this declaration uCrop throws
              ActivityNotFoundException at runtime. uCrop requires an AppCompat
@@ -170,13 +177,12 @@
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
-
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
+            android:value="2"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -185,8 +191,16 @@
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
+            <action
+                android:name="android.intent.action.PROCESS_TEXT"/>
+            <data
+                android:mimeType="text/plain"/>
+        </intent>
+        <!-- url_launcher: lets us resolve a browser for the Privacy Policy /
+             Terms of Use https links on Android 11+ (package visibility). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
         </intent>
     </queries>
 </manifest>
