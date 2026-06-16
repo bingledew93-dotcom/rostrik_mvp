@@ -24,8 +24,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.rostrik_mvp"
+        applicationId = "com.rostrik.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // google_mlkit_text_recognition (and uCrop via image_cropper) require
@@ -41,6 +40,13 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Feed R8 the ML Kit -dontwarn rules (the release build minifies with
+            // R8; without these the google_mlkit_text_recognition CJK references
+            // fail the build). Keeps the default optimized rules too.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

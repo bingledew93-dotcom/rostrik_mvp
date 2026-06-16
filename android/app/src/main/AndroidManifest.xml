@@ -48,7 +48,7 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
     <application
-        android:label="rostrik_mvp"
+        android:label="Rostrik"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- android:screenOrientation="portrait" is a hard OS-level lock so
@@ -57,6 +57,7 @@
              landscape overflow. Mirrors the UCropActivity lock below. -->
         <activity
             android:name=".MainActivity"
+            android:screenOrientation="portrait"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -199,8 +200,10 @@
         <!-- url_launcher: lets us resolve a browser for the Privacy Policy /
              Terms of Use https links on Android 11+ (package visibility). -->
         <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" />
+            <action
+                android:name="android.intent.action.VIEW"/>
+            <data
+                android:scheme="https"/>
         </intent>
     </queries>
 </manifest>
