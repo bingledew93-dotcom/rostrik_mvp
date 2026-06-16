@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android signing — NEVER commit real secrets. The keystore and the
+# key.properties holding real passwords must stay local. (A placeholder-only
+# key.properties is force-committed once as a template; its real values live
+# here, untracked.)
+/android/key.properties
+/android/app/*.jks

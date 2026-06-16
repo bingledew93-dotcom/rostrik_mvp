@@ -1,8 +1,22 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Load the release signing credentials from android/key.properties. That file is
+// gitignored — only a placeholder template is committed — so real passwords stay
+// local. If it's absent (e.g. a fresh clone before keys are dropped in), the
+// release signing config below resolves to nulls and the build still runs for
+// debug/profile.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -35,11 +49,19 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = (keystoreProperties["storeFile"] as String?)?.let { file(it) }
+            storePassword = keystoreProperties["storePassword"] as String?
+        }
+    }
+
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("release") {
+            // Signed with the upload keystore (credentials from key.properties).
+            signingConfig = signingConfigs.getByName("release")
             // Feed R8 the ML Kit -dontwarn rules (the release build minifies with
             // R8; without these the google_mlkit_text_recognition CJK references
             // fail the build). Keeps the default optimized rules too.
