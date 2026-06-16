@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -514,6 +516,74 @@ void main() {
             reason: 'unedited Day defaults to 07:00');
         expect(daySample.endMinutes, 15 * 60,
             reason: 'unedited Day defaults to 15:00');
+      },
+    );
+  });
+
+  group('generate spinner lifecycle (orphaned-state fix)', () {
+    Finder buttonSpinner() => find.descendant(
+          of: find.byKey(const ValueKey('pattern-picker-generate')),
+          matching: find.byType(CircularProgressIndicator),
+        );
+
+    testWidgets(
+      'the Generate button resets once onGenerated completes '
+      '(e.g. backing out of Arm-Engine)',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(800, 2200));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final shiftRepo = FakeShiftRepository();
+        addTearDown(shiftRepo.dispose);
+        final cycleRepo = FakeShiftCycleRepository();
+        addTearDown(cycleRepo.dispose);
+        final generator = ShiftGenerator(shifts: shiftRepo, cycles: cycleRepo);
+
+        // Stands in for the awaited ArmEngineScreen push: stays pending (button
+        // spinning) until completed — completion ≈ the user backing out.
+        final gate = Completer<void>();
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              Provider<ShiftRepository>.value(value: shiftRepo),
+              Provider<ShiftGenerator>.value(value: generator),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: PatternPickerBody(
+                  // Restricting to Day pre-selects day-7-7, so Generate is live.
+                  restrictToType: RosterType.day,
+                  onGenerated: () => gate.future,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Generate → confirm the date picker.
+        await tester.tap(find.byKey(const ValueKey('pattern-picker-generate')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Use this date'));
+        // Fixed pumps, NOT pumpAndSettle: the spinner animates forever while
+        // onGenerated is pending. This drives past the dialog dismiss + the
+        // (fake, fast) generation, up to the awaited onGenerated.
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        // The roster is written and the button is held in its spinning state.
+        expect(await cycleRepo.getAll(), hasLength(1));
+        expect(buttonSpinner(), findsOneWidget);
+
+        // User backs out of ArmEngineScreen → the awaited future completes.
+        gate.complete();
+        await tester.pump(); // run the await continuation + finally setState
+        await tester.pump();
+
+        // The button cleanly resets — no orphaned spinner.
+        expect(buttonSpinner(), findsNothing);
+        expect(find.text('Set Day 1 & Generate'), findsOneWidget);
       },
     );
   });

@@ -49,7 +49,13 @@ class PatternPickerBody extends StatefulWidget {
   /// the user took the preset path OR the Custom Builder path. The
   /// caller owns the after-success behaviour: pop the screen, set the
   /// `onboarding_complete` Hive flag, push MainLayout, etc.
-  final VoidCallback onGenerated;
+  ///
+  /// Returns a `Future` so the body can AWAIT the caller's navigation and
+  /// only then reset its loading state. This matters for the onboarding
+  /// path, where the caller `push`es ArmEngineScreen: if the user backs out
+  /// of that screen (the roster rollback) the future completes and we land
+  /// back here — without the await the generate button would spin forever.
+  final Future<void> Function() onGenerated;
 
   @override
   State<PatternPickerBody> createState() => _PatternPickerBodyState();
@@ -248,19 +254,27 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
       messenger.showSnackBar(
         SnackBar(content: Text('Generated ${shifts.length} shifts')),
       );
-      widget.onGenerated();
+      // AWAIT the caller's navigation. It completes either when the picker is
+      // replaced (success path → pushAndRemoveUntil, this State unmounts) or
+      // when the user backs out of ArmEngineScreen and the route pops back to
+      // us. Either way the `finally` then resets the button.
+      await widget.onGenerated();
     } on RosterGenerationException catch (e) {
       // Validator / time-overlap rejection — surface verbatim. Nothing
       // was written; picker stays open.
       if (!mounted) return;
-      setState(() => _generating = false);
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _generating = false);
       messenger.showSnackBar(
         SnackBar(content: Text('Generation failed: $e')),
       );
+    } finally {
+      // Clear the spinner once generation AND the awaited navigation settle —
+      // fixes the orphaned-spinner trap where backing out of ArmEngineScreen
+      // left this button spinning. The `mounted` guard skips the setState when
+      // the success path already disposed this State (route replaced).
+      if (mounted) setState(() => _generating = false);
     }
   }
 
@@ -273,7 +287,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
       MaterialPageRoute(builder: (_) => const CustomBuilderScreen()),
     );
     if (generated == true && mounted) {
-      widget.onGenerated();
+      await widget.onGenerated();
     }
   }
 

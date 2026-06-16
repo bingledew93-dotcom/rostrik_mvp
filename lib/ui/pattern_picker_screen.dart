@@ -20,7 +20,9 @@ class PatternPickerScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Choose a pattern')),
       body: PatternPickerBody(
-        onGenerated: () => Navigator.of(context).pop(),
+        // async so it satisfies the Future-returning onGenerated; the pop
+        // unmounts this picker, so the body's mounted-guarded reset is a no-op.
+        onGenerated: () async => Navigator.of(context).pop(),
       ),
     );
   }
