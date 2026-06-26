@@ -21,20 +21,21 @@ abstract class AppAlarmRepository {
   Stream<List<AppAlarm>> watch();
 }
 
-/// Deletes [appAlarmId] from [alarms] iff it resolves to an auto-delete
-/// one-time alarm (see [shouldAutoDeleteOnDismiss]). Shared by the in-app
-/// (WakeUpScreen) and foreground (NotificationActionDispatcher) dismiss paths
-/// so the "delete a fired one-time alarm at the dismissal instant" rule lives
-/// in exactly one place; the killed-app background isolate runs the same logic
-/// against a raw Hive box (it has no repository handle). No-op when the payload
-/// carried no rule id, the rule is already gone, or it isn't eligible — all
-/// idempotent, so concurrent dismiss paths can't double-fault.
-Future<void> deleteAlarmIfAutoDelete(
+/// Deletes [appAlarmId] from [alarms] iff it resolves to a one-time alarm that
+/// should be cleaned up after firing (see [shouldDeleteAfterFiring]). The native
+/// [AlarmActivity] dismiss / auto-timeout records every fired alarm's id in the
+/// `pending_alarm_deletes` ledger; the Dart drain replays them through here, so
+/// the "a one-time alarm fires once, then is gone" rule lives in exactly one
+/// place. Returns true iff a rule was actually deleted. No-op (false) when the
+/// id is empty, the rule is already gone, or it's a recurring alarm — all
+/// idempotent, so a re-drained ledger can't double-fault.
+Future<bool> deleteAlarmAfterFiring(
   AppAlarmRepository alarms,
   String appAlarmId,
 ) async {
-  if (appAlarmId.isEmpty) return;
+  if (appAlarmId.isEmpty) return false;
   final alarm = await alarms.getById(appAlarmId);
-  if (!shouldAutoDeleteOnDismiss(alarm)) return;
+  if (!shouldDeleteAfterFiring(alarm)) return false;
   await alarms.delete(appAlarmId);
+  return true;
 }

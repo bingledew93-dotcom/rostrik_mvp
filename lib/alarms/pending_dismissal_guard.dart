@@ -32,13 +32,11 @@ import 'alarm_sync_service.dart' show noShiftPayloadSentinel;
 ///     Replay-then-clear ordering makes a crash between the two re-replay on
 ///     the next boot — idempotent — rather than ever losing a dismissal.
 ///
-/// Why a file and not literal `SharedPreferences`: the Dismiss action's
-/// BroadcastReceiver is flutter_local_notifications' own compiled
-/// `ActionBroadcastReceiver` — no Rostrik Kotlin runs before the engine
-/// spawn without forking the plugin. From the engine's first instruction,
-/// the synchronous file write is the most durable native store available,
-/// and it is the one store both the headless engine AND Kotlin can touch
-/// with zero new dependencies.
+/// Why a file and not literal `SharedPreferences`: the dismiss happens in the
+/// native `AlarmActivity` (Kotlin), which writes this ledger directly with a
+/// synchronous flushed write — the most durable native store available, and the
+/// one store both the native side AND the Dart isolates touch with zero new
+/// dependencies.
 const String pendingDismissalsFileName = 'pending_dismissals';
 
 /// The ledger file inside [appSupportDir] (Android: `context.filesDir`).

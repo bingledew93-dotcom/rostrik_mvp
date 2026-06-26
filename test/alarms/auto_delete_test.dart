@@ -21,65 +21,67 @@ void main() {
         autoDeleteAfterFiring: autoDelete,
       );
 
-  group('shouldAutoDeleteOnDismiss', () {
-    test('true only for an auto-delete one-time alarm', () {
-      expect(shouldAutoDeleteOnDismiss(alarm()), isTrue);
+  group('shouldDeleteAfterFiring', () {
+    test('true for a one-time alarm with the auto-delete flag', () {
+      expect(shouldDeleteAfterFiring(alarm()), isTrue);
     });
-    test('false when the flag is off', () {
-      expect(shouldAutoDeleteOnDismiss(alarm(autoDelete: false)), isFalse);
+    test('true for a one-time alarm even without the flag '
+        '(one-time fires once, so it is always cleaned up)', () {
+      expect(shouldDeleteAfterFiring(alarm(autoDelete: false)), isTrue);
     });
-    test('false for non-one-time repeat types even if flagged', () {
+    test('false for recurring repeat types — never cleaned up after firing, '
+        'even if a stray flag is set', () {
       expect(
-        shouldAutoDeleteOnDismiss(
+        shouldDeleteAfterFiring(
           alarm(repeatType: AppAlarmRepeatType.weekly),
         ),
         isFalse,
       );
       expect(
-        shouldAutoDeleteOnDismiss(
+        shouldDeleteAfterFiring(
           alarm(repeatType: AppAlarmRepeatType.followsRotation),
         ),
         isFalse,
       );
     });
     test('false for null', () {
-      expect(shouldAutoDeleteOnDismiss(null), isFalse);
+      expect(shouldDeleteAfterFiring(null), isFalse);
     });
   });
 
-  group('deleteAlarmIfAutoDelete', () {
+  group('deleteAlarmAfterFiring', () {
     late FakeAppAlarmRepository repo;
     setUp(() => repo = FakeAppAlarmRepository());
     tearDown(() => repo.dispose());
 
-    test('deletes an eligible one-time auto-delete alarm by id', () async {
+    test('deletes a fired one-time alarm by id (returns true)', () async {
       await repo.upsert(alarm(id: 'gone'));
-      await deleteAlarmIfAutoDelete(repo, 'gone');
+      expect(await deleteAlarmAfterFiring(repo, 'gone'), isTrue);
       expect(await repo.getById('gone'), isNull);
     });
 
-    test('leaves a non-auto-delete alarm in place', () async {
-      await repo.upsert(alarm(id: 'stay', autoDelete: false));
-      await deleteAlarmIfAutoDelete(repo, 'stay');
-      expect(await repo.getById('stay'), isNotNull);
+    test('deletes a one-time alarm even without the auto-delete flag', () async {
+      await repo.upsert(alarm(id: 'gone2', autoDelete: false));
+      expect(await deleteAlarmAfterFiring(repo, 'gone2'), isTrue);
+      expect(await repo.getById('gone2'), isNull);
     });
 
-    test('leaves a follows-rotation alarm in place', () async {
+    test('leaves a follows-rotation alarm in place (returns false)', () async {
       await repo.upsert(
         alarm(id: 'fr', repeatType: AppAlarmRepeatType.followsRotation),
       );
-      await deleteAlarmIfAutoDelete(repo, 'fr');
+      expect(await deleteAlarmAfterFiring(repo, 'fr'), isFalse);
       expect(await repo.getById('fr'), isNotNull);
     });
 
-    test('empty id is a no-op', () async {
+    test('empty id is a no-op (returns false)', () async {
       await repo.upsert(alarm(id: 'x'));
-      await deleteAlarmIfAutoDelete(repo, '');
+      expect(await deleteAlarmAfterFiring(repo, ''), isFalse);
       expect(await repo.getById('x'), isNotNull);
     });
 
-    test('unknown id is a no-op (idempotent across dismiss paths)', () async {
-      await deleteAlarmIfAutoDelete(repo, 'never-existed');
+    test('unknown id is a no-op (idempotent across drains)', () async {
+      expect(await deleteAlarmAfterFiring(repo, 'never-existed'), isFalse);
       expect(await repo.getAll(), isEmpty);
     });
   });

@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Required for AlarmManager.setAlarmClock-quality scheduling on Android 12+.
-         Without this, flutter_local_notifications silently downgrades to inexact. -->
+    <!-- AlarmManager.setAlarmClock-quality (exact, Doze-exempt) scheduling on
+         Android 12+. setAlarmClock is itself permission-exempt, but declaring
+         this keeps the capability explicit and the lock-screen next-alarm icon. -->
     <uses-permission
         android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- Lets the alarm fire as a full-screen intent that wakes the lockscreen. -->
@@ -9,9 +10,9 @@
     <!-- Android 13+ runtime permission for displaying notifications at all. -->
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Needed by both BootReceivers (the plugin's AND Rostrik's own) to
-         re-arm pending alarms after reboot. Without it, every scheduled
-         alarm is silently dropped on power-cycle.
+    <!-- Needed by Rostrik's BootReceiver to re-arm pending alarms after a
+         reboot. Without it, every scheduled alarm is silently dropped on
+         power-cycle.
          RECEIVE_BOOT_COMPLETED is sufficient for ACTION_BOOT_COMPLETED
          and ACTION_LOCKED_BOOT_COMPLETED on all supported Android
          versions — there is no separate "locked boot" permission. -->
@@ -79,37 +80,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- Re-schedules pending alarms after a device reboot. The plugin's
-             merged manifest already declares this, but we list it explicitly
-             so the manifest is self-documenting and survives plugin upgrades
-             that might change the merge behavior.
-
-             Note: this receiver restores from FLN's OWN internal store. It
-             is NOT authoritative for Rostrik's alarm state — that role
-             belongs to BootReceiver below, which re-derives the alarm set
-             from Hive via AlarmSyncService. Both receivers run on boot;
-             AlarmSyncService's reconcile is idempotent so any overlap
-             between FLN's restore and our re-derive converges cleanly. -->
-        <receiver
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action
-                    android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action
-                    android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-                <action
-                    android:name="android.intent.action.QUICKBOOT_POWERON"/>
-                <action
-                    android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
-            </intent-filter>
-        </receiver>
-        <!-- Rostrik's own boot-recovery receiver, INTENTIONALLY independent
-             of the FLN one above. Enqueues AlarmSyncWorker, which spins up
-             a headless Flutter engine and runs syncAlarms() against the
-             Hive source of truth — so a Hive-vs-FLN-state divergence
-             (manual app data clear, OEM deep-sleep purge, partial-write
-             from a previous crash) is reconciled automatically.
+        <!-- Rostrik's boot-recovery receiver. Enqueues AlarmSyncWorker, which
+             spins up a headless Flutter engine and runs syncAlarms() against the
+             Hive source of truth — so any divergence between Hive and the OS
+             alarm set (manual app data clear, OEM deep-sleep purge, partial-
+             write from a previous crash) is reconciled automatically.
 
              android:exported="true" because BOOT_COMPLETED is a system
              broadcast and Android requires the receiver to be exported to
@@ -147,20 +122,17 @@
                     android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
-        <!-- Receiver the OS dispatches to when a scheduled alarm fires. -->
+        <!-- Receiver AlarmManager dispatches to when an exact alarm fires. The
+             Dart scheduler builds an EXPLICIT PendingIntent targeting this
+             component (action ALARM_FIRE), so it needs NO intent-filter and
+             MUST stay exported="false" — the system still delivers an explicit
+             PendingIntent to a private receiver, while keeping it private blocks
+             any other app from spoofing a fire. This is the entry point of the
+             custom native alarm path that replaces flutter_local_notifications:
+             onReceive takes a WakeLock, starts AlarmAudioService, and posts the
+             full-screen-intent notification that launches AlarmActivity. -->
         <receiver
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
-            android:exported="false"/>
-        <!-- Receiver the OS dispatches to when the user taps a notification
-             ACTION BUTTON (Snooze / Dismiss). Required because our actions
-             use showsUserInterface:false — Android delivers the tap as a
-             silent broadcast Intent rather than as an Activity launch. If
-             this receiver is not registered, the broadcast is dropped on
-             the floor and our onDidReceiveBackgroundNotificationResponse
-             callback never fires. Without it, action button taps look
-             completely dead from the Flutter side. -->
-        <receiver
-            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:name=".AlarmReceiver"
             android:exported="false"/>
         <!-- Foreground service that owns FIRING-ALARM custom audio. type
              mediaPlayback raises the process to foreground oom-priority so a
@@ -171,6 +143,25 @@
             android:name=".AlarmAudioService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback"/>
+        <!-- Native (NON-Flutter) full-screen alarm screen, launched by
+             AlarmReceiver's full-screen-intent notification. Its OWN task
+             (taskAffinity="") + excludeFromRecents so a dismiss can
+             finishAndRemoveTask with no zombie alarm screen lingering over the
+             keyguard. showWhenLocked / turnScreenOn render it over the lock
+             screen and wake the display (matching runtime flags in onCreate for
+             older API paths). Not exported — only our own FSI PendingIntent
+             starts it. Framework theme because it extends android.app.Activity,
+             not a Flutter/AppCompat Activity. -->
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:screenOrientation="portrait"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"/>
         <!-- image_cropper (uCrop) crop UI, used by the Phase-6 OCR roster
              scanner's tight-crop step. Without this declaration uCrop throws
              ActivityNotFoundException at runtime. uCrop requires an AppCompat

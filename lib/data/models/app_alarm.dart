@@ -171,14 +171,16 @@ class AppAlarm {
   @HiveField(10, defaultValue: 0)
   final int weekdaysBitmask;
 
-  /// When true, the alarm record is permanently deleted from Hive the instant
-  /// the user dismisses it — instead of lingering as a fired, stale config.
-  /// Only meaningful for (and only ever set on) [AppAlarmRepeatType.oneTime]
-  /// alarms; the create/edit sheet exposes the toggle for one-time only. The
-  /// dismiss handlers (in-app wake screen, foreground dispatcher, killed-app
-  /// background isolate) consult [shouldAutoDeleteOnDismiss] and delete via the
-  /// `appAlarmId` carried in the notification payload. Legacy records (no field
-  /// 11) read back `false`.
+  /// Legacy opt-in (one-time only) to delete the record from Hive after it
+  /// fires. NOTE: one-time alarms are now ALWAYS removed after firing (see
+  /// [shouldDeleteAfterFiring]) — a fired one-time left in Hive re-projects
+  /// daily — so this flag is effectively subsumed and the create/edit toggle is
+  /// redundant; it's retained for the persisted schema (HiveField 11) and as an
+  /// explicit opt-in should a non-one-time alarm type ever want post-fire
+  /// cleanup. The native [AlarmActivity] dismiss / auto-timeout records the fired
+  /// `appAlarmId` in the `pending_alarm_deletes` ledger, which the Dart drain
+  /// replays through [deleteAlarmAfterFiring]. Legacy records (no field 11) read
+  /// back `false`.
   @HiveField(11, defaultValue: false)
   final bool autoDeleteAfterFiring;
 
@@ -365,14 +367,18 @@ class AppAlarm {
       'isExactTime: $isExactTime, exactTimeMinutes: $exactTimeMinutes)';
 }
 
-/// Whether the alarm [a] should be permanently deleted from Hive the instant it
-/// is dismissed, rather than left as a fired, stale config. Pure so the three
-/// dismiss sites (in-app wake screen, foreground dispatcher, killed-app
-/// background isolate) share one decision and one unit-test target. `null`
-/// (record already gone, or no `appAlarmId` in the payload) → never delete.
-/// Only one-time alarms with the flag qualify — `autoDeleteAfterFiring` is only
-/// ever set on one-time alarms, but the explicit type guard is belt-and-braces.
-bool shouldAutoDeleteOnDismiss(AppAlarm? a) =>
-    a != null &&
-    a.autoDeleteAfterFiring &&
-    a.repeatType == AppAlarmRepeatType.oneTime;
+/// Whether the alarm [a] should be permanently removed from Hive once it has
+/// fired and been dismissed (or auto-timed-out), rather than left to re-project.
+///
+/// EVERY one-time alarm qualifies: a one-time alarm fires exactly once, so if it
+/// lingers the engine's daily next-occurrence projection re-arms it the
+/// following day — a one-shot alarm silently becoming a daily cycle (the bug
+/// this guards). Gating on `repeatType == oneTime` (rather than the
+/// [AppAlarm.autoDeleteAfterFiring] opt-in) both covers every flagged alarm —
+/// the flag is only ever set on one-time alarms, so one-time subsumes it — AND
+/// protects recurring alarms: a weekly/follows-rotation rule is never cleaned up
+/// after firing even if some bug set the flag on it. `null` (record already
+/// gone, or no `appAlarmId` in the payload) → never delete. Pure so the dismiss
+/// path and its unit tests share one decision.
+bool shouldDeleteAfterFiring(AppAlarm? a) =>
+    a != null && a.repeatType == AppAlarmRepeatType.oneTime;

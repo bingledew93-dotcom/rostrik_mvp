@@ -9,9 +9,8 @@ import 'dart:ui' as ui;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:rostrik_mvp/alarms/alarm_sync_service.dart';
-import 'package:rostrik_mvp/alarms/background_sync_entrypoint.dart';
-import 'package:rostrik_mvp/alarms/notification_action_dispatcher.dart'
-    show alarmActionPortName;
+import 'package:rostrik_mvp/alarms/main_isolate_liveness.dart'
+    show alarmActionPortName, mainIsolateIsAlive;
 import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';

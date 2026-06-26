@@ -16,6 +16,7 @@ import 'alarm_payload.dart';
 import 'alarm_projection.dart';
 import 'alarm_scheduler.dart';
 import 'notification_id_map.dart';
+import 'one_off_snooze_store.dart';
 
 /// Payload sentinel for alarms with no linked shift (one-time alarms,
 /// future custom-repeat / bundle alarms). Replaces the shiftId field
@@ -250,6 +251,12 @@ class AlarmSyncService {
       now: now,
       horizon: _horizon,
       isSchedulePaused: _isPaused(),
+      // Shift-less ('NONE') alarms snoozed natively are pinned to their snooze
+      // instant here, so the orphan-cancel pass keeps (not cancels) the re-armed
+      // alarm within its window — the one-off counterpart to Shift.snoozedUntil.
+      // The native snooze drain (main()/resume/bg) sets this map BEFORE any
+      // reconcile reads it.
+      oneOffSnoozes: readOneOffSnoozes(now: now),
     );
 
     // Trim to the alarm cap (dense-roster guard; rings are sorted earliest
@@ -340,7 +347,7 @@ class AlarmSyncService {
         id: id,
         fireAt: desiredFireAt,
         title: _titleFor(entry.value.alarm),
-        body: _bodyFor(entry.value.alarm, entry.value.fireAt),
+        body: _bodyFor(entry.value.alarm),
         soundKey: entry.value.alarm.soundKey,
         // Canonical 4-field payload — see [AlarmPayload]. Carries the shift id
         // (or 'NONE' sentinel), the OS notification id, the dismiss code
@@ -426,18 +433,20 @@ class AlarmSyncService {
 
   String _titleFor(AppAlarm a) => a.label.isEmpty ? 'Alarm' : a.label;
 
-  String _bodyFor(AppAlarm a, DateTime fireAt) {
-    final hh = fireAt.hour.toString().padLeft(2, '0');
-    final mm = fireAt.minute.toString().padLeft(2, '0');
+  /// The short shift CONTEXT line for the alarm notification — deliberately
+  /// time-free. The native scheduler supplies the formatted ring time
+  /// separately (12-hour, e.g. "03:00 AM") and composes the two
+  /// ([AlarmReceiver.notificationDetail] on the native side), so embedding a
+  /// clock value here would only duplicate it. Empty for a plain (non-rotation)
+  /// alarm, whose time alone already says everything.
+  String _bodyFor(AppAlarm a) {
     final type = a.linkedShiftType;
     if (a.repeatType == AppAlarmRepeatType.followsRotation && type != null) {
-      // The fireAt already encodes the timing mode (lead-time offset OR the
-      // exact clock time), so we just surface when it rings relative to the
-      // shift. "Before" reads correctly for both: an exact time the user picks
-      // is, in practice, ahead of the shift start.
-      return 'Before your ${_typeLabel(type)} shift · $hh:$mm';
+      // "Before" reads correctly for both timing modes: an exact time the user
+      // picks is, in practice, ahead of the shift start, as is a lead-time ring.
+      return 'Before your ${_typeLabel(type)} shift';
     }
-    return 'Rings at $hh:$mm';
+    return '';
   }
 
   static String _typeLabel(ShiftType t) {

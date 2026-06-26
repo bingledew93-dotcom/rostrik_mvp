@@ -33,11 +33,9 @@ import 'timeline/timeline_screen.dart';
 /// which respects the app's `ThemeData` (dark M3 enabled in `RostrikApp`)
 /// for surface, ripple, and selected-state styling.
 ///
-/// Alarm routing: this widget is `pushAndRemoveUntil`'d as the only
-/// route below WakeUpScreen when an alarm fires (see `_routeToWakeUp`
-/// in main.dart). After WakeUpScreen dismisses it `pushReplacement`s
-/// back to a fresh `MainLayout`, so the post-alarm landing is on the
-/// chassis (Dashboard tab — see `_currentIndex` below).
+/// A firing alarm is no longer a Flutter route: the native AlarmActivity draws
+/// over this layout (in its own task) and tears itself down on dismiss, so
+/// MainLayout neither pushes nor reacts to any wake screen.
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 

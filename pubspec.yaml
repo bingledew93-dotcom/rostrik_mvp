@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.11.4
@@ -40,16 +40,11 @@ dependencies:
   hive_ce_flutter: ^2.0.0
   uuid: ^4.0.0
 
-  # Alarm engine. flutter_local_notifications drives delivery via
-  # AndroidScheduleMode.alarmClock (AlarmManager.setAlarmClock under the hood),
-  # which bypasses Doze and battery optimization on modern Android without
-  # requiring USE_EXACT_ALARM. timezone is required by zonedSchedule for DST.
-  # permission_handler covers POST_NOTIFICATIONS (Android 13+) + iOS auth.
-  flutter_local_notifications: ^21.0.0
-  timezone: ^0.11.0
-  # Resolves the device's IANA tz id at runtime so zonedSchedule pins to a
-  # real location (DST-correct) instead of guessing.
-  flutter_timezone: ^5.0.2
+  # Alarm engine. Delivery is a fully native Android layer (AlarmManager.
+  # setAlarmClock → AlarmReceiver → AlarmAudioService + native AlarmActivity),
+  # so there's no notification plugin or timezone DB dependency.
+  # permission_handler covers POST_NOTIFICATIONS (Android 13+), the exact-alarm
+  # capability, and SYSTEM_ALERT_WINDOW (overlay).
   permission_handler: ^12.0.1
 
   # State management bridge — exposes repository streams to the widget

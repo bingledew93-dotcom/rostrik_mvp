@@ -1,10 +1,3 @@
-// Namespaced because `hive_ce_flutter` transitively pulls in an
-// instance-based `IsolateNameServer` that shadows `dart:ui`'s static one.
-// Without the `as ui` qualifier the lookup in [mainIsolateIsAlive] fails to
-// resolve to the platform name server. (Same workaround as
-// notification_response_handler.dart / notification_action_dispatcher.dart.)
-import 'dart:ui' as ui;
-
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
@@ -12,8 +5,10 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 import '../data/storage/local_storage.dart';
 import '../util/clock.dart';
 import 'alarm_sync_service.dart';
-import 'local_notifications_alarm_scheduler.dart';
-import 'notification_action_dispatcher.dart' show alarmActionPortName;
+import 'main_isolate_liveness.dart';
+import 'native_alarm_scheduler.dart';
+import 'pending_alarm_delete_guard.dart';
+import 'pending_snooze_guard.dart';
 
 /// Bridge between the native background-task runners and the Dart-side
 /// [AlarmSyncService]. Runs in a SEPARATE Dart isolate from the main UI
@@ -97,11 +92,12 @@ void syncAlarmsBackgroundEntrypoint() {
 ///      that `AlarmSyncService` hydrates from on cold start. Without
 ///      this, the service's hydrate defensively no-ops and we re-issue
 ///      `scheduleAt` for every desired id (correct but wasteful).
-///   3. `LocalNotificationsAlarmScheduler.init()` — timezone DB,
-///      `flutter_local_notifications` plugin, notification channel
-///      registration. Idempotent against the main-isolate init —
-///      both ultimately talk to the same on-device AlarmManager
-///      state, but their Dart-side plugin objects are independent.
+///   3. `NativeAlarmScheduler.init()` — primes the persisted alarm ledger
+///      from the `settings` box. No plugin, no timezone DB; it talks to the
+///      same native AlarmManager bridge the main isolate uses, registered in
+///      THIS headless engine by `AlarmSyncWorker` (see its
+///      `NativeAlarmScheduling.register` call). Idempotent against the
+///      main-isolate init — both reconcile the same on-device alarm state.
 ///   4. Construct the service with a real `SystemClock` and run
 ///      exactly one `syncAlarms()`.
 ///
@@ -142,7 +138,7 @@ Future<void> _runSync() async {
   // tests, bad in production. Awaiting it surfaces any failure.
   await Hive.openBox('settings');
 
-  final scheduler = await LocalNotificationsAlarmScheduler.init();
+  final scheduler = await NativeAlarmScheduler.init();
 
   final service = AlarmSyncService(
     alarms: storage.alarms,
@@ -163,19 +159,24 @@ Future<void> _runSync() async {
   // box failed to open above.
   service.hydrate();
 
+  // NATIVE SNOOZE FAIL-SAFE — replay any AlarmActivity snoozes into Hive (set
+  // `snoozedUntil`) BEFORE the reconcile. We only reach here when the main
+  // isolate is dead (the guard above bailed otherwise), so a snooze taken while
+  // the app was killed would, without this, hit a shift whose normal fire time
+  // is past → no future ring → the reconcile cancels the just-re-armed alarm as
+  // a ledger orphan. Setting `snoozedUntil` first makes the projection resurrect
+  // the ring, so the reconcile keeps exactly one alarm. File-based (not the
+  // alarm-routing channel, which this headless engine doesn't have).
+  await drainPendingSnoozesIntoHive(storage.shifts);
+
+  // FIRED ONE-TIME CLEANUP — same rationale as the snooze drain above, for the
+  // killed-app path: a one-time alarm that fired and auto-timed-out (or was
+  // dismissed) while the app was dead recorded its `appAlarmId` in the
+  // `pending_alarm_deletes` ledger. Delete the spent one-time rule BEFORE the
+  // reconcile so this background re-sync doesn't re-arm it for tomorrow. File-
+  // based, so it works in this headless engine (no alarm-routing channel).
+  await drainPendingAlarmDeletesIntoHive(storage.alarms);
+
   await service.syncAlarms();
 }
 
-/// True when the main UI isolate is alive in THIS process, detected via the
-/// port [NotificationActionDispatcher] registers under [alarmActionPortName]
-/// in `main()`. That port exists whenever the app process is alive
-/// (foreground OR background-suspended) and disappears once the process is
-/// killed. Mirrors the liveness probe the background notification handler
-/// uses ([notificationBackgroundHandler]).
-///
-/// Public + [visibleForTesting] (rather than private) so the bail decision
-/// in [_runSync] can be unit-tested by registering / removing the port,
-/// without standing up a real headless engine.
-@visibleForTesting
-bool mainIsolateIsAlive() =>
-    ui.IsolateNameServer.lookupPortByName(alarmActionPortName) != null;

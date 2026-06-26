@@ -23,11 +23,10 @@ import 'app_preferences.dart';
 /// Deliberately does NOT expose AlarmEngine: the UI must remain ignorant
 /// of alarm logic. Engine lifecycle stays owned by main().
 ///
-/// [AlarmScheduler] IS exposed, but only so the WakeUpScreen can cancel
-/// the OS notification it was launched from, and `CycleService` can
-/// cancel orphans on cascade-delete. This is a controlled leak: the UI
-/// is reaching back to the OS layer it was launched by, not into the
-/// engine's reconciliation state.
+/// [AlarmScheduler] IS exposed, but only so `CycleService` can cancel orphan
+/// alarms on cascade-delete and the timeline's "kill snooze" affordance can
+/// cancel a single OS alarm. This is a controlled leak: the UI reaches back to
+/// the OS scheduling layer, not into the engine's reconciliation state.
 class AppProviders extends StatelessWidget {
   const AppProviders({
     super.key,

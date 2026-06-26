@@ -2,7 +2,8 @@ import 'package:hive_ce/hive.dart';
 
 /// Stable mapping from an occurrence key (String) to a notification id (int).
 ///
-/// `flutter_local_notifications` requires int IDs. The alarm-centric engine
+/// The native AlarmManager bridge keys each scheduled alarm by an int id (the
+/// PendingIntent requestCode). The alarm-centric engine
 /// keys occurrences as `'<alarmUuid>@<yyyy-MM-dd>'` (one OS alarm per alarm
 /// rule per fire date); a naive `String.hashCode` mapping risks collisions, so
 /// this allocator hands out monotonically increasing ints and persists the

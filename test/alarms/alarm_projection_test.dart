@@ -203,6 +203,76 @@ void main() {
     });
   });
 
+  group('projectAlarmRings — one-off snooze resurrection', () {
+    List<AlarmRing> projectOneOff(
+      List<AppAlarm> alarms,
+      Map<String, DateTime> oneOff,
+    ) =>
+        projectAlarmRings(
+          alarms: alarms,
+          shifts: const [],
+          globalLeadMinutes: lead,
+          now: now,
+          horizon: horizon,
+          oneOffSnoozes: oneOff,
+        );
+
+    test('a snoozed one-time alarm rings at the snooze, suppressing the normal '
+        'next occurrence', () {
+      // One-time at 06:00 (today still future). Snoozed to 05:10 → the ONLY ring
+      // is the snooze; tomorrow's 06:00 is suppressed while snoozed.
+      final a = oneTime(6 * 60, id: 'o1');
+      final rings = projectOneOff(
+        [a],
+        {'o1': DateTime(2026, 6, 15, 5, 10)},
+      );
+      expect(rings.single.fireAt, DateTime(2026, 6, 15, 5, 10));
+    });
+
+    test('a one-time alarm with no snooze (or an elapsed one) rings normally',
+        () {
+      final a = oneTime(6 * 60, id: 'o2');
+      // No snooze.
+      expect(projectOneOff([a], const {}).single.fireAt,
+          DateTime(2026, 6, 15, 6, 0));
+      // Elapsed snooze (before now) is ignored → normal occurrence.
+      expect(
+        projectOneOff([a], {'o2': DateTime(2026, 6, 15, 4, 0)}).single.fireAt,
+        DateTime(2026, 6, 15, 6, 0),
+      );
+    });
+
+    test('a snoozed weekly alarm ADDS the snooze ring and keeps future weekdays',
+        () {
+      // Weekly Mon+Tue at 06:00 (mask: Mon bit0, Tue bit1 = 0b11 = 3). now is
+      // Mon 05:00. Snoozed to 05:20.
+      final a = weekly(3, 6 * 60, id: 'w1');
+      final rings = projectOneOff([a], {'w1': DateTime(2026, 6, 15, 5, 20)});
+      final times = rings.map((r) => r.fireAt).toList();
+      // The snooze ring is present...
+      expect(times, contains(DateTime(2026, 6, 15, 5, 20)));
+      // ...AND this Monday's normal 06:00 (still future) and Tuesday's 06:00.
+      expect(times, contains(DateTime(2026, 6, 15, 6, 0)));
+      expect(times, contains(DateTime(2026, 6, 16, 6, 0)));
+    });
+
+    test('one-off snooze does not affect a shift-linked rotation alarm', () {
+      // A rotation alarm keyed under the SAME id in the map is unaffected — only
+      // one-time/weekly read oneOffSnoozes.
+      final r = rotation(id: 'rot');
+      final s = shift(id: 's1', date: DateTime(2026, 6, 16));
+      final rings = projectAlarmRings(
+        alarms: [r],
+        shifts: [s],
+        globalLeadMinutes: lead,
+        now: now,
+        horizon: horizon,
+        oneOffSnoozes: {'rot': DateTime(2026, 6, 15, 5, 30)},
+      );
+      expect(rings.single.fireAt, DateTime(2026, 6, 16, 6, 0)); // normal
+    });
+  });
+
   group('nextAlarmRing / nextRotationRing', () {
     AlarmRing? nextAny(List<AppAlarm> alarms, List<Shift> shifts) =>
         nextAlarmRing(

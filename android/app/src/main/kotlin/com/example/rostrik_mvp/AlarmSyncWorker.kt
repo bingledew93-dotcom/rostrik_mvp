@@ -133,13 +133,24 @@ class AlarmSyncWorker(
 
             engine.dartExecutor.executeDartEntrypoint(entrypoint)
 
-            // GeneratedPluginRegistrant is the auto-generated file in
-            // io.flutter.plugins. It registers every plugin in the
-            // app — including flutter_local_notifications, which the
-            // Dart entrypoint needs to talk to AlarmManager. Without
-            // this call, the entrypoint's plugin method calls return
+            // GeneratedPluginRegistrant registers every Flutter plugin the app
+            // uses (path_provider, shared_preferences, …) into this headless
+            // engine. Without it the entrypoint's plugin calls return
             // MissingPluginException.
             GeneratedPluginRegistrant.registerWith(engine)
+
+            // Wire the SAME native exact-alarm handler MainActivity uses, so the
+            // background sync's NativeAlarmScheduler.scheduleAt / .cancel land on
+            // a live handler in THIS engine. This is the flutter_local_
+            // notifications replacement: FLN self-registered via the plugin
+            // registrant above, but our hand-written AlarmManager bridge has to
+            // be registered explicitly in each engine — without this the boot
+            // re-sync would MissingPluginException on the first scheduleAt and
+            // alarms would never re-arm after a reboot.
+            NativeAlarmScheduling.register(
+                engine.dartExecutor.binaryMessenger,
+                applicationContext,
+            )
 
             val channel = MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
             val syncCompleted = CompletableDeferred<Boolean>()

@@ -381,24 +381,24 @@ void main() {
     });
   });
 
-  group('auto-delete (one-time)', () {
-    testWidgets('the toggle is one-time only', (tester) async {
+  group('one-time repeat', () {
+    testWidgets('shows no auto-delete toggle — one-time self-deletes by design',
+        (tester) async {
       await pumpSheet(tester);
-      // Hidden under follows-rotation and weekly.
+      // Absent under follows-rotation / weekly...
       expect(find.byKey(const ValueKey('create-alarm-autodelete')), findsNothing);
       await tester.tap(find.text('One time'));
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('create-alarm-autodelete')),
-        findsOneWidget,
-      );
+      // ...and absent under one-time too: the placebo toggle was removed once
+      // every one-time alarm began auto-deleting after firing.
+      expect(find.byKey(const ValueKey('create-alarm-autodelete')), findsNothing);
+      expect(find.text('Auto-delete after firing'), findsNothing);
     });
 
-    testWidgets('enabling it persists autoDeleteAfterFiring', (tester) async {
+    testWidgets('a one-time alarm saves with autoDeleteAfterFiring at its '
+        'default (false)', (tester) async {
       final repo = await pumpSheet(tester);
       await tester.tap(find.text('One time'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('create-alarm-autodelete')));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const ValueKey('create-alarm-save')));
       await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
@@ -406,7 +406,10 @@ void main() {
 
       final stored = (await repo.getAll()).single;
       expect(stored.repeatType, AppAlarmRepeatType.oneTime);
-      expect(stored.autoDeleteAfterFiring, isTrue);
+      // The field is retained in the schema but no longer a user choice; it
+      // stays false. Deletion-after-firing is driven by `shouldDeleteAfterFiring`
+      // (repeatType == oneTime), not this flag.
+      expect(stored.autoDeleteAfterFiring, isFalse);
     });
   });
 

@@ -115,8 +115,6 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   // Selected ISO weekdays (1..7) for a weekly alarm. Empty until the user picks
   // days; a weekly alarm can't be saved while empty.
   final Set<int> _weekdays = <int>{};
-  // One-time only: delete the record permanently the instant it's dismissed.
-  bool _autoDeleteAfterFiring = false;
   bool _saving = false;
   // True while the native preview MediaPlayer is looping the current ringtone
   // (the Phase-2a "Play Now" test harness). Toggled by the row's Play/Stop
@@ -156,7 +154,6 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _isCriticalShift = initial.isCriticalShift;
       _soundKey = initial.soundKey;
       _weekdays.addAll(weekdaysFromMask(initial.weekdaysBitmask));
-      _autoDeleteAfterFiring = initial.autoDeleteAfterFiring;
       _customRingtoneUri = initial.customRingtoneUri;
       _customRingtoneName = initial.customRingtoneName;
       _ringtoneSource = initial.ringtoneSource;
@@ -392,7 +389,6 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     final isFollowsRotation =
         _repeatType == AppAlarmRepeatType.followsRotation;
     final isWeekly = _repeatType == AppAlarmRepeatType.weekly;
-    final isOneTime = _repeatType == AppAlarmRepeatType.oneTime;
     final alarm = AppAlarm(
       // Edit Mode reuses the existing id so the repository updates the record
       // in place (one card, one reconcile) instead of minting a duplicate.
@@ -423,8 +419,10 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       // Weekday mask only carries meaning for weekly alarms; force 0 otherwise
       // so flipping repeat type can't leave a stale day set behind.
       weekdaysBitmask: isWeekly ? weekdayMaskFromSet(_weekdays) : 0,
-      // Auto-delete is a one-time-only affordance.
-      autoDeleteAfterFiring: isOneTime && _autoDeleteAfterFiring,
+      // `autoDeleteAfterFiring` is intentionally left at its default (false):
+      // one-time alarms now self-delete after firing BY DESIGN (see
+      // `shouldDeleteAfterFiring`), so the field is no longer a user choice and
+      // there's no UI for it.
       // Per-alarm custom ringtone draft → persisted on the alarm itself.
       customRingtoneUri: _customRingtoneUri,
       customRingtoneName: _customRingtoneName,
@@ -465,7 +463,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   ///   * followsRotation → timing-mode toggle (Lead Time vs Exact Time) + the
   ///     mode's control + linked-shift picker;
   ///   * weekly → the Mon–Sun multi-select day chips;
-  ///   * oneTime → the "auto-delete after firing" toggle.
+  ///   * oneTime → nothing (no per-alarm options; it self-deletes after firing).
   Widget _buildRepeatReveal(ThemeData theme, bool use24Hour) {
     switch (_repeatType) {
       case AppAlarmRepeatType.followsRotation:
@@ -579,18 +577,11 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
           ),
         );
       case AppAlarmRepeatType.oneTime:
-        return Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: SwitchListTile(
-            key: const ValueKey('create-alarm-autodelete'),
-            contentPadding: EdgeInsets.zero,
-            value: _autoDeleteAfterFiring,
-            onChanged: (v) => setState(() => _autoDeleteAfterFiring = v),
-            title: const Text('Auto-delete after firing'),
-            subtitle:
-                const Text('Remove this alarm once it rings and is dismissed'),
-          ),
-        );
+        // No reveal: a one-time alarm has no per-alarm options. It self-deletes
+        // after firing by design (see `shouldDeleteAfterFiring`), so there's no
+        // "auto-delete" switch to show — a placebo toggle for behaviour the user
+        // can't change.
+        return const SizedBox.shrink();
     }
   }
 

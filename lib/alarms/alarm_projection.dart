@@ -35,7 +35,10 @@ class AlarmRing {
 ///   * **Per-shift suppression** — muted, acknowledged, alarm-skipped, **paused**
 ///     (sick/leave/holiday) and **archived** shifts are all dropped.
 ///   * **Snooze resurrection** — a fired-then-snoozed occurrence rings again at
-///     `snoozedUntil`; future siblings keep their normal time.
+///     its snooze instant; future siblings keep their normal time. Shift-linked
+///     alarms read `Shift.snoozedUntil`; shift-less (one-time / weekly) alarms
+///     read [oneOffSnoozes] (AppAlarm id → snooze instant), since they have no
+///     shift to carry the state.
 ///
 /// Fire times come from the shared [rotationAlarmFireAt] (rotation) and the
 /// one-time / weekly next-occurrence rules, all DST-safe. Pure (no Flutter, no
@@ -51,6 +54,7 @@ List<AlarmRing> projectAlarmRings({
   required DateTime now,
   required Duration horizon,
   bool isSchedulePaused = false,
+  Map<String, DateTime> oneOffSnoozes = const <String, DateTime>{},
 }) {
   if (isSchedulePaused) return const <AlarmRing>[];
   final until = now.add(horizon);
@@ -60,6 +64,15 @@ List<AlarmRing> projectAlarmRings({
     if (!alarm.enabled) continue;
     switch (alarm.repeatType) {
       case AppAlarmRepeatType.oneTime:
+        // Snooze resurrection: while a one-off snooze is active, the imminent
+        // ring IS the snooze — pin to it and skip the normal next occurrence.
+        final oneTimeSnooze = oneOffSnoozes[alarm.id];
+        if (oneTimeSnooze != null && oneTimeSnooze.isAfter(now)) {
+          if (oneTimeSnooze.isBefore(until)) {
+            rings.add(AlarmRing(alarm: alarm, fireAt: oneTimeSnooze));
+          }
+          continue;
+        }
         final fireAt = _nextDailyOccurrence(alarm.minutesOfDay, now);
         if (!fireAt.isBefore(until)) continue;
         rings.add(AlarmRing(alarm: alarm, fireAt: fireAt));
@@ -67,6 +80,16 @@ List<AlarmRing> projectAlarmRings({
       case AppAlarmRepeatType.weekly:
         final mask = alarm.weekdaysBitmask;
         if (mask == 0) continue; // no day selected — nothing to schedule
+        // Snooze resurrection: add the snooze ring for the just-fired occurrence.
+        // The day-loop below only adds FUTURE occurrences, so today's fired one
+        // is already excluded and next week's keeps its normal time — we ADD the
+        // snooze rather than skip, unlike one-time.
+        final weeklySnooze = oneOffSnoozes[alarm.id];
+        if (weeklySnooze != null &&
+            weeklySnooze.isAfter(now) &&
+            weeklySnooze.isBefore(until)) {
+          rings.add(AlarmRing(alarm: alarm, fireAt: weeklySnooze));
+        }
         // DST-safe calendar-day walk; `now`'s own day is included so today's
         // still-future occurrence is caught.
         for (var d = DateTime(now.year, now.month, now.day);
