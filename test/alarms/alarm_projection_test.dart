@@ -17,6 +17,7 @@ void main() {
     bool enabled = true,
     bool exact = false,
     int? exactMin,
+    DateTime? skippedThrough,
   }) =>
       AppAlarm(
         id: id,
@@ -28,23 +29,37 @@ void main() {
         enabled: enabled,
         isExactTime: exact,
         exactTimeMinutes: exactMin,
+        skippedThrough: skippedThrough,
       );
 
-  AppAlarm oneTime(int minutesOfDay, {String id = 'o', bool enabled = true}) =>
+  AppAlarm oneTime(
+    int minutesOfDay, {
+    String id = 'o',
+    bool enabled = true,
+    DateTime? skippedThrough,
+  }) =>
       AppAlarm(
         id: id,
         minutesOfDay: minutesOfDay,
         label: 'Once',
         repeatType: AppAlarmRepeatType.oneTime,
         enabled: enabled,
+        skippedThrough: skippedThrough,
       );
 
-  AppAlarm weekly(int mask, int minutesOfDay, {String id = 'w'}) => AppAlarm(
+  AppAlarm weekly(
+    int mask,
+    int minutesOfDay, {
+    String id = 'w',
+    DateTime? skippedThrough,
+  }) =>
+      AppAlarm(
         id: id,
         minutesOfDay: minutesOfDay,
         label: 'Weekly',
         repeatType: AppAlarmRepeatType.weekly,
         weekdaysBitmask: mask,
+        skippedThrough: skippedThrough,
       );
 
   Shift shift({
@@ -59,6 +74,7 @@ void main() {
     bool isPaused = false,
     bool isArchived = false,
     DateTime? snoozedUntil,
+    List<String> dismissedAlarmIds = const [],
   }) =>
       Shift(
         id: id,
@@ -72,6 +88,7 @@ void main() {
         isPaused: isPaused,
         isArchived: isArchived,
         snoozedUntil: snoozedUntil,
+        dismissedAlarmIds: dismissedAlarmIds,
       );
 
   List<AlarmRing> project(List<AppAlarm> alarms, List<Shift> shifts,
@@ -172,6 +189,115 @@ void main() {
         expect(project([rotation()], [s]), isEmpty,
             reason: 'suppressed shift ${s.id} must not ring');
       }
+    });
+  });
+
+  group('projectAlarmRings — per-ring dismissal (multi-alarm shifts)', () {
+    test('dismissing one alarm suppresses ONLY its ring — the shift\'s other '
+        'alarms keep firing (the blanket-cancel regression)', () {
+      // One Day shift, THREE alarms before it: 60-min lead, 30-min lead, and
+      // an exact 05:00 ring. The user dismissed the exact-time ring; the two
+      // lead rings must survive the projection (and therefore the reconcile).
+      final alarms = [
+        rotation(id: 'lead60'),
+        rotation(id: 'lead30', offset: 30),
+        rotation(id: 'exact5', exact: true, exactMin: 5 * 60),
+      ];
+      final s = shift(
+        id: 's',
+        date: DateTime(2026, 6, 16),
+        dismissedAlarmIds: const ['exact5'],
+      );
+      final rings = project(alarms, [s]);
+      expect(rings.map((r) => r.alarm.id), containsAll(['lead60', 'lead30']));
+      expect(rings.map((r) => r.alarm.id), isNot(contains('exact5')));
+    });
+
+    test('a dismissed ring is not resurrected by a stale future snooze', () {
+      // The shift's snoozedUntil may outlive a dismissal (it can belong to a
+      // sibling). The dismissed ring must stay dead regardless.
+      final s = shift(
+        id: 'snz',
+        date: DateTime(2026, 6, 15),
+        start: 4 * 60, // normalFireAt 03:00 — past
+        end: 12 * 60,
+        snoozedUntil: DateTime(2026, 6, 15, 5, 30), // future
+        dismissedAlarmIds: const ['r'],
+      );
+      expect(project([rotation()], [s]), isEmpty);
+    });
+
+    test('a dismissal for a DIFFERENT alarm rule leaves the ring alone', () {
+      final s = shift(
+        id: 's',
+        date: DateTime(2026, 6, 16),
+        dismissedAlarmIds: const ['someone-else'],
+      );
+      expect(project([rotation()], [s]), hasLength(1));
+    });
+  });
+
+  group('projectAlarmRings — shift-less skip watermark (skippedThrough)', () {
+    test('a weekly occurrence at-or-before the watermark is suppressed; '
+        'later occurrences survive', () {
+      // Mon+Tue at 06:00, now Mon 05:00. Skipping Monday's ring (watermark =
+      // Mon 06:00) must leave Tuesday's — and every later occurrence — armed.
+      final mask = 3; // Mon | Tue
+      final rings = project(
+        [weekly(mask, 6 * 60, skippedThrough: DateTime(2026, 6, 15, 6, 0))],
+        const [],
+      );
+      final times = rings.map((r) => r.fireAt).toList();
+      expect(times, isNot(contains(DateTime(2026, 6, 15, 6, 0))),
+          reason: 'the skipped occurrence itself (== watermark) is dropped');
+      expect(times, contains(DateTime(2026, 6, 16, 6, 0)));
+      expect(times, contains(DateTime(2026, 6, 22, 6, 0)),
+          reason: 'next week\'s same-weekday ring fires after the watermark');
+    });
+
+    test('sequential weekly skips: an advanced watermark keeps earlier '
+        'occurrences suppressed', () {
+      // Skip Mon, then Tue: the watermark advances to Tue 06:00 and must
+      // still cover Mon (monotonic — never un-skips).
+      final rings = project(
+        [weekly(3, 6 * 60, skippedThrough: DateTime(2026, 6, 16, 6, 0))],
+        const [],
+      );
+      final times = rings.map((r) => r.fireAt).toList();
+      expect(times, isNot(contains(DateTime(2026, 6, 15, 6, 0))));
+      expect(times, isNot(contains(DateTime(2026, 6, 16, 6, 0))));
+      expect(times, contains(DateTime(2026, 6, 22, 6, 0)));
+    });
+
+    test('a one-time occurrence at-or-before the watermark is suppressed '
+        '(defensive — the early-skip disables one-times instead)', () {
+      expect(
+        project(
+          [oneTime(6 * 60, skippedThrough: DateTime(2026, 6, 15, 6, 0))],
+          const [],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('an elapsed (past) watermark is inert', () {
+      // Watermark = yesterday: the future-only gate already excludes
+      // everything at-or-before it, so today's ring is untouched.
+      final rings = project(
+        [oneTime(6 * 60, skippedThrough: DateTime(2026, 6, 14, 6, 0))],
+        const [],
+      );
+      expect(rings.single.fireAt, DateTime(2026, 6, 15, 6, 0));
+    });
+
+    test('the watermark NEVER affects follows-rotation rings — their '
+        'dismissals live on the shift row', () {
+      final rings = project(
+        // Watermark far in the future — would swallow everything if consulted.
+        [rotation(skippedThrough: DateTime(2030, 1, 1))],
+        [shift(id: 's', date: DateTime(2026, 6, 16))],
+      );
+      expect(rings, hasLength(1));
     });
   });
 

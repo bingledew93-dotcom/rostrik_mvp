@@ -105,18 +105,20 @@ Future<int> applyPendingSnoozesInHive({
 }) async {
   final clock = now ?? DateTime.now();
 
-  // Collapse to the latest `until` per shift AND per one-off AppAlarm id — a
+  // Collapse to the latest snooze per shift AND per one-off AppAlarm id — a
   // re-snooze appends a new line. A line is shift-based when its shiftId is a
   // real id (not empty / not the 'NONE' sentinel); otherwise it's one-off and
-  // keyed by appAlarmId.
-  final latestShift = <String, DateTime>{};
+  // keyed by appAlarmId. The shift map keeps the whole entry (not just the
+  // instant) so the dismiss-wins check below can match the snoozed RING
+  // against `Shift.dismissedAlarmIds`.
+  final latestShift = <String, PendingSnooze>{};
   final latestOneOff = <String, DateTime>{};
   for (final s in snoozes) {
     final isShift = s.shiftId.isNotEmpty && s.shiftId != noShiftPayloadSentinel;
     if (isShift) {
       final existing = latestShift[s.shiftId];
-      if (existing == null || s.until.isAfter(existing)) {
-        latestShift[s.shiftId] = s.until;
+      if (existing == null || s.until.isAfter(existing.until)) {
+        latestShift[s.shiftId] = s;
       }
     } else if (s.appAlarmId.isNotEmpty) {
       final existing = latestOneOff[s.appAlarmId];
@@ -128,14 +130,24 @@ Future<int> applyPendingSnoozesInHive({
 
   var applied = 0;
 
-  // Shift-based → Shift.snoozedUntil (skips elapsed, already-acknowledged, and
-  // no-op writes so the reconcile isn't kicked for nothing).
+  // Shift-based → Shift.snoozedUntil (skips elapsed, already-dismissed, and
+  // no-op writes so the reconcile isn't kicked for nothing). Dismiss-wins is
+  // PER-RING: the dismissal drain runs first, so a snooze whose own alarm was
+  // since dismissed (its rule id landed in `dismissedAlarmIds`) is stale and
+  // dropped — but a snooze for a SIBLING alarm on the same shift still
+  // applies. Whole-shift `isAcknowledged` (legacy ledger entries) still
+  // blanket-skips.
   for (final entry in latestShift.entries) {
-    if (!entry.value.isAfter(clock)) continue;
+    final snooze = entry.value;
+    if (!snooze.until.isAfter(clock)) continue;
     final shift = await shifts.getById(entry.key);
     if (shift == null || shift.isAcknowledged) continue;
-    if (shift.snoozedUntil == entry.value) continue;
-    await shifts.upsert(shift.copyWith(snoozedUntil: entry.value));
+    if (snooze.appAlarmId.isNotEmpty &&
+        shift.dismissedAlarmIds.contains(snooze.appAlarmId)) {
+      continue;
+    }
+    if (shift.snoozedUntil == snooze.until) continue;
+    await shifts.upsert(shift.copyWith(snoozedUntil: snooze.until));
     applied++;
   }
 

@@ -34,6 +34,15 @@ class AlarmRing {
 ///   * **OFF shifts** → never match a follows-rotation alarm's `linkedShiftType`.
 ///   * **Per-shift suppression** — muted, acknowledged, alarm-skipped, **paused**
 ///     (sick/leave/holiday) and **archived** shifts are all dropped.
+///   * **Per-ring dismissal** — a ring whose alarm rule is in the shift's
+///     [Shift.dismissedAlarmIds] is dropped ALONE; sibling alarms linked to the
+///     same shift keep their rings (dismissing the first of a day's alarms must
+///     never disarm the rest).
+///   * **Shift-less skip watermark** — a one-time/weekly occurrence whose
+///     fireAt is at-or-before its rule's [AppAlarm.skippedThrough] is dropped;
+///     later occurrences (next week's ring) survive. The shift-less
+///     counterpart of the per-ring dismissal above, written by the Dashboard
+///     early-skip. Never consulted for follows-rotation rings.
 ///   * **Snooze resurrection** — a fired-then-snoozed occurrence rings again at
 ///     its snooze instant; future siblings keep their normal time. Shift-linked
 ///     alarms read `Shift.snoozedUntil`; shift-less (one-time / weekly) alarms
@@ -62,19 +71,27 @@ List<AlarmRing> projectAlarmRings({
 
   for (final alarm in alarms) {
     if (!alarm.enabled) continue;
+    // Shift-less skip watermark (Dashboard early-skip): suppress any
+    // one-time/weekly occurrence at-or-before `skippedThrough`. Evaluated
+    // per-ring below; rotation rings never consult it (their dismissals live
+    // on the shift row as `dismissedAlarmIds`).
+    final skippedThrough = alarm.skippedThrough;
+    bool skipped(DateTime fireAt) =>
+        skippedThrough != null && !fireAt.isAfter(skippedThrough);
     switch (alarm.repeatType) {
       case AppAlarmRepeatType.oneTime:
         // Snooze resurrection: while a one-off snooze is active, the imminent
         // ring IS the snooze — pin to it and skip the normal next occurrence.
         final oneTimeSnooze = oneOffSnoozes[alarm.id];
         if (oneTimeSnooze != null && oneTimeSnooze.isAfter(now)) {
-          if (oneTimeSnooze.isBefore(until)) {
+          if (oneTimeSnooze.isBefore(until) && !skipped(oneTimeSnooze)) {
             rings.add(AlarmRing(alarm: alarm, fireAt: oneTimeSnooze));
           }
           continue;
         }
         final fireAt = _nextDailyOccurrence(alarm.minutesOfDay, now);
         if (!fireAt.isBefore(until)) continue;
+        if (skipped(fireAt)) continue;
         rings.add(AlarmRing(alarm: alarm, fireAt: fireAt));
 
       case AppAlarmRepeatType.weekly:
@@ -87,7 +104,8 @@ List<AlarmRing> projectAlarmRings({
         final weeklySnooze = oneOffSnoozes[alarm.id];
         if (weeklySnooze != null &&
             weeklySnooze.isAfter(now) &&
-            weeklySnooze.isBefore(until)) {
+            weeklySnooze.isBefore(until) &&
+            !skipped(weeklySnooze)) {
           rings.add(AlarmRing(alarm: alarm, fireAt: weeklySnooze));
         }
         // DST-safe calendar-day walk; `now`'s own day is included so today's
@@ -105,6 +123,7 @@ List<AlarmRing> projectAlarmRings({
           );
           if (!fireAt.isAfter(now)) continue;
           if (!fireAt.isBefore(until)) continue;
+          if (skipped(fireAt)) continue;
           rings.add(AlarmRing(alarm: alarm, fireAt: fireAt));
         }
 
@@ -119,6 +138,11 @@ List<AlarmRing> projectAlarmRings({
           if (s.isAlarmSkipped) continue;
           if (s.isPaused) continue;
           if (s.isArchived) continue;
+          // PER-OCCURRENCE dismissal: only THIS alarm rule's ring for this
+          // shift was dismissed — its siblings on the same shift must keep
+          // firing. Checked BEFORE the snooze pin so a stale `snoozedUntil`
+          // can never resurrect a ring the user already dismissed.
+          if (s.dismissedAlarmIds.contains(alarm.id)) continue;
 
           final normalFireAt = rotationAlarmFireAt(
             alarm: alarm,

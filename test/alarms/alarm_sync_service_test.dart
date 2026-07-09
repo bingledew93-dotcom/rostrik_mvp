@@ -4,6 +4,7 @@ import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
 import 'package:rostrik_mvp/alarms/alarm_sync_service.dart';
+import 'package:rostrik_mvp/alarms/pending_dismissal_guard.dart';
 
 import 'fakes.dart';
 
@@ -911,6 +912,121 @@ void main() {
       expect(idMap.has('fr@2026-06-03'), isTrue); // future → kept
       expect(idMap.has('legacy-plain-shift-uuid'), isTrue,
           reason: 'unknown key shapes are never purged');
+    });
+  });
+
+  group('per-occurrence dismissal — the blanket-cancel regression', () {
+    // The field bug: a day shift with several alarms; the FIRST alarm fires
+    // and is dismissed (shake or slide), and the reconcile then cancelled
+    // EVERY remaining OS alarm for that shift, because the dismissal was a
+    // whole-shift `isAcknowledged` write. The fix records the dismissal
+    // per-ring (`Shift.dismissedAlarmIds`), so only the fired ring leaves the
+    // desired set. This test drives the REAL replay path
+    // (`ackPendingDismissalsInHive`, exactly what the boot/resume drain runs)
+    // and asserts at the scheduler boundary.
+    test('dismissing the first fired alarm leaves the shift\'s later OS '
+        'alarms scheduled', () async {
+      // Two alarms for the same Day shift: 60-min lead (06:00) + 30-min lead
+      // (06:30) ahead of the 07:00 start.
+      await alarms.upsert(followsRotation(id: 'lead60'));
+      await alarms.upsert(
+          followsRotation(id: 'lead30', relativeOffsetMinutes: 30));
+      await shifts.upsert(
+        mkShift(id: 's1', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+
+      final id60 = await idMap.idFor('lead60@2026-06-01');
+      final id30 = await idMap.idFor('lead30@2026-06-01');
+      expect(scheduler.scheduled.keys, containsAll([id60, id30]));
+
+      // 06:05 — lead60 has fired natively; the user shakes/slides it away.
+      // The native ledger line `s1|lead60` is replayed into Hive.
+      clock.set(DateTime(2026, 6, 1, 6, 5));
+      await ackPendingDismissalsInHive(
+        shifts: shifts,
+        dismissals: const [PendingDismissal('s1', 'lead60')],
+      );
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled.containsKey(id60), isFalse,
+          reason: 'the fired + dismissed ring is torn down');
+      expect(scheduler.scheduled[id30]?.fireAt, DateTime(2026, 6, 1, 6, 30),
+          reason: 'THE regression: the shift\'s later alarm must survive the '
+              'reconcile that follows a dismissal');
+      expect((await shifts.getById('s1'))!.isAcknowledged, isFalse,
+          reason: 'no whole-shift ack may be written for a targeted dismiss');
+    });
+
+    test('a targeted dismissal never disturbs the same alarm\'s ring on '
+        'OTHER shifts', () async {
+      await alarms.upsert(followsRotation(id: 'lead60'));
+      await shifts.upsert(
+        mkShift(id: 's1', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await shifts.upsert(
+        mkShift(id: 's2', date: DateTime(2026, 6, 2), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+      final idTomorrow = await idMap.idFor('lead60@2026-06-02');
+
+      clock.set(DateTime(2026, 6, 1, 6, 5));
+      await ackPendingDismissalsInHive(
+        shifts: shifts,
+        dismissals: const [PendingDismissal('s1', 'lead60')],
+      );
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled[idTomorrow]?.fireAt,
+          DateTime(2026, 6, 2, 6, 0),
+          reason: 'the dismissal is scoped to s1\'s occurrence only');
+    });
+
+    test('a LEGACY whole-shift ledger entry still tears down every ring for '
+        'that shift (documented degradation)', () async {
+      await alarms.upsert(followsRotation(id: 'lead60'));
+      await alarms.upsert(
+          followsRotation(id: 'lead30', relativeOffsetMinutes: 30));
+      await shifts.upsert(
+        mkShift(id: 's1', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await service.syncAlarms();
+      final id30 = await idMap.idFor('lead30@2026-06-01');
+
+      clock.set(DateTime(2026, 6, 1, 6, 5));
+      await ackPendingDismissalsInHive(
+        shifts: shifts,
+        dismissals: const [PendingDismissal('s1', '')], // no alarm identity
+      );
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled.containsKey(id30), isFalse,
+          reason: 'without an alarm identity the conservative whole-shift '
+              'ack applies — an old build\'s ledger entry must still land');
+    });
+
+    test('a weekly skippedThrough watermark cancels ONLY the covered '
+        'occurrence — next week\'s OS alarm stays armed', () async {
+      // Monday-only weekly at 06:00; now is Mon 2026-06-01 05:00, so the
+      // 14-day window holds two occurrences: today and Mon 06-08.
+      final rule = weekly();
+      await alarms.upsert(rule);
+      await service.syncAlarms();
+      final idToday = await idMap.idFor('wk@2026-06-01');
+      final idNextWeek = await idMap.idFor('wk@2026-06-08');
+      expect(scheduler.scheduled.keys, containsAll([idToday, idNextWeek]));
+
+      // The Dashboard early-skip write: watermark = today's fire instant.
+      await alarms.upsert(
+        rule.copyWith(skippedThrough: DateTime(2026, 6, 1, 6, 0)),
+      );
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled.containsKey(idToday), isFalse,
+          reason: 'the skipped occurrence\'s OS alarm is torn down');
+      expect(scheduler.scheduled[idNextWeek]?.fireAt,
+          DateTime(2026, 6, 8, 6, 0),
+          reason: 'occurrences after the watermark are untouched');
     });
   });
 }

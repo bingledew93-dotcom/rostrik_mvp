@@ -513,11 +513,14 @@ class AlarmActivity : Activity(), SensorEventListener {
         //    lingers in the shade.
         cancelAlarmNotification()
 
-        // 3. Report success to the Dart layer durably. Appending the id to the
-        //    native ledger is the process-death-proof callback the app already
-        //    trusts (MainActivity.readPendingDismissals + the Dart boot gate
-        //    replay it into Hive). No need to spin up Flutter at 3am.
-        recordDismissal(alarmId)
+        // 3. Report success to the Dart layer durably. Appending
+        //    `<shiftId>|<appAlarmId>` to the native ledger is the
+        //    process-death-proof callback the app already trusts
+        //    (MainActivity.readPendingDismissals + the Dart boot gate replay it
+        //    into Hive). The appAlarmId scopes the dismissal to THIS ring —
+        //    Dart records it per-occurrence so the shift's other alarms keep
+        //    firing. No need to spin up Flutter at 3am.
+        recordDismissal(alarmId, appAlarmId)
 
         // 3b. Record the fired rule so Dart can delete a spent ONE-TIME alarm
         //     before its next reconcile re-projects it into a daily cycle.
@@ -625,21 +628,27 @@ class AlarmActivity : Activity(), SensorEventListener {
         }
     }
 
-    /** Append the dismissed alarm id to the native ledger, flushed + fsync'd so
-     *  it survives the OS reaping us immediately after. De-dup is the reader's
-     *  job (a double-tap appends twice; the Hive replay acks once). */
-    private fun recordDismissal(id: String?) {
-        if (id.isNullOrEmpty()) return
+    /** Append `<shiftId>|<appAlarmId>` to the native ledger, flushed + fsync'd
+     *  so it survives the OS reaping us immediately after. The appAlarmId is
+     *  what lets Dart resolve the dismissal to ONE ring (a shift can carry
+     *  several alarms; dismissing the first must never disarm the rest). When
+     *  it is absent (a fire intent armed by an older build) the bare shiftId
+     *  is written and Dart falls back to the legacy whole-shift ack. De-dup is
+     *  the reader's job (a double-tap appends twice; the Hive replay acks
+     *  once). */
+    private fun recordDismissal(shiftId: String?, appAlarmId: String?) {
+        if (shiftId.isNullOrEmpty()) return
+        val line = if (appAlarmId.isNullOrEmpty()) shiftId else "$shiftId|$appAlarmId"
         try {
             val file = File(filesDir, PENDING_DISMISSALS_FILE)
             FileOutputStream(file, /* append = */ true).use { out ->
-                out.write((id + "\n").toByteArray(Charsets.UTF_8))
+                out.write((line + "\n").toByteArray(Charsets.UTF_8))
                 out.flush()
                 out.fd.sync() // kernel-sync — the whole point of the fail-safe
             }
-            Log.d(TAG, "recorded dismissal id=$id")
+            Log.d(TAG, "recorded dismissal $line")
         } catch (e: Exception) {
-            Log.w(TAG, "recordDismissal failed for id=$id", e)
+            Log.w(TAG, "recordDismissal failed for $line", e)
         }
     }
 

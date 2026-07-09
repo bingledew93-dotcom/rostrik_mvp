@@ -6,8 +6,10 @@ import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_cycle.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
+import 'package:rostrik_mvp/data/repositories/app_alarm_repository.dart';
 import 'package:rostrik_mvp/data/repositories/shift_repository.dart';
 import 'package:rostrik_mvp/ui/dashboard_screen.dart';
+import 'package:rostrik_mvp/ui/shift_format.dart';
 
 import '../alarms/fakes.dart';
 
@@ -17,12 +19,17 @@ void main() {
     required List<Shift> shifts,
     List<ShiftCycle> cycles = const [],
     List<AppAlarm> alarms = const [],
+    FakeAppAlarmRepository? alarmRepo,
   }) async {
-    // Backing repo for the early-skip "Dismiss Upcoming Alarm" write. Most
-    // tests never touch it (no alarm in window → no control), but it must be
-    // in the tree because the control reads it on confirm.
+    // Backing repos for the early-skip "Dismiss Upcoming Alarm" writes. Most
+    // tests never touch them (no alarm in window → no control), but they must
+    // be in the tree because the control reads them on confirm. Rotation
+    // skips write the SHIFT repo (returned); shift-less one-time/weekly skips
+    // write the ALARM repo — pass [alarmRepo] to assert on those.
     final shiftRepo = FakeShiftRepository();
     addTearDown(shiftRepo.dispose);
+    final appAlarmRepo = alarmRepo ?? FakeAppAlarmRepository();
+    if (alarmRepo == null) addTearDown(appAlarmRepo.dispose);
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -44,6 +51,7 @@ void main() {
           Provider<List<AppAlarm>>.value(value: alarms),
           Provider<AlarmSettings>.value(value: AlarmSettings.defaults),
           Provider<ShiftRepository>.value(value: shiftRepo),
+          Provider<AppAlarmRepository>.value(value: appAlarmRepo),
         ],
         child: const MaterialApp(home: DashboardScreen()),
       ),
@@ -410,6 +418,18 @@ void main() {
           linkedShiftType: ShiftType.day,
         );
 
+    // A SECOND alarm on the same Day shift: fires at start−30 (per-alarm
+    // lead override), i.e. AFTER dayAlarm's start−60 (global-lead) ring —
+    // the sibling the per-ring skip must leave armed.
+    AppAlarm thirtyMinAlarm() => AppAlarm(
+          id: 'wake30',
+          minutesOfDay: 7 * 60,
+          label: 'Final call',
+          repeatType: AppAlarmRepeatType.followsRotation,
+          linkedShiftType: ShiftType.day,
+          relativeOffsetMinutes: 30,
+        );
+
     // A Day shift whose alarm (global 60-min lead) fires ~2h from now —
     // reliably inside the 12h window regardless of wall-clock, with correct
     // midnight rollover via calendar fields.
@@ -480,8 +500,9 @@ void main() {
       );
     });
 
-    testWidgets('sliding to confirm marks ONLY that shift isAlarmSkipped',
-        (tester) async {
+    testWidgets(
+        'sliding to confirm appends ONLY that ring\'s alarm id — no blanket '
+        'isAlarmSkipped write', (tester) async {
       final repo = await pumpDashboard(
         tester,
         shifts: [soonShift()],
@@ -497,7 +518,227 @@ void main() {
 
       final stored = await repo.getById('soon');
       expect(stored, isNotNull);
-      expect(stored!.isAlarmSkipped, isTrue);
+      expect(stored!.dismissedAlarmIds, ['wake']);
+      expect(stored.isAlarmSkipped, isFalse,
+          reason: 'the whole-shift flag is retired as a write target — it '
+              'silenced every alarm on the shift');
+      expect(stored.isAcknowledged, isFalse);
+    });
+
+    testWidgets(
+        'with several alarms, skip-one targets the EARLIEST ring and leaves '
+        'the siblings alone', (tester) async {
+      final repo = await pumpDashboard(
+        tester,
+        shifts: [soonShift()],
+        // 'wake' fires at start−60 (global lead); 'wake30' at start−30 —
+        // 'wake' is the next chronological ring.
+        alarms: [dayAlarm(), thirtyMinAlarm()],
+      );
+      await tester.tap(find.byKey(const ValueKey('dismiss-upcoming-button')));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byIcon(Icons.alarm_off), const Offset(600, 0));
+      await tester.pumpAndSettle();
+
+      final stored = await repo.getById('soon');
+      expect(stored!.dismissedAlarmIds, ['wake'],
+          reason: 'only the immediate next ring is skipped — wake30 stays');
+    });
+
+    testWidgets(
+        'sequential skip: once the first ring is dismissed, the control '
+        'retargets the next ring (label + write)', (tester) async {
+      final base = soonShift();
+      final start = base.startDateTime;
+      final clock60 = formatClock(
+        start.subtract(const Duration(minutes: 60)).let(_minutesOfDay),
+        use24Hour: false,
+      );
+      final clock30 = formatClock(
+        start.subtract(const Duration(minutes: 30)).let(_minutesOfDay),
+        use24Hour: false,
+      );
+
+      // Fresh shift → the button advertises the 60-min ring.
+      await pumpDashboard(
+        tester,
+        shifts: [base],
+        alarms: [dayAlarm(), thirtyMinAlarm()],
+      );
+      expect(find.text('Dismiss upcoming alarm · $clock60'), findsOneWidget);
+
+      // The first ring dismissed (as the production stream would deliver
+      // after a skip write) → the SAME control now targets the 30-min ring.
+      final repo = await pumpDashboard(
+        tester,
+        shifts: [
+          base.copyWith(dismissedAlarmIds: ['wake']),
+        ],
+        alarms: [dayAlarm(), thirtyMinAlarm()],
+      );
+      expect(find.text('Dismiss upcoming alarm · $clock30'), findsOneWidget);
+
+      // And confirming appends the SECOND id alongside the first.
+      await tester.tap(find.byKey(const ValueKey('dismiss-upcoming-button')));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byIcon(Icons.alarm_off), const Offset(600, 0));
+      await tester.pumpAndSettle();
+      final stored = await repo.getById('soon');
+      expect(stored!.dismissedAlarmIds, ['wake', 'wake30']);
+    });
+
+    testWidgets(
+        'Skip All appears only with multiple rings and appends every '
+        'remaining alarm id via its own slide-to-confirm', (tester) async {
+      final repo = await pumpDashboard(
+        tester,
+        shifts: [soonShift()],
+        alarms: [dayAlarm(), thirtyMinAlarm()],
+      );
+      final skipAll = find.byKey(const ValueKey('skip-all-button'));
+      expect(skipAll, findsOneWidget);
+      expect(find.text('Skip all 2 alarms for this shift'), findsOneWidget);
+
+      // Visible button → slide-to-confirm gate; never a bare tap (and never
+      // a long-press — hidden gestures fail groggy users).
+      await tester.tap(skipAll);
+      await tester.pumpAndSettle();
+      final slide = find.byKey(const ValueKey('skip-all-slide'));
+      expect(slide, findsOneWidget);
+      expect(
+        (await repo.getById('soon')),
+        isNull,
+        reason: 'revealing the bar must not write anything yet',
+      );
+
+      await tester.drag(find.byIcon(Icons.clear_all), const Offset(600, 0));
+      await tester.pumpAndSettle();
+
+      final stored = await repo.getById('soon');
+      expect(stored!.dismissedAlarmIds, containsAll(['wake', 'wake30']));
+      expect(stored.isAlarmSkipped, isFalse);
+    });
+
+    testWidgets('Skip All is hidden when only one ring remains — skip-one '
+        'already covers it', (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: [soonShift()],
+        alarms: [dayAlarm()],
+      );
+      expect(find.byKey(const ValueKey('skip-all-button')), findsNothing);
+    });
+
+    testWidgets(
+        'a ONE-TIME alarm within 12h surfaces the control, and skipping '
+        'disables the rule (the missing-button regression)', (tester) async {
+      // One-time at now+2h: `_nextDailyOccurrence` lands it inside the 12h
+      // window whether or not the +2h crosses midnight.
+      final fire = DateTime.now().add(const Duration(hours: 2));
+      final once = AppAlarm(
+        id: 'once',
+        minutesOfDay: fire.hour * 60 + fire.minute,
+        label: 'Appointment',
+        repeatType: AppAlarmRepeatType.oneTime,
+      );
+      final alarmRepo = FakeAppAlarmRepository();
+      addTearDown(alarmRepo.dispose);
+
+      await pumpDashboard(
+        tester,
+        shifts: const [], // no roster at all — the old rotation-only gate
+        alarms: [once],
+        alarmRepo: alarmRepo,
+      );
+      expect(
+        find.byKey(const ValueKey('dismiss-upcoming-button')),
+        findsOneWidget,
+        reason: 'shift-less rings must surface the early-skip too',
+      );
+      // A lone ring — no Skip All escape hatch.
+      expect(find.byKey(const ValueKey('skip-all-button')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('dismiss-upcoming-button')));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byIcon(Icons.alarm_off), const Offset(600, 0));
+      await tester.pumpAndSettle();
+
+      final stored = await alarmRepo.getById('once');
+      expect(stored!.enabled, isFalse,
+          reason: 'a skipped one-shot is the rule disarmed — a watermark '
+              'would resurrect it tomorrow');
+      expect(stored.skippedThrough, isNull);
+    });
+
+    testWidgets(
+        'a WEEKLY alarm within 12h surfaces the control, and skipping '
+        'advances skippedThrough to exactly this occurrence', (tester) async {
+      // Weekly firing ~2h from now on that day's weekday, so the next
+      // occurrence is deterministic: the (possibly midnight-crossed) now+2h
+      // calendar slot.
+      final fire = DateTime.now().add(const Duration(hours: 2));
+      final expectedFireAt =
+          DateTime(fire.year, fire.month, fire.day, fire.hour, fire.minute);
+      final weekly = AppAlarm(
+        id: 'wk',
+        minutesOfDay: fire.hour * 60 + fire.minute,
+        label: 'Gym',
+        repeatType: AppAlarmRepeatType.weekly,
+        weekdaysBitmask: 1 << (fire.weekday - 1),
+      );
+      final alarmRepo = FakeAppAlarmRepository();
+      addTearDown(alarmRepo.dispose);
+
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        alarms: [weekly],
+        alarmRepo: alarmRepo,
+      );
+      expect(
+        find.byKey(const ValueKey('dismiss-upcoming-button')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('dismiss-upcoming-button')));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byIcon(Icons.alarm_off), const Offset(600, 0));
+      await tester.pumpAndSettle();
+
+      final stored = await alarmRepo.getById('wk');
+      expect(stored!.skippedThrough, expectedFireAt,
+          reason: 'the watermark pins THIS occurrence — next week\'s ring '
+              'fires later and stays armed');
+      expect(stored.enabled, isTrue,
+          reason: 'a weekly rule must survive a one-occurrence skip');
+    });
+
+    testWidgets('the cancel X collapses the Skip All bar without writing',
+        (tester) async {
+      final repo = await pumpDashboard(
+        tester,
+        shifts: [soonShift()],
+        alarms: [dayAlarm(), thirtyMinAlarm()],
+      );
+      await tester.tap(find.byKey(const ValueKey('skip-all-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('dismiss-upcoming-cancel')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('skip-all-slide')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('dismiss-upcoming-button')),
+        findsOneWidget,
+      );
+      expect(await repo.getById('soon'), isNull);
     });
   });
+}
+
+/// Minutes-of-day of a DateTime — mirrors how the control derives the label
+/// clock from `fireAt`.
+int _minutesOfDay(DateTime t) => t.hour * 60 + t.minute;
+
+extension _Let<T> on T {
+  R let<R>(R Function(T) f) => f(this);
 }

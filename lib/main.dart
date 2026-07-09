@@ -187,8 +187,9 @@ void main() async {
 /// task). It records the dismissal in the file ledger but never touches Hive —
 /// the Flutter isolate is the sole Hive writer, which is exactly what keeps the
 /// two sides from corrupting each other. On resume we replay the ledger into
-/// Hive ([_syncNativePendingDismissals]); the resulting `isAcknowledged` write
-/// trips AlarmSyncService's shift watcher, which cancels any now-stale OS alarm.
+/// Hive ([_syncNativePendingDismissals]); the resulting per-ring
+/// `dismissedAlarmIds` write trips AlarmSyncService's shift watcher, which
+/// cancels the dismissed ring's now-stale OS alarm — and ONLY that one.
 class _AlarmDismissalDrain with WidgetsBindingObserver {
   _AlarmDismissalDrain(this._shifts, this._alarms);
 
@@ -221,30 +222,43 @@ class _AlarmDismissalDrain with WidgetsBindingObserver {
 /// `filesDir/pending_dismissals`, the ledger the background isolate's first
 /// instruction writes on a killed-app Dismiss. Ordering is load-bearing:
 ///   1. READ the native store;
-///   2. WRITE `isAcknowledged` into Hive ([ackPendingDismissalsInHive] —
-///      idempotent, snooze-clearing, exactly the write the reaped isolate
-///      would have made);
+///   2. WRITE the dismissal into Hive ([ackPendingDismissalsInHive] —
+///      idempotent, per-ring via `Shift.dismissedAlarmIds`, exactly the
+///      write the reaped isolate would have made);
 ///   3. only then CLEAR the store — a crash between 2 and 3 re-replays on
 ///      the next boot instead of ever losing a dismissal.
 ///
 /// Channel errors (iOS — no MainActivity handler; widget tests — no
 /// platform) read as "nothing pending": the fail-safe is Android-only by
 /// nature, because only Android kills the FLN background isolate this way.
+///
+/// Each ledger line is `<shiftId>|<appAlarmId>` — a PER-OCCURRENCE dismissal
+/// that lands in `Shift.dismissedAlarmIds` and suppresses only that ring, so
+/// a shift's remaining alarms survive the reconcile. A legacy bare
+/// `<shiftId>` line (no alarm identity) degrades to the whole-shift ack.
 Future<void> _syncNativePendingDismissals(ShiftRepository shifts) async {
-  List<String> ids;
+  List<PendingDismissal> dismissals;
   try {
     final raw = await _alarmRoutingChannel
         .invokeMethod<List<Object?>>('getPendingDismissals');
-    ids = raw?.whereType<String>().toList() ?? const <String>[];
+    dismissals = (raw ?? const <Object?>[])
+        .whereType<String>()
+        .map(parsePendingDismissalLine)
+        .whereType<PendingDismissal>()
+        .toList();
   } catch (_) {
     return; // no native handler on this platform — nothing to drain
   }
-  if (ids.isEmpty) return;
+  if (dismissals.isEmpty) return;
 
-  final acked = await ackPendingDismissalsInHive(shifts: shifts, shiftIds: ids);
+  final acked = await ackPendingDismissalsInHive(
+    shifts: shifts,
+    dismissals: dismissals,
+  );
   debugPrint(
     '[main] native dismiss fail-safe: replayed $acked dismissal(s) '
-    'from ${ids.length} ledger entr${ids.length == 1 ? 'y' : 'ies'} into Hive',
+    'from ${dismissals.length} ledger '
+    'entr${dismissals.length == 1 ? 'y' : 'ies'} into Hive',
   );
 
   try {
@@ -292,6 +306,10 @@ class RostrikApp extends StatelessWidget {
     return MaterialApp(
       title: 'Rostrik',
       navigatorKey: navigatorKey,
+      // No corner "DEBUG" ribbon on dev installs. Release builds never show
+      // it, but field-testing happens on debug builds too and the banner
+      // reads as broken UI to a beta tester.
+      debugShowCheckedModeBanner: false,
       // Forced dark mode: most app activity is around alarm-fire time
       // (early morning / late night) where dark is correct regardless
       // of OS setting. WakeUpScreen and the notification audio are

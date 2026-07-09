@@ -22,6 +22,7 @@ class Shift {
     this.isArchived = false,
     this.isPaused = false,
     this.pauseReason,
+    this.dismissedAlarmIds = const [],
   })  : date = DateTime(date.year, date.month, date.day),
         assert(
           startMinutes >= 0 && startMinutes < 1440,
@@ -87,16 +88,16 @@ class Shift {
   @HiveField(9)
   final String? cycleId;
 
-  // Per-occurrence "skip the next alarm" flag, set by the Dashboard's
-  // "Dismiss Upcoming Alarm" early-skip affordance. Deliberately DISTINCT from
-  // `isAcknowledged`: the AlarmEngine treats both as "alarm not desired for
-  // this occurrence" (so the orphan-cancel pass tears down the pending OS
-  // notification), but `_findNext` on the Dashboard filters out acknowledged
-  // shifts — reusing ack here would wrongly drop the shift from the next-shift
-  // card the moment the user skipped its alarm. A skipped shift still shows in
-  // the schedule; only its alarm is suppressed. The master AppAlarm rule stays
-  // enabled, so subsequent shifts re-arm normally. `defaultValue: false` keeps
-  // legacy records readable.
+  // LEGACY whole-shift "skip the next alarm" flag — formerly written by the
+  // Dashboard's "Dismiss Upcoming Alarm" early-skip. RETIRED AS A WRITE
+  // TARGET: the early-skip now records per-ring dismissals in
+  // [dismissedAlarmIds] instead, so skipping one alarm no longer silences the
+  // shift's other alarms. Still READ by the projector (a shift already
+  // carrying `true` from an older build keeps all its rings suppressed), so
+  // the field must not be removed. Deliberately DISTINCT from
+  // `isAcknowledged`: `_findNext` on the Dashboard filters out acknowledged
+  // shifts — reusing ack here would wrongly drop the shift from the
+  // next-shift card. `defaultValue: false` keeps legacy records readable.
   @HiveField(10, defaultValue: false)
   final bool isAlarmSkipped;
 
@@ -137,6 +138,19 @@ class Shift {
   // without a stated reason. Nullable, so no `defaultValue` is needed.
   @HiveField(14)
   final String? pauseReason;
+
+  // PER-OCCURRENCE dismissal set: the AppAlarm rule ids whose ring for THIS
+  // shift date the user has dismissed (slide/shake on the native AlarmActivity,
+  // or the 15-min auto-timeout). A shift with several linked alarms (e.g. a
+  // 60-min lead, a 30-min lead and an exact-time ring before the same Day
+  // shift) accumulates one entry per dismissed ring; the projection suppresses
+  // ONLY those rings, so dismissing the first alarm can never tear down its
+  // still-pending siblings. Contrast [isAcknowledged], which is the WHOLE-SHIFT
+  // blanket ack — still written by legacy ledger entries that carry no alarm
+  // identity, and still honoured as "every ring handled".
+  // `defaultValue: []` keeps pre-existing records readable.
+  @HiveField(15, defaultValue: [])
+  final List<String> dismissedAlarmIds;
 
   /// Whether this occurrence's alarm has already been HANDLED at [now] —
   /// dismissed ([isAcknowledged]) or pushed forward by a still-active snooze
@@ -219,6 +233,7 @@ class Shift {
     bool? isPaused,
     String? pauseReason,
     bool clearPauseReason = false,
+    List<String>? dismissedAlarmIds,
   }) =>
       Shift(
         id: id ?? this.id,
@@ -241,6 +256,7 @@ class Shift {
         // unchanged" — same idiom as `clearSnoozedUntil`.
         pauseReason:
             clearPauseReason ? null : (pauseReason ?? this.pauseReason),
+        dismissedAlarmIds: dismissedAlarmIds ?? this.dismissedAlarmIds,
       );
 
   @override
@@ -262,7 +278,18 @@ class Shift {
           isAdHoc == other.isAdHoc &&
           isArchived == other.isArchived &&
           isPaused == other.isPaused &&
-          pauseReason == other.pauseReason;
+          pauseReason == other.pauseReason &&
+          _sameIds(dismissedAlarmIds, other.dismissedAlarmIds);
+
+  // Element-wise list equality (pure Dart — no foundation.listEquals here).
+  static bool _sameIds(List<String> a, List<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 
   @override
   int get hashCode => Object.hash(
@@ -281,6 +308,7 @@ class Shift {
         isArchived,
         isPaused,
         pauseReason,
+        Object.hashAll(dismissedAlarmIds),
       );
 
   @override
@@ -291,5 +319,5 @@ class Shift {
       'snoozedUntil: $snoozedUntil, cycleId: $cycleId, '
       'isAlarmSkipped: $isAlarmSkipped, isAdHoc: $isAdHoc, '
       'isArchived: $isArchived, isPaused: $isPaused, '
-      'pauseReason: $pauseReason)';
+      'pauseReason: $pauseReason, dismissedAlarmIds: $dismissedAlarmIds)';
 }

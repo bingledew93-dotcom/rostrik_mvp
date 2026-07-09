@@ -121,6 +121,53 @@ class _PrePauseShiftAdapter extends TypeAdapter<Shift> {
   }
 }
 
+/// Stand-in for the pre-dismissal-layer ShiftAdapter (typeId 1, 15 fields —
+/// through `pauseReason`, before `dismissedAlarmIds` existed). Verifies the
+/// real adapter's empty-list default for field 15 on read.
+class _PreDismissalShiftAdapter extends TypeAdapter<Shift> {
+  @override
+  final typeId = 1;
+
+  @override
+  Shift read(BinaryReader reader) => throw UnimplementedError();
+
+  @override
+  void write(BinaryWriter writer, Shift obj) {
+    writer
+      ..writeByte(15) // 15 fields — no dismissedAlarmIds (15) byte
+      ..writeByte(0)
+      ..write(obj.id)
+      ..writeByte(1)
+      ..write(obj.date)
+      ..writeByte(2)
+      ..write(obj.type)
+      ..writeByte(3)
+      ..write(obj.startMinutes)
+      ..writeByte(4)
+      ..write(obj.endMinutes)
+      ..writeByte(5)
+      ..write(obj.note)
+      ..writeByte(6)
+      ..write(obj.isMuted)
+      ..writeByte(7)
+      ..write(obj.isAcknowledged)
+      ..writeByte(8)
+      ..write(obj.snoozedUntil)
+      ..writeByte(9)
+      ..write(obj.cycleId)
+      ..writeByte(10)
+      ..write(obj.isAlarmSkipped)
+      ..writeByte(11)
+      ..write(obj.isAdHoc)
+      ..writeByte(12)
+      ..write(obj.isArchived)
+      ..writeByte(13)
+      ..write(obj.isPaused)
+      ..writeByte(14)
+      ..write(obj.pauseReason);
+  }
+}
+
 void main() {
   late Directory tempDir;
   late Box<Shift> box;
@@ -367,6 +414,44 @@ void main() {
           // bytes (incl. field 12 / isArchived, which still reads false).
           expect(loaded.note, 'written before the exception layer');
           expect(loaded.isArchived, isFalse);
+          await reopened.deleteFromDisk();
+        } finally {
+          Hive.registerAdapter(ShiftAdapter(), override: true);
+        }
+      },
+    );
+
+    test('dismissedAlarmIds round-trips through the adapter', () async {
+      await repo.upsert(
+        _shift(id: 'd').copyWith(dismissedAlarmIds: ['alarm-1', 'alarm-2']),
+      );
+      final loaded = await repo.getById('d');
+      expect(loaded!.dismissedAlarmIds, ['alarm-1', 'alarm-2']);
+    });
+
+    test(
+      'records written before field 15 existed default to an empty list',
+      () async {
+        final boxName = 'shifts_predismissal_${boxCounter++}';
+
+        Hive.registerAdapter(_PreDismissalShiftAdapter(), override: true);
+        final legacyBox = await Hive.openBox<Shift>(boxName);
+        await legacyBox.put(
+          'pre-dismissal',
+          _shift(id: 'pre-dismissal', note: 'written before per-ring dismiss'),
+        );
+        await legacyBox.close();
+
+        Hive.registerAdapter(ShiftAdapter(), override: true);
+        try {
+          final reopened = await Hive.openBox<Shift>(boxName);
+          final loaded = reopened.get('pre-dismissal');
+          expect(loaded, isNotNull);
+          expect(loaded!.dismissedAlarmIds, isEmpty);
+          // Earlier fields untouched — read advanced cleanly past the absent
+          // field-15 byte.
+          expect(loaded.note, 'written before per-ring dismiss');
+          expect(loaded.isPaused, isFalse);
           await reopened.deleteFromDisk();
         } finally {
           Hive.registerAdapter(ShiftAdapter(), override: true);

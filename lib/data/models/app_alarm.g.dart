@@ -40,13 +40,17 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       // time null, so every pre-migration alarm reads back as lead-time mode.
       isExactTime: fields[15] == null ? false : fields[15] as bool,
       exactTimeMinutes: (fields[16] as num?)?.toInt(),
+      // Field 17 (per-occurrence skip watermark for shift-less alarms) added
+      // in the early-skip coverage migration. Absent on legacy records → null
+      // (nothing skipped).
+      skippedThrough: fields[17] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppAlarm obj) {
     writer
-      ..writeByte(16)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -78,7 +82,9 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       ..writeByte(15)
       ..write(obj.isExactTime)
       ..writeByte(16)
-      ..write(obj.exactTimeMinutes);
+      ..write(obj.exactTimeMinutes)
+      ..writeByte(17)
+      ..write(obj.skippedThrough);
   }
 
   @override

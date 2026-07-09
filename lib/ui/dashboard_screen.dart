@@ -9,6 +9,7 @@ import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/models/shift_type.dart';
+import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../logic/cycle_resolver.dart';
 import '../state/app_preferences.dart';
@@ -70,20 +71,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final globalLeadMinutes = context.watch<AlarmSettings>().leadTime.inMinutes;
     final next = _findNext(shifts, now);
     final activeCycle = _pickActiveCycle(cycles);
-    // Early-bird skip: the single next roster-automated alarm due within 12h.
-    // When present, the dashboard offers a one-occurrence skip that leaves the
-    // master alarm rule armed (see `_DismissUpcomingAlarmControl`).
-    final upcoming = nextRotationRing(
+    // Early-bird skip: the single next alarm of ANY type due within 12h —
+    // rotation rings AND shift-less one-time/weekly rings (which
+    // `nextRotationRing` used to filter out, hiding the control for them).
+    // When present, the dashboard offers a PER-OCCURRENCE skip: a rotation
+    // ring's alarm id is appended to the shift's `dismissedAlarmIds`; a
+    // shift-less ring advances its rule's `skippedThrough` watermark (weekly)
+    // or disables the rule (one-time). See `_DismissUpcomingAlarmControl`.
+    final upcoming = nextAlarmRing(
       alarms: alarms,
       shifts: shifts,
       globalLeadMinutes: globalLeadMinutes,
       now: now,
       // The early-skip is a "you woke before your alarm" affordance — keep the
       // original 12h look-ahead. Same projector the engine + Alarms tab use,
-      // so it now inherently ignores paused / archived / muted shifts.
+      // so it now inherently ignores paused / archived / muted shifts AND
+      // already-dismissed/skipped rings — which is what makes sequential
+      // skipping work: each skip write re-lands here targeting the next ring.
       horizon: const Duration(hours: 12),
       isSchedulePaused: AppPreferences.isSchedulePausedOf(context),
     );
+    // The skip group, earliest first — `first` IS `upcoming`. For a rotation
+    // ring: every remaining ring for its shift (the tail is what "Skip all"
+    // covers), projected over the wide display horizon (not the 12h gate) so
+    // a sibling ring just outside the window still counts, and filtered to
+    // shift-linked rings. For a shift-less ring: a lone-ring group — there is
+    // no shift to group by, so skip-one IS skip-all and no escape hatch shows.
+    final upcomingRings = upcoming == null
+        ? const <AlarmRing>[]
+        : upcoming.shift == null
+            ? <AlarmRing>[upcoming]
+            : projectAlarmRings(
+                alarms: alarms,
+                shifts: [upcoming.shift!],
+                globalLeadMinutes: globalLeadMinutes,
+                now: now,
+                horizon: kRingDisplayHorizon,
+                isSchedulePaused: AppPreferences.isSchedulePausedOf(context),
+              ).where((r) => r.shift != null).toList();
 
     return Scaffold(
       // Respect both top (notch / status bar) AND bottom (gesture pill)
@@ -113,8 +138,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ? const _EmptyDashboard()
                         : _UpcomingShiftCard(shift: next, now: now),
                   ),
-                  if (upcoming != null)
-                    _DismissUpcomingAlarmControl(upcoming: upcoming),
+                  if (upcomingRings.isNotEmpty)
+                    _DismissUpcomingAlarmControl(
+                      // Keyed by the TARGET ring: once a skip lands, the
+                      // shift/alarm-stream rebuild re-computes the ring list
+                      // and `first` becomes the next chronological ring — the
+                      // new key discards the old confirm state + spent slide
+                      // handle, so the control is immediately ready for the
+                      // next sequential skip. The fireAt component is what
+                      // re-keys a WEEKLY retarget (same rule id, same missing
+                      // shift — only the occurrence instant moves).
+                      key: ValueKey(
+                        'early-skip-${upcomingRings.first.shift?.id ?? 'rule'}'
+                        '-${upcomingRings.first.alarm.id}'
+                        '-${upcomingRings.first.fireAt.millisecondsSinceEpoch}',
+                      ),
+                      rings: upcomingRings,
+                    ),
                   if (activeCycle != null)
                     _RotationPositionCard(cycle: activeCycle, now: now),
                   // Collapsed-by-default "My Rotation" — embeds the month
@@ -567,19 +607,44 @@ class _RotationPositionCard extends StatelessWidget {
   }
 }
 
+/// Which pending action the early-skip control is asking the user to confirm.
+enum _EarlySkipMode { collapsed, confirmOne, confirmAll }
+
 /// Early-bird skip affordance: a prominent action shown when a roster-automated
 /// alarm is due within the next 12 hours. Tapping reveals an inline
 /// slide-to-confirm bar (Rostrik's visible-control → swipe-to-confirm standard,
-/// so a stray 4am tap can't silence a must-not-miss alarm); confirming marks
-/// only THIS occurrence's shift `isAlarmSkipped`. The master alarm rule stays
-/// enabled and future swings re-arm normally — the engine simply cancels this
-/// one pending notification on its next reconcile.
+/// so a stray 4am tap can't silence a must-not-miss alarm).
+///
+/// PER-OCCURRENCE, not per-shift, and covering EVERY alarm type. Confirming
+/// resolves the NEXT chronological ring by what carries its state:
+///   * **Rotation ring** (has a shift) → append the alarm id to the shift's
+///     [Shift.dismissedAlarmIds]; the shift's later alarms stay armed.
+///   * **Weekly ring** (no shift) → advance the rule's
+///     [AppAlarm.skippedThrough] watermark to this ring's instant; next
+///     week's occurrence fires later, so it stays armed.
+///   * **One-time ring** (no shift) → disable the rule (`enabled: false`) —
+///     its only upcoming ring skipped IS the rule disarmed, and a watermark
+///     would resurrect it tomorrow via the daily next-occurrence roll.
+/// Every write flows back through a watched stream (shifts or alarms), the
+/// projector drops the skipped ring, and this control re-keys onto the
+/// following ring — sequential skips are one slide each. (The old
+/// whole-shift `isAlarmSkipped` blanket write is retired here; the flag is
+/// still honoured by the projector for shifts already carrying it.)
+///
+/// When more than one ring remains (rotation groups only — shift-less rings
+/// are lone-ring groups), a secondary "Skip all" button covers the
+/// intentional day-off case — it appends EVERY remaining ring's alarm id.
+/// It is a visible button behind the same slide-to-confirm gate (never a
+/// long-press: hidden gestures fail groggy users; and skip-all is the most
+/// dangerous action on this screen).
 class _DismissUpcomingAlarmControl extends StatefulWidget {
-  const _DismissUpcomingAlarmControl({required this.upcoming});
+  const _DismissUpcomingAlarmControl({super.key, required this.rings});
 
-  /// A follows-rotation ring from the unified projector — its [AlarmRing.shift]
-  /// is always non-null (rotation rings carry their shift).
-  final AlarmRing upcoming;
+  /// The skip group, earliest first — never empty. For a rotation target:
+  /// the upcoming shift's remaining rings, all carrying the SAME non-null
+  /// [AlarmRing.shift]. For a one-time/weekly target: exactly one shift-less
+  /// ring. `rings.first` is the skip-one target; the whole list is skip-all's.
+  final List<AlarmRing> rings;
 
   @override
   State<_DismissUpcomingAlarmControl> createState() =>
@@ -588,61 +653,149 @@ class _DismissUpcomingAlarmControl extends StatefulWidget {
 
 class _DismissUpcomingAlarmControlState
     extends State<_DismissUpcomingAlarmControl> {
-  bool _confirming = false;
+  _EarlySkipMode _mode = _EarlySkipMode.collapsed;
 
-  Future<void> _onConfirm() async {
-    // Snapshot the repo before the await — confirming skips the shift, the
-    // upcoming-alarm recompute returns null, and this control is removed from
-    // the tree, so reading context post-await would race with disposal.
-    final shifts = context.read<ShiftRepository>();
-    await shifts.upsert(
-      widget.upcoming.shift!.copyWith(isAlarmSkipped: true),
-    );
+  AlarmRing get _next => widget.rings.first;
+
+  /// Skips [targets] in one write, routed by where the occurrence's state
+  /// lives (see the class doc). Skip-one passes a single ring; skip-all
+  /// passes a whole rotation group.
+  Future<void> _skip(List<AlarmRing> targets) async {
+    // Snapshot the repos before the await — the resulting write rebuilds the
+    // dashboard, which may re-key or remove this control, so reading context
+    // post-await would race with disposal.
+    final ring = targets.first;
+    final shift = ring.shift;
+    if (shift != null) {
+      // Rotation group: append every target's alarm id to the shift's
+      // dismissed set. The set spread keeps existing entries first and
+      // de-duplicates, so re-confirming a ring that raced in from another
+      // surface is a harmless no-op entry-wise.
+      final shifts = context.read<ShiftRepository>();
+      await shifts.upsert(shift.copyWith(
+        dismissedAlarmIds: <String>{
+          ...shift.dismissedAlarmIds,
+          for (final r in targets) r.alarm.id,
+        }.toList(),
+      ));
+    } else if (ring.alarm.repeatType == AppAlarmRepeatType.oneTime) {
+      // A one-shot's only upcoming ring skipped = the rule disarmed. The card
+      // stays on the Alarms tab, toggled off, ready to re-arm — and unlike a
+      // skip watermark it can't resurrect tomorrow via the daily roll.
+      final alarms = context.read<AppAlarmRepository>();
+      await alarms.upsert(ring.alarm.copyWith(enabled: false));
+    } else {
+      // Weekly: advance the skip watermark to this ring's instant. Monotonic
+      // max, so skipping Monday's ring and then Tuesday's can never rewind
+      // the watermark and un-skip Monday.
+      final alarms = context.read<AppAlarmRepository>();
+      final prev = ring.alarm.skippedThrough;
+      await alarms.upsert(ring.alarm.copyWith(
+        skippedThrough:
+            (prev != null && prev.isAfter(ring.fireAt)) ? prev : ring.fireAt,
+      ));
+    }
+    // The stream rebuild re-keys this control for the next ring (or removes
+    // it once nothing is left). Collapse locally too, so a stale frame —
+    // stream debounce, or a static provider under the test harness — never
+    // leaves a spent slide handle on screen.
+    if (mounted) setState(() => _mode = _EarlySkipMode.collapsed);
   }
 
   @override
   Widget build(BuildContext context) {
+    switch (_mode) {
+      case _EarlySkipMode.collapsed:
+        return _buildCollapsed(context);
+      case _EarlySkipMode.confirmOne:
+        return _buildConfirmBar(
+          key: const ValueKey('dismiss-upcoming-slide'),
+          label: 'Slide to skip this alarm',
+          icon: Icons.alarm_off,
+          targets: [_next],
+        );
+      case _EarlySkipMode.confirmAll:
+        return _buildConfirmBar(
+          key: const ValueKey('skip-all-slide'),
+          label: 'Slide to skip all ${widget.rings.length} alarms',
+          icon: Icons.clear_all,
+          targets: widget.rings,
+        );
+    }
+  }
+
+  Widget _buildCollapsed(BuildContext context) {
     final theme = Theme.of(context);
     final fireClock = formatClock(
-      widget.upcoming.fireAt.hour * 60 + widget.upcoming.fireAt.minute,
+      _next.fireAt.hour * 60 + _next.fireAt.minute,
       use24Hour: AppPreferences.use24HourOf(context),
     );
     return Padding(
       padding: const EdgeInsets.only(top: 16),
-      child: _confirming
-          ? Row(
-              children: [
-                Expanded(
-                  child: SlideToConfirm(
-                    key: const ValueKey('dismiss-upcoming-slide'),
-                    label: 'Slide to skip this alarm',
-                    icon: Icons.alarm_off,
-                    onConfirm: _onConfirm,
-                  ),
-                ),
-                IconButton(
-                  key: const ValueKey('dismiss-upcoming-cancel'),
-                  icon: const Icon(Icons.close),
-                  tooltip: 'Keep alarm',
-                  onPressed: () => setState(() => _confirming = false),
-                ),
-              ],
-            )
-          : SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('dismiss-upcoming-button'),
-                onPressed: () => setState(() => _confirming = true),
-                icon: const Icon(Icons.alarm_off),
-                label: Text('Dismiss upcoming alarm · $fireClock'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  textStyle: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton.tonalIcon(
+            key: const ValueKey('dismiss-upcoming-button'),
+            onPressed: () =>
+                setState(() => _mode = _EarlySkipMode.confirmOne),
+            icon: const Icon(Icons.alarm_off),
+            label: Text('Dismiss upcoming alarm · $fireClock'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              textStyle: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
             ),
+          ),
+          // The intentional-day-off escape hatch — only when there is more
+          // than one ring left (with a single ring, skip-one IS skip-all).
+          // Quieter than the primary action: skipping every wake-up must be
+          // a considered choice, not the path of least resistance.
+          if (widget.rings.length > 1)
+            TextButton.icon(
+              key: const ValueKey('skip-all-button'),
+              onPressed: () =>
+                  setState(() => _mode = _EarlySkipMode.confirmAll),
+              icon: const Icon(Icons.clear_all, size: 18),
+              label: Text(
+                'Skip all ${widget.rings.length} alarms for this shift',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The shared confirm row: slide bar + an X to back out. [targets] is what
+  /// a completed slide dismisses.
+  Widget _buildConfirmBar({
+    required Key key,
+    required String label,
+    required IconData icon,
+    required List<AlarmRing> targets,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: SlideToConfirm(
+              key: key,
+              label: label,
+              icon: icon,
+              onConfirm: () => _skip(targets),
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('dismiss-upcoming-cancel'),
+            icon: const Icon(Icons.close),
+            tooltip: 'Keep alarm',
+            onPressed: () =>
+                setState(() => _mode = _EarlySkipMode.collapsed),
+          ),
+        ],
+      ),
     );
   }
 }

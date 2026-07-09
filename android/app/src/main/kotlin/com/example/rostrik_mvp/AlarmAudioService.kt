@@ -197,9 +197,10 @@ class AlarmAudioService : Service() {
      *  unattended teardown so a phone left in a drawer can't drain to zero. */
     private fun onAutoTimeout() {
         Log.w(TAG, "alarm hit the 15-min auto-timeout — stopping to save battery")
-        // 1. Record the dismissal so Dart still acknowledges the shift in Hive
-        //    (same contract as a manual dismiss — the ledger holds shift ids).
-        recordAutoDismissal(alarmId)
+        // 1. Record the dismissal so Dart still resolves this ring in Hive
+        //    (same `<shiftId>|<appAlarmId>` contract as a manual dismiss — the
+        //    appAlarmId keeps it scoped to THIS ring, not the whole shift).
+        recordAutoDismissal(alarmId, appAlarmId)
         // 1b. Record the fired rule so Dart deletes a spent ONE-TIME alarm —
         //     same cleanup the manual dismiss does, so an unattended one-shot
         //     can't re-project into a daily cycle.
@@ -219,25 +220,28 @@ class AlarmAudioService : Service() {
         stopSelf()
     }
 
-    /** Append the ringing shift's id to the native ledger, flushed + fsync'd so
-     *  it survives an immediate reap. Skips empty / shift-less (`NONE`) ids,
-     *  mirroring `markPendingDismissal` in pending_dismissal_guard.dart — there
-     *  is no shift row to acknowledge for those. */
-    private fun recordAutoDismissal(id: String?) {
-        if (id.isNullOrEmpty() || id == NO_SHIFT_SENTINEL) {
-            Log.d(TAG, "auto-timeout: no shift id to record (id='$id')")
+    /** Append `<shiftId>|<appAlarmId>` to the native ledger, flushed + fsync'd
+     *  so it survives an immediate reap. Mirrors [AlarmActivity.recordDismissal]:
+     *  the appAlarmId scopes the auto-timeout dismissal to the ring that was
+     *  actually sounding, so the shift's other alarms stay armed. Skips empty /
+     *  shift-less (`NONE`) shift ids — there is no shift row to update for
+     *  those. */
+    private fun recordAutoDismissal(shiftId: String?, appAlarmId: String?) {
+        if (shiftId.isNullOrEmpty() || shiftId == NO_SHIFT_SENTINEL) {
+            Log.d(TAG, "auto-timeout: no shift id to record (id='$shiftId')")
             return
         }
+        val line = if (appAlarmId.isNullOrEmpty()) shiftId else "$shiftId|$appAlarmId"
         try {
             val file = File(filesDir, PENDING_DISMISSALS_FILE)
             FileOutputStream(file, /* append = */ true).use { out ->
-                out.write((id + "\n").toByteArray(Charsets.UTF_8))
+                out.write((line + "\n").toByteArray(Charsets.UTF_8))
                 out.flush()
                 out.fd.sync()
             }
-            Log.d(TAG, "auto-timeout recorded dismissal id=$id")
+            Log.d(TAG, "auto-timeout recorded dismissal $line")
         } catch (e: Exception) {
-            Log.w(TAG, "auto-timeout recordDismissal failed id=$id", e)
+            Log.w(TAG, "auto-timeout recordDismissal failed $line", e)
         }
     }
 

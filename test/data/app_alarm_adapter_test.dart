@@ -51,6 +51,7 @@ AppAlarm _alarm({
   bool isExactTime = false,
   int? exactTimeMinutes,
   int? relativeOffsetMinutes,
+  DateTime? skippedThrough,
 }) =>
     AppAlarm(
       id: 'a1',
@@ -63,6 +64,7 @@ AppAlarm _alarm({
       isExactTime: isExactTime,
       exactTimeMinutes: exactTimeMinutes,
       relativeOffsetMinutes: relativeOffsetMinutes,
+      skippedThrough: skippedThrough,
     );
 
 void main() {
@@ -132,6 +134,34 @@ void main() {
       expect(() => _alarm(exactTimeMinutes: 1439), returnsNormally);
       expect(() => _alarm(exactTimeMinutes: 1440), throwsA(isA<AssertionError>()));
       expect(() => _alarm(exactTimeMinutes: -1), throwsA(isA<AssertionError>()));
+    });
+  });
+
+  group('AppAlarm — shift-less skip watermark (model)', () {
+    test('defaults to null (nothing skipped)', () {
+      expect(_alarm().skippedThrough, isNull);
+    });
+
+    test('copyWith advances the watermark, preserving others', () {
+      final updated =
+          _alarm().copyWith(skippedThrough: DateTime(2026, 7, 13, 6, 0));
+      expect(updated.skippedThrough, DateTime(2026, 7, 13, 6, 0));
+      expect(updated.label, 'Wake');
+    });
+
+    test('copyWith(null) leaves the watermark unchanged — it never clears',
+        () {
+      final skipped =
+          _alarm(skippedThrough: DateTime(2026, 7, 13, 6, 0));
+      expect(skipped.copyWith(label: 'x').skippedThrough,
+          DateTime(2026, 7, 13, 6, 0));
+    });
+
+    test('equality + hashCode include the watermark', () {
+      final a = _alarm();
+      final b = _alarm(skippedThrough: DateTime(2026, 7, 13, 6, 0));
+      expect(a == b, isFalse);
+      expect(a.hashCode == b.hashCode, isFalse);
     });
   });
 
@@ -314,6 +344,23 @@ void main() {
       );
       expect(read.isExactTime, isFalse);
       expect(read.exactTimeMinutes, isNull);
+    });
+
+    test('round-trips the skip watermark (field 17)', () async {
+      final read = await roundTrip(
+        _alarm(skippedThrough: DateTime(2026, 7, 13, 6, 0)),
+        writeWith: AppAlarmAdapter(),
+      );
+      expect(read.skippedThrough, DateTime(2026, 7, 13, 6, 0));
+    });
+
+    test('a legacy record (no field 17) defaults to a null watermark',
+        () async {
+      final read = await roundTrip(
+        _alarm(skippedThrough: DateTime(2026, 7, 13, 6, 0)),
+        writeWith: _LegacyAppAlarmAdapter(),
+      );
+      expect(read.skippedThrough, isNull);
     });
   });
 }

@@ -76,6 +76,7 @@ class AppAlarm {
     this.ringtoneSource = RingtoneSource.classic,
     this.isExactTime = false,
     this.exactTimeMinutes,
+    this.skippedThrough,
   })  : assert(
           minutesOfDay >= 0 && minutesOfDay < 1440,
           'minutesOfDay must be 0..1439',
@@ -222,6 +223,29 @@ class AppAlarm {
   @HiveField(16)
   final int? exactTimeMinutes;
 
+  /// PER-OCCURRENCE skip for SHIFT-LESS alarms (weekly; defensively honoured
+  /// for one-time too): the projection suppresses any occurrence whose fireAt
+  /// is at-or-before this instant. The Dashboard's early-skip writes the
+  /// skipped ring's fireAt here — next week's occurrence fires later, so it
+  /// stays armed. This is the shift-less counterpart of
+  /// `Shift.dismissedAlarmIds`: rotation rings record their dismissal on the
+  /// shift row; weekly/one-time rings have no shift, so the rule itself
+  /// carries it. Riding the AppAlarm (not a side store) is load-bearing — the
+  /// upsert flows through the watched alarms stream, so the engine reconciles
+  /// (cancelling the pending OS alarm) and every UI projection retargets,
+  /// with zero extra wiring.
+  ///
+  /// Only ever advanced (monotonic max at the write site); a past instant is
+  /// inert because the projector's future-only gate already excludes rings
+  /// at-or-before now, so it never needs clearing. Never consulted for
+  /// follows-rotation rings. Null on legacy records (no field 17).
+  ///
+  /// NOT used for skipping a one-time alarm: `_nextDailyOccurrence` rolls a
+  /// one-time forward daily, so a suppressed-instant skip would resurrect it
+  /// TOMORROW — the early-skip disables the rule (`enabled: false`) instead.
+  @HiveField(17)
+  final DateTime? skippedThrough;
+
   /// The exact-time fire clock when exact-time mode is ACTIVE and well-formed,
   /// else null (= lead-time mode). This is the single mode-decision gate shared
   /// by the engine (`rotationAlarmFireAt`) and every UI projection
@@ -283,6 +307,7 @@ class AppAlarm {
     bool? isExactTime,
     int? exactTimeMinutes,
     bool clearExactTime = false,
+    DateTime? skippedThrough,
   }) =>
       AppAlarm(
         id: id ?? this.id,
@@ -308,6 +333,9 @@ class AppAlarm {
         exactTimeMinutes: clearExactTime
             ? null
             : (exactTimeMinutes ?? this.exactTimeMinutes),
+        // No clear flag: the skip watermark only ever advances (a past value
+        // is inert), so `null` always means "leave unchanged".
+        skippedThrough: skippedThrough ?? this.skippedThrough,
       );
 
   @override
@@ -330,7 +358,8 @@ class AppAlarm {
           customRingtoneName == other.customRingtoneName &&
           ringtoneSource == other.ringtoneSource &&
           isExactTime == other.isExactTime &&
-          exactTimeMinutes == other.exactTimeMinutes;
+          exactTimeMinutes == other.exactTimeMinutes &&
+          skippedThrough == other.skippedThrough;
 
   @override
   int get hashCode => Object.hash(
@@ -350,6 +379,7 @@ class AppAlarm {
         ringtoneSource,
         isExactTime,
         exactTimeMinutes,
+        skippedThrough,
       );
 
   @override
@@ -364,7 +394,8 @@ class AppAlarm {
       'customRingtoneUri: $customRingtoneUri, '
       'customRingtoneName: $customRingtoneName, '
       'ringtoneSource: $ringtoneSource, '
-      'isExactTime: $isExactTime, exactTimeMinutes: $exactTimeMinutes)';
+      'isExactTime: $isExactTime, exactTimeMinutes: $exactTimeMinutes, '
+      'skippedThrough: $skippedThrough)';
 }
 
 /// Whether the alarm [a] should be permanently removed from Hive once it has

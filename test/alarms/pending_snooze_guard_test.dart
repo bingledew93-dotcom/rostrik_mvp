@@ -71,7 +71,12 @@ void main() {
     late FakeShiftRepository shifts;
     setUp(() => shifts = FakeShiftRepository());
 
-    Shift mk({String id = 's1', bool ack = false, DateTime? snoozedUntil}) =>
+    Shift mk({
+      String id = 's1',
+      bool ack = false,
+      DateTime? snoozedUntil,
+      List<String> dismissedAlarmIds = const [],
+    }) =>
         Shift(
           id: id,
           date: DateTime(2026, 6, 15),
@@ -80,6 +85,7 @@ void main() {
           endMinutes: 15 * 60,
           isAcknowledged: ack,
           snoozedUntil: snoozedUntil,
+          dismissedAlarmIds: dismissedAlarmIds,
         );
 
     test('sets snoozedUntil on the shift', () async {
@@ -120,6 +126,32 @@ void main() {
       );
       expect(applied, 0);
       expect((await shifts.getById('past'))!.snoozedUntil, isNull);
+    });
+
+    test('dismiss-wins is PER-RING: a snooze whose own alarm was dismissed is '
+        'stale, but a sibling alarm\'s snooze still applies', () async {
+      // The dismissal drain runs before the snooze drain and recorded
+      // alarm-1's dismissal on this shift. alarm-1's snooze line is now stale
+      // (dismiss is final for that ring); alarm-2's snooze must still land —
+      // the whole-shift blanket skip is exactly what the per-occurrence
+      // dismissal layer removed.
+      await shifts.upsert(mk(dismissedAlarmIds: const ['alarm-1']));
+      final applied = await applyPendingSnoozesInHive(
+        shifts: shifts,
+        snoozes: [PendingSnooze('s1', 'alarm-1', until)],
+        now: now,
+      );
+      expect(applied, 0);
+      expect((await shifts.getById('s1'))!.snoozedUntil, isNull);
+
+      final siblingUntil = until.add(const Duration(minutes: 12));
+      final appliedSibling = await applyPendingSnoozesInHive(
+        shifts: shifts,
+        snoozes: [PendingSnooze('s1', 'alarm-2', siblingUntil)],
+        now: now,
+      );
+      expect(appliedSibling, 1);
+      expect((await shifts.getById('s1'))!.snoozedUntil, siblingUntil);
     });
   });
 
