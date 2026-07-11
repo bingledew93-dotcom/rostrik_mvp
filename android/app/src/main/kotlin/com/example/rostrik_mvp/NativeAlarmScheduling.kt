@@ -35,6 +35,7 @@ object NativeAlarmScheduling {
     const val CHANNEL = "rostrik/native_alarms"
     private const val METHOD_SET_EXACT_ALARM = "setExactAlarm"
     private const val METHOD_CANCEL_ALARM = "cancelAlarm"
+    private const val METHOD_CAN_SCHEDULE_EXACT = "canScheduleExactAlarms"
 
     /** Wires the channel onto [messenger], servicing calls with [context]'s
      *  application context. Returns the channel so the caller can retain it for
@@ -92,6 +93,16 @@ object NativeAlarmScheduling {
                         cancelExactAlarm(appContext, id)
                         result.success(null)
                     }
+                }
+                // The AUTHORITATIVE exact-alarm capability check for the
+                // Dashboard's reliability banner. Asks AlarmManager directly —
+                // NOT permission_handler, whose status lookup resolves the
+                // SCHEDULE_EXACT_ALARM group via the MANIFEST declaration and
+                // reports a false "denied" on 13+ now that the manifest caps
+                // that permission at maxSdkVersion=32 (USE_EXACT_ALARM, which
+                // actually grants exactness there, never enters its lookup).
+                METHOD_CAN_SCHEDULE_EXACT -> {
+                    result.success(canScheduleExactAlarms(appContext))
                 }
                 else -> result.notImplemented()
             }
@@ -207,6 +218,17 @@ object NativeAlarmScheduling {
             Log.e(TAG, "setAlarmClock refused (exact-alarm permission revoked) id=$id", e)
             false
         }
+    }
+
+    /** Whether the OS will accept `setAlarmClock` from this app right now.
+     *  True below S (no exact-alarm permission concept); on S+ defers to
+     *  [AlarmManager.canScheduleExactAlarms], which honours BOTH grant paths —
+     *  the revocable SCHEDULE_EXACT_ALARM (12/12L) and the install-time
+     *  USE_EXACT_ALARM (13+). */
+    private fun canScheduleExactAlarms(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return am.canScheduleExactAlarms()
     }
 
     /** Cancels a previously-scheduled exact alarm. Rebuilds a PendingIntent that

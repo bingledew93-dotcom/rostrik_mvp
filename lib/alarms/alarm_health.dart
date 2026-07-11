@@ -1,7 +1,7 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import 'native_alarm_scheduler.dart' show NativeAlarmScheduler;
 
 /// Snapshot of the two runtime grants a ringing alarm cannot survive without
 /// (audit F3). Both can silently disappear AFTER onboarding:
@@ -44,32 +44,51 @@ class AlarmHealth {
 /// tests inject a canned snapshot.
 typedef AlarmHealthProbe = Future<AlarmHealth> Function();
 
-/// Reads the live permission state via `permission_handler`. Best-effort:
-/// any channel failure reads as [AlarmHealth.healthy] rather than throwing —
-/// this runs on the Dashboard build path and must never break the home
-/// screen (or show a warning it can't substantiate).
+/// Wire method on the `rostrik/native_alarms` channel answering
+/// `AlarmManager.canScheduleExactAlarms()` — MUST match
+/// `NativeAlarmScheduling.METHOD_CAN_SCHEDULE_EXACT`.
+const String _methodCanScheduleExact = 'canScheduleExactAlarms';
+
+/// Reads the live grant state. Per-check best-effort: a channel failure on
+/// either probe reads as healthy for THAT check rather than throwing — this
+/// runs on the Dashboard build path and must never break the home screen (or
+/// show a warning it can't substantiate).
+///
+/// The exact-alarm check deliberately asks OUR native channel — the same
+/// AlarmManager the scheduler talks to — and NOT
+/// `Permission.scheduleExactAlarm.status`. Field bug (Pixel 9 XL, Android 16):
+/// permission_handler resolves that group via the MANIFEST declaration first,
+/// and since SCHEDULE_EXACT_ALARM is capped at maxSdkVersion=32 (the Google-
+/// documented pattern when USE_EXACT_ALARM is declared), the lookup comes back
+/// empty on 13+ and the plugin reports "denied" without ever consulting
+/// `canScheduleExactAlarms()` — a false banner while the OS happily arms
+/// exact alarms. On iOS the channel has no handler → healthy, correct (exact
+/// alarms are an Android-only concept).
 Future<AlarmHealth> probeAlarmHealth() async {
+  // Maps to `areNotificationsEnabled()` on Android (covers both the 13+
+  // runtime denial AND the app-level notification toggle) and the
+  // authorization status on iOS.
+  var notificationsEnabled = true;
   try {
-    // Maps to `areNotificationsEnabled()` on Android (covers both the 13+
-    // runtime denial AND the app-level notification toggle) and the
-    // authorization status on iOS.
-    final notifications = await Permission.notification.status;
-
-    // Exact alarms are an Android-only concept; on 13+ USE_EXACT_ALARM reads
-    // granted and can't be revoked, so this effectively guards the 12/12L
-    // "Alarms & reminders" toggle.
-    var exactAllowed = true;
-    if (!kIsWeb && Platform.isAndroid) {
-      exactAllowed = (await Permission.scheduleExactAlarm.status).isGranted;
-    }
-
-    return AlarmHealth(
-      notificationsEnabled: notifications.isGranted,
-      exactAlarmsAllowed: exactAllowed,
-    );
+    notificationsEnabled = (await Permission.notification.status).isGranted;
   } catch (_) {
-    return AlarmHealth.healthy; // no platform (tests) — never a false alarm
+    // No platform (tests) — never a false alarm.
   }
+
+  var exactAlarmsAllowed = true;
+  try {
+    exactAlarmsAllowed = await const MethodChannel(
+          NativeAlarmScheduler.channelName,
+        ).invokeMethod<bool>(_methodCanScheduleExact) ??
+        true;
+  } catch (_) {
+    // No handler (iOS / tests) — exactness isn't a concept there.
+  }
+
+  return AlarmHealth(
+    notificationsEnabled: notificationsEnabled,
+    exactAlarmsAllowed: exactAlarmsAllowed,
+  );
 }
 
 /// Notifications fix path: the app's system settings page (the notification
