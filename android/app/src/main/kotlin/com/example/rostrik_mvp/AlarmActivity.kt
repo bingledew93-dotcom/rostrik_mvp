@@ -240,16 +240,22 @@ class AlarmActivity : Activity(), SensorEventListener {
     // the alarm must never require the user to unlock first.
     // -----------------------------------------------------------------------
     private fun applyLockScreenWindowFlags() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+        // ADD THIS: Explicitly request the keyguard manager to allow bypass
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            keyguardManager.requestDismissKeyguard(this, null) 
         }
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
-        )
     }
+    window.addFlags(
+        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD // ADD THIS LEGACY FLAG
+    )
+}
 
     private fun buildContentView(): LinearLayout {
         val root = LinearLayout(this).apply {
@@ -541,7 +547,10 @@ class AlarmActivity : Activity(), SensorEventListener {
     private fun cancelAlarmNotification() {
         try {
             val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            mgr.cancel(AlarmReceiver.NOTIF_ID)
+            // Per-alarm id (audit F4) — cancel THIS ring's notification only;
+            // a superseded sibling's stays until it is handled. Fallback for
+            // legacy intents without the id extra.
+            mgr.cancel(if (notificationId >= 0) notificationId else AlarmReceiver.NOTIF_ID)
         } catch (e: Exception) {
             Log.w(TAG, "notification cancel failed", e)
         }
@@ -573,7 +582,7 @@ class AlarmActivity : Activity(), SensorEventListener {
         //    notification shows when it will actually ring; keep the shift
         //    context as-is.
         if (notificationId >= 0) {
-            NativeAlarmScheduling.schedule(
+            val armed = NativeAlarmScheduling.schedule(
                 applicationContext,
                 id = notificationId,
                 triggerAtMillis = snoozeUntil,
@@ -589,6 +598,14 @@ class AlarmActivity : Activity(), SensorEventListener {
                 body = contextText,
                 requiresShake = requiresShake,
             )
+            if (!armed) {
+                // Android 12/12L with the exact-alarm permission revoked: the
+                // re-arm was refused (schedule() never throws — an uncaught
+                // SecurityException here would crash the alarm screen on a
+                // snooze tap). The snooze ledger below still records intent;
+                // Dart's reconcile re-arms once permission returns.
+                Log.w(TAG, "snooze: exact-alarm refused — snooze not re-armed natively")
+            }
         } else {
             Log.w(TAG, "snooze: missing notification id — cannot re-arm natively")
         }

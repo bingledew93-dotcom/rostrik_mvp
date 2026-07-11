@@ -140,6 +140,13 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             applicationContext,
         )
+
+        // WINDOW-ROLL GUARANTEE (audit F1): register the periodic background
+        // refresh that keeps the 14-day OS alarm window advancing even when
+        // the user neither opens the app nor reboots for weeks. KEEP policy →
+        // this per-launch call is a no-op once the schedule exists, and
+        // WorkManager persists it across reboots.
+        AlarmSyncWorker.enqueuePeriodicRefresh(applicationContext)
     }
 
     override fun onDestroy() {

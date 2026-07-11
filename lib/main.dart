@@ -157,8 +157,9 @@ void main() async {
   // watcher, which reconciles away any now-stale OS alarm. Cold-launch is
   // covered by the drain above; there is no longer any FSI payload to pull —
   // AlarmActivity, not MainActivity, owns the alarm event end to end.
-  WidgetsBinding.instance
-      .addObserver(_AlarmDismissalDrain(storage.shifts, storage.alarms));
+  WidgetsBinding.instance.addObserver(
+    _AlarmDismissalDrain(storage.shifts, storage.alarms, syncService),
+  );
 
   // LEGAL CONSENT GATE — read the accepted legal version from
   // shared_preferences (the source of truth the consent screen writes). If it
@@ -191,10 +192,11 @@ void main() async {
 /// `dismissedAlarmIds` write trips AlarmSyncService's shift watcher, which
 /// cancels the dismissed ring's now-stale OS alarm — and ONLY that one.
 class _AlarmDismissalDrain with WidgetsBindingObserver {
-  _AlarmDismissalDrain(this._shifts, this._alarms);
+  _AlarmDismissalDrain(this._shifts, this._alarms, this._syncService);
 
   final ShiftRepository _shifts;
   final AppAlarmRepository _alarms;
+  final AlarmSyncService _syncService;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -208,10 +210,17 @@ class _AlarmDismissalDrain with WidgetsBindingObserver {
   /// then fired-one-time cleanup. Each resulting Hive write trips
   /// AlarmSyncService's alarm/shift watchers, which reconcile the OS alarm set
   /// to match (and stop re-projecting a deleted one-time).
+  ///
+  /// The tail sync is the WINDOW-ROLL guarantee (audit F1): the drains only
+  /// trigger a reconcile when a ledger actually had entries, so a long-lived
+  /// process resumed after days of quiet would otherwise keep a stale 14-day
+  /// window. An explicit sync is safe to run unconditionally — it's
+  /// idempotent and issues zero platform calls when nothing changed.
   Future<void> _drainNativeLedgers() async {
     await _syncNativePendingDismissals(_shifts);
     await drainPendingSnoozesIntoHive(_shifts);
     await drainPendingAlarmDeletesIntoHive(_alarms);
+    await _syncService.syncAlarms();
   }
 }
 

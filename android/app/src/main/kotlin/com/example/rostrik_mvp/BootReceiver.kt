@@ -41,6 +41,17 @@ import android.util.Log
  *     are computed, so re-deriving from Hive is correct.
  *   - QUICKBOOT_POWERON: HTC/legacy quick-boot signal. Cheap to
  *     handle, costs nothing on devices that don't emit it.
+ *   - ACTION_TIMEZONE_CHANGED / ACTION_TIME_CHANGED (audit F2): every
+ *     armed alarm is an EPOCH instant computed from LOCAL wall time at
+ *     schedule time. When the user crosses timezones (fly-in/fly-out
+ *     shift workers) or manually adjusts the clock, those instants no
+ *     longer land on the intended local wall time — a 06:00 wake-up can
+ *     drift hours. The re-sync recomputes every fireAt from local
+ *     calendar math and re-arms. Both actions are on Android's
+ *     implicit-broadcast exceptions list ("clock applications may need
+ *     to receive these broadcasts to update alarms when the time
+ *     changes"), so a manifest-registered receiver still gets them on
+ *     API 26+.
  */
 class BootReceiver : BroadcastReceiver() {
     companion object {
@@ -65,6 +76,10 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_LOCKED_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
+            // Clock moved under our armed epoch instants — re-derive them
+            // from local wall time (ACTION_TIME_CHANGED == "TIME_SET").
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_TIME_CHANGED,
             ACTION_QUICKBOOT_POWERON,
             ACTION_HTC_QUICKBOOT_POWERON -> true
             else -> false

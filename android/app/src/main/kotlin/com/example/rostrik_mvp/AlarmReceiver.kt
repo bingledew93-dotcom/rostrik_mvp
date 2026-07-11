@@ -81,7 +81,17 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // Foreground-Service-Intent (FSI) keep-up notification.
         private const val CHANNEL_ID = "rostrik_alarm_fire"
-        const val NOTIF_ID = 0x414C524D // "ALRM" — shared so AlarmActivity can cancel it.
+
+        // FALLBACK notification id (audit F4): the fire notification is keyed
+        // by the alarm's own EXTRA_NOTIFICATION_ID so near-simultaneous alarms
+        // get SEPARATE, separately-dismissable notifications instead of the
+        // second silently replacing the first (the audio + wake screen still
+        // coalesce onto the newest — one service, one singleInstance activity —
+        // but a superseded alarm's notification stays in the shade; tapping it
+        // reopens AlarmActivity with THAT alarm's payload so its dismissal is
+        // still recorded). This constant is only used when the extra is absent
+        // (legacy intents / the preview path).
+        const val NOTIF_ID = 0x414C524D // "ALRM"
 
         // Partial WakeLock held from fire → dismiss. Static so [AlarmActivity]
         // (a different object, possibly a different process incarnation) can
@@ -89,10 +99,12 @@ class AlarmReceiver : BroadcastReceiver() {
         // acquire/release pair, idempotent.
         private const val WAKELOCK_TAG = "rostrik:alarm-fire"
         // Hard ceiling so a never-dismissed alarm (FSI ignored, device in a
-        // drawer) can't pin the CPU forever. Comfortably longer than any sane
-        // ring window; the service's own playback timeout should end things
-        // first.
-        private const val WAKELOCK_TIMEOUT_MS = 11L * 60L * 1000L
+        // drawer) can't pin the CPU forever. MUST outlast AlarmAudioService's
+        // 15-minute AUTO_TIMEOUT (audit F5 — it was 11 min, silently lapsing
+        // mid-ring; the MediaPlayer's own wake mode masked it): the service's
+        // timeout is the intended end of an unattended ring, and it releases
+        // this lock itself, so the ceiling only ever fires as a fail-safe.
+        private const val WAKELOCK_TIMEOUT_MS = 16L * 60L * 1000L
 
         @Volatile
         private var wakeLock: PowerManager.WakeLock? = null
@@ -178,6 +190,12 @@ class AlarmReceiver : BroadcastReceiver() {
             // record a fired ONE-TIME rule for deletion (same cleanup the manual
             // dismiss does) even when the user never touched the phone.
             putExtra(EXTRA_APP_ALARM_ID, fireIntent.getStringExtra(EXTRA_APP_ALARM_ID))
+            // The per-alarm notification id, so the auto-timeout cancels THIS
+            // alarm's fire notification (audit F4 keys them per alarm).
+            putExtra(
+                EXTRA_NOTIFICATION_ID,
+                fireIntent.getIntExtra(EXTRA_NOTIFICATION_ID, -1),
+            )
             // Forward the notification detail so the service's keep-alive
             // notification reads the same as the full-screen one (label title +
             // "time · context" text) instead of a generic "Alarm".
@@ -259,9 +277,13 @@ class AlarmReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             piFlags = piFlags or PendingIntent.FLAG_IMMUTABLE
         }
-        // requestCode keyed on the alarm id so distinct alarms get distinct
-        // PendingIntents (UPDATE_CURRENT refreshes a re-fire's extras).
-        val requestCode = alarmId?.hashCode() ?: 0
+        // requestCode keyed on the PER-ALARM notification id so distinct
+        // alarms get distinct PendingIntents even on the SAME shift (a
+        // shiftId-hash key would let UPDATE_CURRENT silently rewrite an
+        // earlier notification's tap payload with the newer alarm's extras).
+        // Falls back to the shift-id hash for legacy intents without the id.
+        val notifId = fireIntent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+        val requestCode = if (notifId >= 0) notifId else (alarmId?.hashCode() ?: 0)
         val fullScreenPi = PendingIntent.getActivity(
             context,
             requestCode,
@@ -278,7 +300,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val notification = builder
             .setContentTitle(label)
             .setContentText(notificationDetail(displayTime, body))
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_stat_alarm)
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true)
             .setAutoCancel(false)
@@ -290,7 +312,9 @@ class AlarmReceiver : BroadcastReceiver() {
             .build()
 
         val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        mgr.notify(NOTIF_ID, notification)
+        // Per-alarm id (audit F4) — a second alarm firing mid-ring posts its
+        // OWN notification instead of replacing the first one's.
+        mgr.notify(if (notifId >= 0) notifId else NOTIF_ID, notification)
     }
 
     private fun ensureChannel(context: Context) {

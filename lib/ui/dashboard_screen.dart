@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../alarms/alarm_health.dart';
 import '../alarms/alarm_projection.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
@@ -30,7 +31,7 @@ import 'slide_to_confirm.dart';
 /// countdown stays fresh; cancelled in `dispose()` so the timer never
 /// outlives the widget.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, this.onOpenTab});
+  const DashboardScreen({super.key, this.onOpenTab, this.healthProbe});
 
   /// Switches the MainLayout bottom-nav tab. Supplied in production so the
   /// "My Rotation" tile's "View full roster" affordance jumps to the Roster
@@ -38,12 +39,23 @@ class DashboardScreen extends StatefulWidget {
   /// affordance is hidden in that case.
   final void Function(int index)? onOpenTab;
 
+  /// Alarm-reliability probe override for tests. Null → the real
+  /// [probeAlarmHealth] (which itself degrades to healthy when no platform
+  /// is available, so existing tests never see a false banner).
+  final AlarmHealthProbe? healthProbe;
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   Timer? _ticker;
+
+  /// Latest reliability snapshot; null until the first probe lands (no
+  /// banner while unknown — never warn on a guess).
+  AlarmHealth? _health;
+  late final AlarmHealthProbe _probe;
 
   @override
   void initState() {
@@ -54,10 +66,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+    _probe = widget.healthProbe ?? probeAlarmHealth;
+    _refreshHealth();
+    // Re-probe on every resume: the warning's whole job is catching a grant
+    // the user just revoked in Settings — and clearing the moment they come
+    // back from fixing it.
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshHealth();
+  }
+
+  Future<void> _refreshHealth() async {
+    final health = await _probe();
+    if (mounted) setState(() => _health = health);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     super.dispose();
   }
@@ -128,6 +157,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Reliability warning first — an alarm app whose alarms
+                  // cannot ring outranks everything else on this screen.
+                  // Hidden while the probe is pending or everything is fine.
+                  if (_health case final health? when !health.ok)
+                    _AlarmReliabilityBanner(
+                      health: health,
+                      onFixed: _refreshHealth,
+                    ),
                   // Hero gets a fixed slice of the viewport so its internal
                   // vertical centering still reads as a hero AND the page can
                   // scroll once "My Rotation" expands (a centre-aligned Column
@@ -604,6 +641,134 @@ class _RotationPositionCard extends StatelessWidget {
       case ShiftType.off:
         return 'Off';
     }
+  }
+}
+
+/// Alarm-reliability warning (audit F3) — shown while a grant the alarms
+/// cannot ring without is missing. One row per detected problem, each with
+/// its own fix affordance deep-linking to the right system surface:
+///
+///   * notifications off → app settings (a denied POST_NOTIFICATIONS can't be
+///     re-prompted; the toggle lives in Settings). Without it the alarm AUDIO
+///     still fires but there's no wake screen and no visible dismiss.
+///   * exact alarms blocked (Android 12/12L only) → the "Alarms & reminders"
+///     special-access screen. Without it NOTHING is armed at all.
+///
+/// Deliberately not dismissible: while the state persists, alarms genuinely
+/// cannot do their job — hiding the warning would recreate the silent failure
+/// it exists to prevent. It disappears by being fixed ([onFixed] re-probes on
+/// return from Settings via the Dashboard's resume hook too).
+class _AlarmReliabilityBanner extends StatelessWidget {
+  const _AlarmReliabilityBanner({required this.health, required this.onFixed});
+
+  final AlarmHealth health;
+
+  /// Re-probe callback, invoked after a fix affordance returns so the banner
+  /// clears immediately when the grant is restored (belt-and-braces with the
+  /// resume re-probe — the settings hop doesn't always background the app).
+  final Future<void> Function() onFixed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
+      key: const ValueKey('alarm-health-banner'),
+      color: scheme.errorContainer,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: scheme.onErrorContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Alarms can\'t ring reliably',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: scheme.onErrorContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (!health.notificationsEnabled)
+              _issueRow(
+                theme,
+                'Notifications are off — a ringing alarm can\'t show its '
+                'wake screen or be dismissed.',
+                buttonKey: const ValueKey('health-fix-notifications'),
+                buttonLabel: 'Open settings',
+                onPressed: () async {
+                  // Fire-and-forget the settings hop — its future resolves on
+                  // the platform's schedule (never, under the test harness),
+                  // and awaiting it would strand the re-probe below. The
+                  // AUTHORITATIVE clear is the Dashboard's resume re-probe
+                  // when the user comes back from Settings; this immediate
+                  // one covers same-process grant changes and keeps the
+                  // banner honest if the hop fails to launch.
+                  unawaited(openNotificationSettings());
+                  await onFixed();
+                },
+              ),
+            if (!health.exactAlarmsAllowed)
+              _issueRow(
+                theme,
+                'Exact alarms are blocked — wake-ups can\'t be scheduled '
+                'at all.',
+                buttonKey: const ValueKey('health-fix-exact'),
+                buttonLabel: 'Allow',
+                onPressed: () async {
+                  // Same fire-and-forget rationale as the notifications row.
+                  unawaited(requestExactAlarmPermission());
+                  await onFixed();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _issueRow(
+    ThemeData theme,
+    String message, {
+    required Key buttonKey,
+    required String buttonLabel,
+    required Future<void> Function() onPressed,
+  }) {
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onErrorContainer,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonal(
+            key: buttonKey,
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.onErrorContainer,
+              foregroundColor: scheme.errorContainer,
+              visualDensity: VisualDensity.compact,
+            ),
+            onPressed: onPressed,
+            child: Text(buttonLabel),
+          ),
+        ],
+      ),
+    );
   }
 }
 

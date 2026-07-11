@@ -1,9 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- AlarmManager.setAlarmClock-quality (exact, Doze-exempt) scheduling on
-         Android 12+. setAlarmClock is itself permission-exempt, but declaring
-         this keeps the capability explicit and the lock-screen next-alarm icon. -->
+    <!-- Exact-alarm capability, split by API level per Google's guidance for
+         alarm-clock apps (audit F7):
+           * 12/12L (31-32): SCHEDULE_EXACT_ALARM — pre-granted but USER-
+             REVOCABLE via Settings → "Alarms & reminders"; a revocation makes
+             setAlarmClock throw (guarded → EXACT_ALARM_DENIED, surfaced by the
+             Dashboard reliability banner). maxSdkVersion=32 keeps it off 13+.
+           * 13+ (33+): USE_EXACT_ALARM — install-time and NON-revocable for
+             apps whose core function is an alarm clock. Play policy restricts
+             it to exactly this category; Rostrik qualifies. -->
     <uses-permission
-        android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Lets the alarm fire as a full-screen intent that wakes the lockscreen. -->
     <uses-permission
         android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
@@ -36,10 +45,13 @@
         android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
-    <!-- Custom ringtone selection (Phase 1): read user-picked audio files.
-         Granular media permission on Android 13+ (API 33+). file_picker's
-         document-picker flow works without it, but it's declared so broader
-         audio reads are available and the requested capability is explicit. -->
+    <!-- Custom ringtone playback at FIRE TIME (audit F7 — reviewed and KEPT):
+         the vault flow copies picked files into app storage (no permission
+         needed), but the SYSTEM-picker flow stores a content:// URI that can
+         point at user-added audio on shared storage. AlarmAudioService opens
+         that URI at 3am with no activity result grant in scope — without this
+         permission the open fails and the engine falls back to the bundled
+         classic tone (alarm still rings, wrong sound). -->
     <uses-permission
         android:name="android.permission.READ_MEDIA_AUDIO"/>
     <!-- Pre-Android-13 fallback. Capped at API 32 so it is NOT requested on
@@ -120,6 +132,15 @@
                     android:name="android.intent.action.QUICKBOOT_POWERON"/>
                 <action
                     android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                <!-- Clock-change recovery: armed alarms are epoch instants
+                     derived from LOCAL wall time; a timezone hop or manual
+                     clock edit strands them at the wrong local time until
+                     re-synced. Both actions are implicit-broadcast EXCEPTIONS
+                     for clock apps, so manifest delivery works on API 26+. -->
+                <action
+                    android:name="android.intent.action.TIMEZONE_CHANGED"/>
+                <action
+                    android:name="android.intent.action.TIME_SET"/>
             </intent-filter>
         </receiver>
         <!-- Receiver AlarmManager dispatches to when an exact alarm fires. The

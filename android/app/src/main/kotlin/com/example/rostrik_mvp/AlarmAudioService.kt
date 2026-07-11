@@ -114,6 +114,11 @@ class AlarmAudioService : Service() {
      *  manual dismiss does). Null on the legacy preview path. */
     private var appAlarmId: String? = null
 
+    /** The ringing alarm's PER-ALARM fire-notification id (audit F4), captured
+     *  on [ACTION_PLAY] so the auto-timeout cancels the right notification.
+     *  -1 on legacy/preview intents → falls back to [AlarmReceiver.NOTIF_ID]. */
+    private var fsiNotificationId: Int = -1
+
     /** Notification copy, captured on [ACTION_PLAY] and used by
      *  [buildNotification] so the keep-alive notification matches the
      *  full-screen one. Defaults keep the legacy preview path readable. */
@@ -131,6 +136,8 @@ class AlarmAudioService : Service() {
             ACTION_PLAY -> {
                 alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 appAlarmId = intent.getStringExtra(AlarmReceiver.EXTRA_APP_ALARM_ID)
+                fsiNotificationId =
+                    intent.getIntExtra(AlarmReceiver.EXTRA_NOTIFICATION_ID, -1)
                 // Capture the notification copy BEFORE going foreground so the
                 // keep-alive notification is built with it (reading three extras
                 // is microseconds — still well within the 5s startForeground
@@ -270,7 +277,11 @@ class AlarmAudioService : Service() {
     private fun cancelFullScreenNotification() {
         try {
             val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            mgr.cancel(AlarmReceiver.NOTIF_ID)
+            // Per-alarm id (audit F4) — cancel the ringing alarm's own fire
+            // notification; legacy intents fall back to the fixed id.
+            mgr.cancel(
+                if (fsiNotificationId >= 0) fsiNotificationId else AlarmReceiver.NOTIF_ID,
+            )
         } catch (e: Exception) {
             Log.w(TAG, "FSI notification cancel failed", e)
         }
@@ -337,7 +348,7 @@ class AlarmAudioService : Service() {
         return builder
             .setContentTitle(label)
             .setContentText(AlarmReceiver.notificationDetail(displayTime, contextText))
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setSmallIcon(R.drawable.ic_stat_alarm)
             .setOngoing(true)
             .build()
     }

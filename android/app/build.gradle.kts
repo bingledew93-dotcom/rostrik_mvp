@@ -27,9 +27,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // flutter_local_notifications uses java.time.* which is API 26+;
-        // desugaring back-fills it for our minSdk (21) so the alarm engine
-        // works on older Android too.
+        // java.time.* back-fill for plugins that use it below API 26.
+        // (Originally added for flutter_local_notifications; that plugin is
+        // gone, but desugaring is kept — it's cheap, and removing it risks
+        // breaking any remaining transitive java.time use on old devices.)
         isCoreLibraryDesugaringEnabled = true
     }
 
@@ -78,8 +79,7 @@ flutter {
 }
 
 dependencies {
-    // Required by flutter_local_notifications via the core-library-desugaring
-    // flag above. Version pinned per the plugin's README (>= 2.1.4).
+    // Backing library for the core-library-desugaring flag above.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
     // WorkManager — used by BootReceiver → AlarmSyncWorker to run a

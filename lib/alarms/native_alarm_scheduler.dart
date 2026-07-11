@@ -139,30 +139,50 @@ class NativeAlarmScheduler implements AlarmScheduler {
     }
 
     final fireMillis = fireAt.millisecondsSinceEpoch;
-    await _channel.invokeMethod<void>(_methodSetExact, <String, dynamic>{
-      _argId: id,
-      _argTriggerAtMillis: fireMillis,
-      // The shift id the native dismiss/auto-timeout records in the ledger so
-      // Dart acks the right shift in Hive. 'NONE' for shift-less alarms; the
-      // native side skips that.
-      _argAlarmId: decoded?.shiftId ?? '',
-      // The owning AppAlarm UUID — recorded by the native snooze so Dart can
-      // persist a one-off ('NONE') alarm's snooze keyed by this id.
-      _argAppAlarmId: decoded?.appAlarmId ?? '',
-      _argLabel: title,
-      // Notification detail: the 12-hour ring time + the short shift context.
-      // AlarmReceiver composes these into the native notification (and forwards
-      // them to AlarmAudioService) — see [AlarmReceiver.notificationDetail].
-      _argDisplayTime: _formatClock12h(fireAt),
-      _argBody: body,
-      _argSource: source,
-      _argUri: uri,
-      _argVibrate: vibrate,
-      _argBundledResource: bundledResource,
-      _argSnoozeMinutes: _readSnoozeMinutes(),
-      // Critical-shift alarms require a shake to dismiss; normal alarms slide.
-      _argRequiresShake: decoded?.isCritical ?? false,
-    });
+    try {
+      await _channel.invokeMethod<void>(_methodSetExact, <String, dynamic>{
+        _argId: id,
+        _argTriggerAtMillis: fireMillis,
+        // The shift id the native dismiss/auto-timeout records in the ledger so
+        // Dart acks the right shift in Hive. 'NONE' for shift-less alarms; the
+        // native side skips that.
+        _argAlarmId: decoded?.shiftId ?? '',
+        // The owning AppAlarm UUID — recorded by the native snooze so Dart can
+        // persist a one-off ('NONE') alarm's snooze keyed by this id.
+        _argAppAlarmId: decoded?.appAlarmId ?? '',
+        _argLabel: title,
+        // Notification detail: the 12-hour ring time + the short shift context.
+        // AlarmReceiver composes these into the native notification (and forwards
+        // them to AlarmAudioService) — see [AlarmReceiver.notificationDetail].
+        _argDisplayTime: _formatClock12h(fireAt),
+        _argBody: body,
+        _argSource: source,
+        _argUri: uri,
+        _argVibrate: vibrate,
+        _argBundledResource: bundledResource,
+        _argSnoozeMinutes: _readSnoozeMinutes(),
+        // Critical-shift alarms require a shake to dismiss; normal alarms slide.
+        _argRequiresShake: decoded?.isCritical ?? false,
+      });
+    } on PlatformException catch (e) {
+      // Native refused the schedule — 'EXACT_ALARM_DENIED' when the user
+      // revoked "Alarms & reminders" on Android 12/12L. Two invariants:
+      //   1. Do NOT record the id in the ledger. A phantom entry would make
+      //      the reconciler believe the alarm is armed and never retry; a
+      //      skipped write means the next reconcile sees the id absent from
+      //      pendingIds() and re-issues it — self-healing once the permission
+      //      is restored.
+      //   2. Do NOT rethrow. One refused alarm must not abort the whole
+      //      reconcile — which on cold start runs BEFORE runApp, where an
+      //      escaping error would strand the app on the splash screen.
+      // (MissingPluginException is deliberately NOT caught: an unregistered
+      // channel is a wiring bug that should stay loud in development.)
+      debugPrint(
+        '[NativeAlarmScheduler] schedule refused for id=$id: '
+        '${e.code} ${e.message}',
+      );
+      return;
+    }
 
     _ledger[id] = fireMillis;
     await _persist();
@@ -221,23 +241,40 @@ class NativeAlarmScheduler implements AlarmScheduler {
     return _ledger.keys.toSet();
   }
 
-  /// Reads the persisted ledger into [_ledger] once. Best-effort + idempotent:
-  /// a no-op when the `settings` box isn't open (e.g. the test harness, which
-  /// injects a fake channel anyway). Mirrors `AlarmSyncService`'s hydrate.
+  /// Reads the persisted ledger into [_ledger], retrying on every call until
+  /// the `settings` box is actually readable. Mirrors `AlarmSyncService`'s
+  /// hydrate.
+  ///
+  /// The latch is set ONLY once `Hive.isBoxOpen('settings')` confirms the box
+  /// — at that point whatever the box holds (including nothing, on a fresh
+  /// install) IS the hydrated truth. Latching before the check would make a
+  /// single too-early call (scheduler constructed ahead of the box open)
+  /// permanently blind this ledger to its on-disk state: `pendingIds()` would
+  /// answer empty forever, the reconciler would re-schedule everything as
+  /// new, and `cancelAll` — which can only cancel ids the ledger knows, since
+  /// AlarmManager has no enumeration API — would silently orphan every live
+  /// OS alarm. Both production init paths open the box first, so the retry
+  /// is a guard rail against reordering, not a live bug being papered over.
+  ///
+  /// Disk entries merge via `putIfAbsent`: hydration may land AFTER live
+  /// `scheduleAt`/`cancel` mutations (the retry is the point), and a fresher
+  /// in-memory fireAt must never be clobbered by a stale persisted one.
   void _hydrate() {
     if (_hydrated) return;
-    _hydrated = true;
     try {
-      if (!Hive.isBoxOpen('settings')) return;
+      if (!Hive.isBoxOpen('settings')) return; // not ready — retry next call
+      _hydrated = true;
       final raw = Hive.box('settings').get(_ledgerKey);
-      if (raw is! Map) return;
+      if (raw is! Map) return; // fresh install / nothing persisted yet
       raw.forEach((dynamic k, dynamic v) {
         final id = (k is int) ? k : int.tryParse(k.toString());
         final ms = (v is int) ? v : int.tryParse(v.toString());
-        if (id != null && ms != null) _ledger[id] = ms;
+        if (id != null && ms != null) _ledger.putIfAbsent(id, () => ms);
       });
     } catch (_) {
-      // Cold start without persisted state simply re-issues fresh schedules.
+      // Unreadable state is treated as "not hydrated yet" — the next call
+      // retries. Cold start without persisted state simply re-issues fresh
+      // schedules.
     }
   }
 

@@ -50,7 +50,7 @@ object NativeAlarmScheduling {
                     if (id == null || triggerAtMillis == null) {
                         result.error("BAD_ARGS", "id and triggerAtMillis are required", null)
                     } else {
-                        scheduleExactAlarm(
+                        val armed = scheduleExactAlarm(
                             appContext,
                             id = id,
                             triggerAtMillis = triggerAtMillis,
@@ -67,7 +67,21 @@ object NativeAlarmScheduling {
                             body = call.argument<String>("body"),
                             requiresShake = call.argument<Boolean>("requiresShake") ?: false,
                         )
-                        result.success(null)
+                        if (armed) {
+                            result.success(null)
+                        } else {
+                            // Surface the refusal instead of pretending success:
+                            // the Dart scheduler must NOT record this id in its
+                            // ledger, or the reconciler would believe the alarm
+                            // is armed and never retry once the permission is
+                            // restored. Error code is part of the wire contract
+                            // with NativeAlarmScheduler.scheduleAt.
+                            result.error(
+                                "EXACT_ALARM_DENIED",
+                                "exact-alarm permission revoked — alarm $id not armed",
+                                null,
+                            )
+                        }
                     }
                 }
                 METHOD_CANCEL_ALARM -> {
@@ -86,7 +100,9 @@ object NativeAlarmScheduling {
     }
 
     /** Public so [AlarmActivity]'s Snooze can re-arm an alarm in-process (it has
-     *  a Context, not a MethodChannel). The channel handler routes here too. */
+     *  a Context, not a MethodChannel). The channel handler routes here too.
+     *  Returns whether the alarm was actually armed — false when the exact-alarm
+     *  permission has been revoked (see [scheduleExactAlarm]); never throws. */
     fun schedule(
         context: Context,
         id: Int,
@@ -109,11 +125,20 @@ object NativeAlarmScheduling {
 
     /** Schedules (or replaces) one exact alarm. `setAlarmClock` is the
      *  highest-priority AlarmManager tier: exact, Doze-exempt, surfaced on the
-     *  lock-screen alarm icon — and it needs NO SCHEDULE_EXACT_ALARM grant. The
-     *  fire PendingIntent targets [AlarmReceiver] explicitly; FLAG_UPDATE_CURRENT
-     *  keyed on [id] means re-scheduling the same id replaces it (and refreshes
-     *  its sound/label extras), satisfying the AlarmScheduler replace-by-id
-     *  contract. */
+     *  lock-screen alarm icon. The fire PendingIntent targets [AlarmReceiver]
+     *  explicitly; FLAG_UPDATE_CURRENT keyed on [id] means re-scheduling the
+     *  same id replaces it (and refreshes its sound/label extras), satisfying
+     *  the AlarmScheduler replace-by-id contract.
+     *
+     *  PERMISSIONS: on Android 13+ the manifest's USE_EXACT_ALARM (install-time,
+     *  non-revocable for alarm-clock apps) covers `setAlarmClock`. On Android
+     *  12/12L only SCHEDULE_EXACT_ALARM exists, is pre-granted, and the user CAN
+     *  revoke it via Settings → "Alarms & reminders" — after which
+     *  `setAlarmClock` throws SecurityException. That throw must never escape:
+     *  uncaught it aborts the Dart boot sync mid-`main()` (app stuck on splash)
+     *  or crashes [AlarmActivity]'s in-process snooze re-arm. Returns false on
+     *  refusal so callers can report an honest failure instead of recording a
+     *  phantom alarm. */
     private fun scheduleExactAlarm(
         context: Context,
         id: Int,
@@ -129,7 +154,7 @@ object NativeAlarmScheduling {
         displayTime: String?,
         body: String?,
         requiresShake: Boolean,
-    ) {
+    ): Boolean {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val fireIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = AlarmReceiver.ACTION_ALARM_FIRE
@@ -171,8 +196,17 @@ object NativeAlarmScheduling {
             Intent(context, MainActivity::class.java),
             pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT),
         )
-        am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showPi), firePi)
-        Log.d(TAG, "setExactAlarm id=$id at=$triggerAtMillis alarmId=$alarmId")
+        return try {
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAtMillis, showPi), firePi)
+            Log.d(TAG, "setExactAlarm id=$id at=$triggerAtMillis alarmId=$alarmId")
+            true
+        } catch (e: SecurityException) {
+            // Android 12/12L with "Alarms & reminders" revoked. Loud but
+            // non-fatal — the caller reports the refusal to Dart, whose ledger
+            // then stays honest and re-issues on the reconcile after re-grant.
+            Log.e(TAG, "setAlarmClock refused (exact-alarm permission revoked) id=$id", e)
+            false
+        }
     }
 
     /** Cancels a previously-scheduled exact alarm. Rebuilds a PendingIntent that
@@ -199,7 +233,16 @@ object NativeAlarmScheduling {
         }
     }
 
-    /** Adds the FLAG_IMMUTABLE bit (required on S+) to [base] PendingIntent flags. */
+    /** Adds the FLAG_IMMUTABLE bit (required on S+) to [base] PendingIntent flags.
+     *
+     *  IMMUTABLE + FLAG_UPDATE_CURRENT is deliberate and correct — do not "fix"
+     *  it to FLAG_MUTABLE. Immutability only blocks the RECIPIENT from merging a
+     *  fill-in Intent at send() time; it does NOT stop this app from refreshing
+     *  the extras by re-creating the PendingIntent with UPDATE_CURRENT (the
+     *  documented owner-side update path, and how every reschedule here refreshes
+     *  sound/label/shake extras — verified live by the snooze re-arm, which
+     *  re-stamps the display time on the SAME id). FLAG_MUTABLE would be a
+     *  security downgrade with no functional gain. */
     private fun pendingIntentFlags(base: Int): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             base or PendingIntent.FLAG_IMMUTABLE

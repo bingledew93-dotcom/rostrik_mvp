@@ -5,6 +5,7 @@ import 'package:rostrik_mvp/data/models/alarm_settings.dart';
 import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_cycle.dart';
+import 'package:rostrik_mvp/alarms/alarm_health.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
 import 'package:rostrik_mvp/data/repositories/app_alarm_repository.dart';
 import 'package:rostrik_mvp/data/repositories/shift_repository.dart';
@@ -20,6 +21,7 @@ void main() {
     List<ShiftCycle> cycles = const [],
     List<AppAlarm> alarms = const [],
     FakeAppAlarmRepository? alarmRepo,
+    AlarmHealthProbe? healthProbe,
   }) async {
     // Backing repos for the early-skip "Dismiss Upcoming Alarm" writes. Most
     // tests never touch them (no alarm in window → no control), but they must
@@ -53,7 +55,7 @@ void main() {
           Provider<ShiftRepository>.value(value: shiftRepo),
           Provider<AppAlarmRepository>.value(value: appAlarmRepo),
         ],
-        child: const MaterialApp(home: DashboardScreen()),
+        child: MaterialApp(home: DashboardScreen(healthProbe: healthProbe)),
       ),
     );
     await tester.pump();
@@ -731,6 +733,121 @@ void main() {
         findsOneWidget,
       );
       expect(await repo.getById('soon'), isNull);
+    });
+  });
+
+  group('alarm reliability banner (audit F3)', () {
+    testWidgets('absent while healthy — and by default in tests (the probe '
+        'degrades to healthy without a platform)', (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async => AlarmHealth.healthy,
+      );
+      await tester.pump(); // flush the async probe
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsNothing);
+    });
+
+    testWidgets('notifications revoked → banner with the settings fix row',
+        (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async => const AlarmHealth(
+          notificationsEnabled: false,
+          exactAlarmsAllowed: true,
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsOneWidget);
+      expect(find.byKey(const ValueKey('health-fix-notifications')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('health-fix-exact')), findsNothing,
+          reason: 'only detected problems get a row');
+    });
+
+    testWidgets('exact alarms revoked → banner with the allow fix row',
+        (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async => const AlarmHealth(
+          notificationsEnabled: true,
+          exactAlarmsAllowed: false,
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsOneWidget);
+      expect(find.byKey(const ValueKey('health-fix-exact')), findsOneWidget);
+      expect(find.byKey(const ValueKey('health-fix-notifications')),
+          findsNothing);
+    });
+
+    testWidgets('both revoked → both fix rows in one banner', (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async => const AlarmHealth(
+          notificationsEnabled: false,
+          exactAlarmsAllowed: false,
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('health-fix-notifications')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('health-fix-exact')), findsOneWidget);
+    });
+
+    testWidgets('the fix affordance re-probes and clears the banner once the '
+        'grant is restored', (tester) async {
+      // First probe: broken. After the fix button runs, the next probe
+      // reports healthy (as if the user flipped the toggle in Settings).
+      var probes = 0;
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async {
+          probes++;
+          return probes == 1
+              ? const AlarmHealth(
+                  notificationsEnabled: false, exactAlarmsAllowed: true)
+              : AlarmHealth.healthy;
+        },
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsOneWidget);
+
+      // The settings hop is fire-and-forget (its platform future never
+      // resolves under the test harness — exactly why the button must not
+      // await it); the button's own re-probe is what we're pinning.
+      await tester.tap(find.byKey(const ValueKey('health-fix-notifications')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsNothing);
+    });
+
+    testWidgets('returning to the app re-probes and clears the banner — the '
+        'production path back from Settings', (tester) async {
+      var probes = 0;
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async {
+          probes++;
+          return probes == 1
+              ? const AlarmHealth(
+                  notificationsEnabled: false, exactAlarmsAllowed: true)
+              : AlarmHealth.healthy;
+        },
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsOneWidget);
+
+      // Simulate coming back from the Settings app: the lifecycle observer
+      // re-probes on resume, sees the restored grant, and clears the banner.
+      tester.binding
+          .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsNothing);
     });
   });
 }

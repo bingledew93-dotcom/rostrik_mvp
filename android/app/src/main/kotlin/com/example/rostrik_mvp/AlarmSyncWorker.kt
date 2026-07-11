@@ -3,10 +3,13 @@ package com.example.rostrik_mvp
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import java.util.concurrent.TimeUnit
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -31,9 +34,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  * Why not the `workmanager` Flutter plugin: per Phase-5 architectural
  * stance we don't run a long-lived Dart isolate in a periodic worker.
- * This Worker is one-shot per boot / package-replace — it starts an
- * engine, runs one sync, tears down. The engine does not persist
- * across `doWork()` calls.
+ * Every run — one-shot (boot / package-replace / clock-change) or the
+ * periodic window-roll refresh — starts an engine, runs one sync,
+ * tears down. The engine does not persist across `doWork()` calls.
  *
  * Hand-off contract with Dart (identical to the iOS path):
  *   1. Native creates the engine, registers plugins, starts the
@@ -86,6 +89,19 @@ class AlarmSyncWorker(
         /// expected runtime.
         private const val SYNC_TIMEOUT_MS = 30_000L
 
+        /// Unique name for the PERIODIC window-roll refresh — distinct from
+        /// the one-shot boot name so the two never collide in WorkManager.
+        private const val UNIQUE_PERIODIC_NAME = "rostrik_alarm_sync_periodic"
+
+        /// How often the periodic refresh runs. The OS pending set covers a
+        /// rolling 14-DAY window, so a 12-hour cadence has ~27 chances to
+        /// land before the window could ever empty — WorkManager may defer
+        /// individual runs for Doze/battery, and that slack is exactly why
+        /// the cadence is this dense relative to the deadline. Battery cost
+        /// is negligible: the sync is a ≤30s one-shot reconcile that issues
+        /// zero platform calls when nothing changed.
+        private const val PERIODIC_INTERVAL_HOURS = 12L
+
         fun enqueueOneShot(context: Context) {
             val request = OneTimeWorkRequestBuilder<AlarmSyncWorker>()
                 // No constraints — boot recovery must run regardless
@@ -96,6 +112,29 @@ class AlarmSyncWorker(
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.KEEP,
+                request,
+            )
+        }
+
+        /** The 14-day-window ROLL guarantee (audit F1): without this, the OS
+         *  pending set only advanced when the app was opened, data changed,
+         *  or the device rebooted — a user who did none of those for two
+         *  weeks silently stopped getting alarms on day 15. Registered from
+         *  MainActivity on every launch; KEEP makes re-enqueuing a no-op and
+         *  WorkManager persists the schedule across reboots. Safe alongside
+         *  a live app: the Dart entrypoint bails when the main isolate is
+         *  alive (it owns reconciliation while the app runs). */
+        fun enqueuePeriodicRefresh(context: Context) {
+            val request = PeriodicWorkRequestBuilder<AlarmSyncWorker>(
+                PERIODIC_INTERVAL_HOURS,
+                TimeUnit.HOURS,
+            )
+                // No constraints — same rationale as the boot path: the roll
+                // must happen regardless of charging/network/idle state.
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                UNIQUE_PERIODIC_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
                 request,
             )
         }
