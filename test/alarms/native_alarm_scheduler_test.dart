@@ -114,6 +114,44 @@ void main() {
   });
 
   test(
+      'pendingIds validates the ledger against the OS and prunes wiped ids '
+      '(the force-stop / reboot recovery)', () async {
+    // The Pixel 9 XL field bug: a force-stop cancelled every OS alarm but the
+    // persisted ledger still claimed them armed, so the reconciler re-issued
+    // nothing — a silent outage. The OS-truth probe (PendingIntent existence)
+    // must win over the ledger, and the phantoms must be pruned so they stay
+    // gone.
+    final box = await Hive.openBox('settings');
+    await box.put(ledgerKey, <int, int>{7: 1111, 8: 2222, 9: 3333});
+
+    const channel = MethodChannel(NativeAlarmScheduler.channelName);
+    final asked = <List<Object?>>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getAliveAlarmIds') {
+        asked.add((call.arguments as Map)['ids'] as List<Object?>);
+        return <int>[8]; // the OS only still holds id 8 — 7 and 9 were wiped
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    final scheduler = NativeAlarmScheduler(channel: channel);
+    expect(await scheduler.pendingIds(), {8},
+        reason: 'the reconciler must see wiped alarms as NOT pending so it '
+            're-arms them');
+    expect(asked.single.toSet(), {7, 8, 9},
+        reason: 'the whole ledger is offered for validation');
+
+    // The phantoms are pruned from the persisted ledger too.
+    final persisted = box.get(ledgerKey) as Map;
+    expect(persisted.keys.toSet(), {8});
+  });
+
+  test(
       'a refused native schedule (exact-alarm permission revoked) neither '
       'throws nor writes a phantom ledger entry', () async {
     const channel = MethodChannel(NativeAlarmScheduler.channelName);

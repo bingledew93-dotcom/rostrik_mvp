@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../alarms/alarm_health.dart';
 import 'battery_survival_dialog.dart';
 
 /// Step 2 of onboarding. Notifications + Exact Alarms are standard toggles
@@ -56,15 +57,18 @@ class _PermissionsScreenState extends State<PermissionsScreen>
 
   Future<void> _refreshAll() async {
     final n = await Permission.notification.status;
-    // The two below are Android-only. On iOS, `status` returns
-    // `restricted` (the platform's "n/a" response) — we map that to
-    // "granted" visually so the tile doesn't look broken on iOS.
-    final e = await Permission.scheduleExactAlarm.status;
+    // Exact alarms: ask the OS through our native channel, NOT
+    // `Permission.scheduleExactAlarm.status` — permission_handler resolves
+    // that group via the MANIFEST declaration, and with SCHEDULE_EXACT_ALARM
+    // correctly capped at maxSdkVersion=32 it reports a false "denied" on
+    // Android 13+ (field bug: this tile rendered a dead, un-flippable switch
+    // while USE_EXACT_ALARM had the capability granted all along).
+    final e = await exactAlarmsAllowedNow();
     final b = await Permission.ignoreBatteryOptimizations.status;
     if (!mounted) return;
     setState(() {
       _notifications = n;
-      _exactAlarms = e;
+      _exactAlarms = e ? PermissionStatus.granted : PermissionStatus.denied;
       _batteryUnrestricted = b;
     });
   }

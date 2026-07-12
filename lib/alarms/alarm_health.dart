@@ -75,20 +75,36 @@ Future<AlarmHealth> probeAlarmHealth() async {
     // No platform (tests) — never a false alarm.
   }
 
-  var exactAlarmsAllowed = true;
-  try {
-    exactAlarmsAllowed = await const MethodChannel(
-          NativeAlarmScheduler.channelName,
-        ).invokeMethod<bool>(_methodCanScheduleExact) ??
-        true;
-  } catch (_) {
-    // No handler (iOS / tests) — exactness isn't a concept there.
-  }
-
   return AlarmHealth(
     notificationsEnabled: notificationsEnabled,
-    exactAlarmsAllowed: exactAlarmsAllowed,
+    exactAlarmsAllowed: await exactAlarmsAllowedNow(),
   );
+}
+
+/// The live OS answer for "can this app arm exact alarms right now" —
+/// `AlarmManager.canScheduleExactAlarms()` via our native channel. Shared by
+/// [probeAlarmHealth] (Dashboard banner) and the onboarding permissions
+/// screen's Exact Alarms tile, both of which previously read
+/// `Permission.scheduleExactAlarm.status` and got permission_handler's false
+/// manifest-based "denied" on Android 13+ (the tile showed a dead, un-flippable
+/// switch). Best-effort: no handler (iOS / tests) or a channel error reads as
+/// allowed — exactness isn't a concept there, and a warning we can't
+/// substantiate must never show.
+/// TESTING NOTE: on a real device this call always resolves — Android
+/// registers the handler before any Dart runs, and iOS replies
+/// not-implemented (→ caught → true). Under the widget-test harness a
+/// NEVER-mocked channel neither answers nor throws (the message sits in
+/// ChannelBuffers forever), so any test that pumps a widget calling this
+/// must mock the `rostrik/native_alarms` channel or inject a probe —
+/// otherwise the await strands the caller mid-function.
+Future<bool> exactAlarmsAllowedNow() async {
+  try {
+    return await const MethodChannel(NativeAlarmScheduler.channelName)
+            .invokeMethod<bool>(_methodCanScheduleExact) ??
+        true;
+  } catch (_) {
+    return true;
+  }
 }
 
 /// Notifications fix path: the app's system settings page (the notification

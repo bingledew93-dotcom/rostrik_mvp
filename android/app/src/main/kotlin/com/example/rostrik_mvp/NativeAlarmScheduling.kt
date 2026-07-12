@@ -36,6 +36,7 @@ object NativeAlarmScheduling {
     private const val METHOD_SET_EXACT_ALARM = "setExactAlarm"
     private const val METHOD_CANCEL_ALARM = "cancelAlarm"
     private const val METHOD_CAN_SCHEDULE_EXACT = "canScheduleExactAlarms"
+    private const val METHOD_GET_ALIVE_ALARM_IDS = "getAliveAlarmIds"
 
     /** Wires the channel onto [messenger], servicing calls with [context]'s
      *  application context. Returns the channel so the caller can retain it for
@@ -103,6 +104,24 @@ object NativeAlarmScheduling {
                 // actually grants exactness there, never enters its lookup).
                 METHOD_CAN_SCHEDULE_EXACT -> {
                     result.success(canScheduleExactAlarms(appContext))
+                }
+                // Ledger VALIDATION (Pixel 9 XL field bug): AlarmManager can't
+                // be enumerated, but the fire PendingIntents CAN be probed with
+                // FLAG_NO_CREATE — and the events that silently wipe an app's
+                // alarms (force-stop, reboot, OEM cleaners) wipe its
+                // PendingIntents too. Filtering the Dart ledger's ids down to
+                // the ones whose PI still exists gives the reconciler REAL OS
+                // truth, so wiped alarms read as "not pending" and get
+                // re-armed instead of being trusted as phantoms forever.
+                METHOD_GET_ALIVE_ALARM_IDS -> {
+                    val ids = call.argument<List<Number>>("ids")
+                    if (ids == null) {
+                        result.error("BAD_ARGS", "ids is required", null)
+                    } else {
+                        result.success(
+                            ids.map { it.toInt() }.filter { isAlarmAlive(appContext, it) },
+                        )
+                    }
                 }
                 else -> result.notImplemented()
             }
@@ -229,6 +248,25 @@ object NativeAlarmScheduling {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         return am.canScheduleExactAlarms()
+    }
+
+    /** Whether the fire PendingIntent for [id] still exists in the system —
+     *  the live-OS proxy for "is this alarm still armed". Same FLAG_NO_CREATE
+     *  filter-match [cancelExactAlarm] uses. True for an alarm that already
+     *  FIRED (the PI outlives delivery) — fine: the reconciler drops fired
+     *  occurrences as past/not-desired anyway; this check only needs to catch
+     *  wholesale wipes (force-stop / reboot / OEM cleaner), which destroy the
+     *  PIs along with the alarms. */
+    private fun isAlarmAlive(context: Context, id: Int): Boolean {
+        val fireIntent = Intent(context, AlarmReceiver::class.java).apply {
+            action = AlarmReceiver.ACTION_ALARM_FIRE
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            id,
+            fireIntent,
+            pendingIntentFlags(PendingIntent.FLAG_NO_CREATE),
+        ) != null
     }
 
     /** Cancels a previously-scheduled exact alarm. Rebuilds a PendingIntent that

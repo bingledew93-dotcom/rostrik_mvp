@@ -32,6 +32,19 @@ void main() {
     );
     addTearDown(() => tester.binding.defaultBinaryMessenger
         .setMockMethodCallHandler(permChannel, null));
+
+    // The Exact Alarms tile reads the OS truth via `rostrik/native_alarms`
+    // (see alarm_health.dart) — a NEVER-mocked channel hangs forever under
+    // the test harness, which would strand _refreshAll mid-await and freeze
+    // every tile after it. Report "allowed" (the modern-Android reality
+    // under USE_EXACT_ALARM).
+    const nativeAlarms = MethodChannel('rostrik/native_alarms');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      nativeAlarms,
+      (call) async => call.method == 'canScheduleExactAlarms' ? true : null,
+    );
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeAlarms, null));
   }
 
   Future<void> pumpPermissions(WidgetTester tester) async {

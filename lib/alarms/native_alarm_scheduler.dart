@@ -26,11 +26,21 @@ import 'alarm_sound.dart';
 ///
 /// This preserves `AlarmSyncService`'s idempotent replace-by-id logic verbatim:
 /// on a steady state the ledger matches the desired set and the reconciler
-/// issues zero channel calls. The one semantic the native path cannot reproduce
-/// is FLN's ability to detect an OEM-killed alarm via a live OS query — that
-/// resilience now comes from `setAlarmClock`'s own Doze/OEM hardiness plus the
-/// native boot re-sync (`BootReceiver` → `AlarmSyncWorker`), not from
-/// `pendingIds()`.
+/// issues zero channel calls.
+///
+/// **The ledger is VALIDATED against the OS on every [pendingIds] read.**
+/// Force-stop, reboot, and OEM "cleaner" kills all cancel the app's alarms
+/// WITHOUT touching our persisted ledger — trusting it blind made the
+/// reconciler believe everything was still armed and re-issue nothing, a
+/// silent total outage until each occurrence's date rolled out of the window
+/// (Pixel 9 XL field bug: a force-stop wiped the OS set; every alarm already
+/// in the ledger stayed phantom while newly-created rules armed fine). The
+/// same events that wipe the alarms also wipe the app's PendingIntents, and
+/// THOSE can be probed (`FLAG_NO_CREATE`), so `getAliveAlarmIds` filters the
+/// ledger down to what the OS really holds; pruned phantoms then read as
+/// not-pending and the reconciler re-arms them. This is also what makes the
+/// boot re-sync actually effective — alarms never survive a reboot, and
+/// before this validation the boot reconcile trusted the stale ledger too.
 class NativeAlarmScheduler implements AlarmScheduler {
   NativeAlarmScheduler({MethodChannel? channel})
       : _channel = channel ?? const MethodChannel(channelName);
@@ -41,6 +51,7 @@ class NativeAlarmScheduler implements AlarmScheduler {
   // Method names — MUST match MainActivity's handler.
   static const String _methodSetExact = 'setExactAlarm';
   static const String _methodCancel = 'cancelAlarm';
+  static const String _methodGetAliveAlarmIds = 'getAliveAlarmIds';
 
   // Argument keys — MUST match what MainActivity reads (and the keys
   // AlarmReceiver / AlarmAudioService expect on the fire Intent).
@@ -238,7 +249,29 @@ class NativeAlarmScheduler implements AlarmScheduler {
   @override
   Future<Set<int>> pendingIds() async {
     _hydrate();
-    return _ledger.keys.toSet();
+    if (_ledger.isEmpty) return <int>{};
+    try {
+      final alive = await _channel.invokeMethod<List<Object?>>(
+        _methodGetAliveAlarmIds,
+        <String, dynamic>{'ids': _ledger.keys.toList()},
+      );
+      // A null reply means the handler didn't actually answer (e.g. a test
+      // mock covering other methods) — only a real list is authoritative.
+      if (alive == null) return _ledger.keys.toSet();
+      final aliveSet = alive.whereType<int>().toSet();
+      // Prune phantoms: ids the OS no longer holds (force-stop / reboot /
+      // OEM cleaner wiped them). Dropping them here makes the reconciler
+      // see them as not-pending and re-arm; keeping them was the outage.
+      if (aliveSet.length != _ledger.length) {
+        _ledger.removeWhere((id, _) => !aliveSet.contains(id));
+        await _persist();
+      }
+      return aliveSet;
+    } on PlatformException {
+      return _ledger.keys.toSet(); // native error — degrade to ledger truth
+    } on MissingPluginException {
+      return _ledger.keys.toSet(); // no handler (iOS/tests) — ledger truth
+    }
   }
 
   /// Reads the persisted ledger into [_ledger], retrying on every call until
