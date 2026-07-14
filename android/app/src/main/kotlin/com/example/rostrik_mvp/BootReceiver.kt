@@ -89,21 +89,44 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        // Hand off to WorkManager. The Worker runs off the main thread,
-        // has no ANR budget, can survive process restarts, and is the
-        // canonical place to spin up a Flutter engine for headless
-        // Dart execution. Using ExistingWorkPolicy.KEEP — if a previous
-        // boot's worker is somehow still queued (very rare; would only
-        // happen on a reboot loop), don't pile on a second.
+        // NATIVE RE-ARM FIRST — no WorkManager, no Flutter engine (Pixel 9 XL
+        // field bug: the WorkManager hand-off below silently died on FBE
+        // devices, see AlarmSyncWorker.workManager, and alarms stayed dead
+        // until the app was opened). A reboot erases every AlarmManager alarm;
+        // re-arming straight from the device-protected store takes
+        // milliseconds inside this receiver and works BEFORE first unlock
+        // (LOCKED_BOOT_COMPLETED) — so an alarm due before the user unlocks
+        // still rings. Runs again on BOOT_COMPLETED — idempotent
+        // (UPDATE_CURRENT on the same ids).
+        //
+        // Clock changes are deliberately EXCLUDED: the stored epoch instants
+        // are exactly what a timezone/time change invalidates — only the Dart
+        // reconcile can recompute them from local wall time.
+        val isClockChange = action == Intent.ACTION_TIMEZONE_CHANGED ||
+            action == Intent.ACTION_TIME_CHANGED
+        if (!isClockChange) {
+            try {
+                NativeAlarmScheduling.rearmFromStore(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "native boot re-arm failed", e)
+            }
+        }
+
+        // Then hand off to WorkManager for the authoritative Hive reconcile.
+        // The Worker runs off the main thread, has no ANR budget, and is the
+        // canonical place to spin up a Flutter engine for headless Dart
+        // execution. ExistingWorkPolicy.KEEP — if a previous boot's worker is
+        // somehow still queued (reboot loop), don't pile on a second.
         try {
             AlarmSyncWorker.enqueueOneShot(context)
             Log.d(TAG, "AlarmSyncWorker enqueued for $action")
         } catch (e: Exception) {
-            // WorkManager.getInstance can throw if the app's
-            // Application class hasn't initialised the WorkManager
-            // singleton yet. Defensive log — losing one boot trigger
-            // is not catastrophic; the next app foreground will
-            // reconcile.
+            // Pre-unlock (LOCKED_BOOT_COMPLETED) this always lands here:
+            // WorkManager's Room DB lives in credential-encrypted storage.
+            // Harmless — the native re-arm above already restored the alarms,
+            // and the post-unlock BOOT_COMPLETED retries the enqueue (with
+            // AlarmSyncWorker.workManager's on-demand init fixing the
+            // direct-boot-born-process trap).
             Log.e(TAG, "Failed to enqueue AlarmSyncWorker", e)
         }
     }

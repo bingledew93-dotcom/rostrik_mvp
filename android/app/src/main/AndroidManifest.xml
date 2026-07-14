@@ -106,17 +106,15 @@
 
              android:directBootAware="true" lets the receiver's onReceive run
              during direct boot (before first unlock) on FBE
-             (file-based-encryption) devices. NOTE: it cannot do useful work
-             that early — WorkManager's own job DB AND our Hive boxes both
-             live in CREDENTIAL-encrypted storage, which is unavailable until
-             first unlock. An enqueue attempted from
-             ACTION_LOCKED_BOOT_COMPLETED therefore throws and is caught/
-             logged in BootReceiver (a deliberate no-op). The authoritative
-             trigger is ACTION_BOOT_COMPLETED, which on FBE devices fires
-             AFTER unlock — by then CE storage (hence Hive) is readable and
-             the Worker runs. LOCKED_BOOT_COMPLETED is kept only so the
-             receiver is wired as early as the platform allows for any future
-             direct-boot-aware work; today it intentionally does nothing. -->
+             (file-based-encryption) devices — and that early run is now LOAD-
+             BEARING: it re-arms every alarm straight from the device-protected
+             native store (NativeAlarmScheduling.rearmFromStore), no WorkManager
+             and no Flutter engine needed, so an alarm due before first unlock
+             still rings. The WorkManager enqueue is a SECOND, post-unlock
+             layer: it throws pre-unlock (job DB + Hive are credential-
+             encrypted; caught + logged) and succeeds on ACTION_BOOT_COMPLETED,
+             which fires after unlock — the Worker then runs the authoritative
+             Hive reconcile. -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true"
@@ -154,7 +152,8 @@
              full-screen-intent notification that launches AlarmActivity. -->
         <receiver
             android:name=".AlarmReceiver"
-            android:exported="false"/>
+            android:exported="false"
+            android:directBootAware="true"/>
         <!-- Foreground service that owns FIRING-ALARM custom audio. type
              mediaPlayback raises the process to foreground oom-priority so a
              ringing alarm survives the keyguard occluding/destroying the
@@ -163,6 +162,7 @@
         <service
             android:name=".AlarmAudioService"
             android:exported="false"
+            android:directBootAware="true"
             android:foregroundServiceType="mediaPlayback"/>
         <!-- Native (NON-Flutter) full-screen alarm screen, launched by
              AlarmReceiver's full-screen-intent notification. Its OWN task
@@ -173,9 +173,18 @@
              older API paths). Not exported — only our own FSI PendingIntent
              starts it. Framework theme because it extends android.app.Activity,
              not a Flutter/AppCompat Activity. -->
+        <!-- The whole FIRE CHAIN (receiver → audio service → alarm screen) is
+             directBootAware so an alarm due BEFORE first unlock — a phone that
+             rebooted overnight — still rings and can be dismissed over the
+             keyguard. Pre-unlock degradations are deliberate and safe: custom
+             content:// tones can't resolve (engine falls back to the bundled
+             classic tone) and the CE-storage dismissal/snooze ledgers can't be
+             written (caught; the post-unlock reconcile treats the fired
+             occurrence as past and never re-arms it). -->
         <activity
             android:name=".AlarmActivity"
             android:exported="false"
+            android:directBootAware="true"
             android:launchMode="singleInstance"
             android:taskAffinity=""
             android:excludeFromRecents="true"

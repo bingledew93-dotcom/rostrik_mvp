@@ -2,6 +2,7 @@ package com.example.rostrik_mvp
 
 import android.content.Context
 import android.util.Log
+import androidx.work.Configuration
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -102,6 +103,31 @@ class AlarmSyncWorker(
         /// zero platform calls when nothing changed.
         private const val PERIODIC_INTERVAL_HOURS = 12L
 
+        /** [WorkManager.getInstance] with the DIRECT-BOOT repair (Pixel 9 XL
+         *  field bug): on FBE devices LOCKED_BOOT_COMPLETED starts this app's
+         *  process BEFORE first unlock, where androidx-startup's
+         *  WorkManagerInitializer is skipped (non-direct-boot-aware providers
+         *  don't run, and the Room DB is credential-encrypted anyway). The
+         *  post-unlock BOOT_COMPLETED then lands in that SAME process, where
+         *  getInstance STILL throws "WorkManager is not initialized" — the
+         *  boot reconcile silently died this way on every reboot. Initialize
+         *  on demand and retry; pre-unlock the initialize itself fails and
+         *  the exception propagates to the caller's catch (the native store
+         *  re-arm has already restored the alarms by then). */
+        private fun workManager(context: Context): WorkManager =
+            try {
+                WorkManager.getInstance(context)
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "WorkManager uninitialized (direct-boot-born process) — initializing on demand")
+                try {
+                    WorkManager.initialize(context, Configuration.Builder().build())
+                } catch (ignored: IllegalStateException) {
+                    // Lost a race with another initializer — getInstance below
+                    // now succeeds either way.
+                }
+                WorkManager.getInstance(context)
+            }
+
         fun enqueueOneShot(context: Context) {
             val request = OneTimeWorkRequestBuilder<AlarmSyncWorker>()
                 // No constraints — boot recovery must run regardless
@@ -109,7 +135,7 @@ class AlarmSyncWorker(
                 // light and the user expects alarms to be ready
                 // immediately after unlock.
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
+            workManager(context).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.KEEP,
                 request,
@@ -132,7 +158,7 @@ class AlarmSyncWorker(
                 // No constraints — same rationale as the boot path: the roll
                 // must happen regardless of charging/network/idle state.
                 .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            workManager(context).enqueueUniquePeriodicWork(
                 UNIQUE_PERIODIC_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 request,
