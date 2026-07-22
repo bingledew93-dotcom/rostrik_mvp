@@ -307,7 +307,14 @@ class _SnoozeDurationSection extends StatelessWidget {
                     .toList(),
                 onChanged: (v) {
                   if (v == null) return;
-                  Hive.box('settings').put('snooze_duration', v);
+                  // put + flush: on an aggressive-reap device a bare put can be
+                  // dropped before Hive's lazy flush, reverting the snooze
+                  // interval to the 1-min default. The bg isolate reads this
+                  // same key, so a lost write also mis-times a killed-app
+                  // snooze. Fire-and-forget — the listenable updates the
+                  // dropdown synchronously.
+                  final box = Hive.box('settings');
+                  box.put('snooze_duration', v).then((_) => box.flush());
                 },
               );
             },

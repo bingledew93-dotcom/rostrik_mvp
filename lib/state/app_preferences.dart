@@ -89,22 +89,37 @@ class AppPreferences extends ChangeNotifier {
   bool get isSchedulePaused =>
       _box.get(isSchedulePausedKey, defaultValue: false) as bool;
 
-  void setUse24HourTime(bool value) => _box.put(use24HourTimeKey, value);
+  void setUse24HourTime(bool value) => _putAndFlush(use24HourTimeKey, value);
 
   void setStartWeekOnMonday(bool value) =>
-      _box.put(startWeekOnMondayKey, value);
+      _putAndFlush(startWeekOnMondayKey, value);
 
-  void setSleepGoalHours(int value) => _box.put(sleepGoalHoursKey, value);
+  void setSleepGoalHours(int value) => _putAndFlush(sleepGoalHoursKey, value);
 
-  void setWindDownMinutes(int value) => _box.put(windDownMinutesKey, value);
+  void setWindDownMinutes(int value) => _putAndFlush(windDownMinutesKey, value);
 
   void setBedtimeReminderEnabled(bool value) =>
-      _box.put(bedtimeReminderEnabledKey, value);
+      _putAndFlush(bedtimeReminderEnabledKey, value);
 
   void setWindDownReminderEnabled(bool value) =>
-      _box.put(windDownReminderEnabledKey, value);
+      _putAndFlush(windDownReminderEnabledKey, value);
 
-  void setIsSchedulePaused(bool value) => _box.put(isSchedulePausedKey, value);
+  void setIsSchedulePaused(bool value) => _putAndFlush(isSchedulePausedKey, value);
+
+  /// Writes [value] then schedules a durability flush. The in-memory `put`
+  /// updates the box AND fires its [ValueListenable] synchronously, so the UI
+  /// and every `get` reflect the change instantly (this stays a `void` setter —
+  /// callers are fire-and-forget UI toggles). The flush is the reap-durability
+  /// guard the AppAlarm repo also makes: on an aggressive-reap OEM device a bare
+  /// `put` can be lost if the process is killed before Hive's lazy flush lands,
+  /// silently reverting the setting (the "app doesn't remember its settings"
+  /// bug). Kept synchronous (no `await`) so a fire-and-forget UI callback can't
+  /// leak a pending-I/O Future into a widget test's async zone; flush errors are
+  /// swallowed — the next successful write (or app foreground) re-persists.
+  void _putAndFlush(String key, Object value) {
+    _box.put(key, value);
+    _box.flush().catchError((Object _) {});
+  }
 
   @override
   void dispose() {
