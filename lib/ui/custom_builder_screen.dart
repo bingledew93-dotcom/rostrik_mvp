@@ -147,10 +147,14 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
       showDragHandle: true,
       builder: (_) => _AddShiftBlockSheet(
         cycleLength: _cycleLengthDays,
-        // Days already covered by OTHER blocks are MARKED (not locked): tapping
-        // one adds a second shift to that day — a split. The generator rejects
-        // only splits whose times actually overlap.
-        claimedDays: claimedDayIndices(_blocks, exclude: editing),
+        // The OTHER blocks — the sheet marks their days (a tap there makes a
+        // split) and flags, live as the user paints, any day where THIS block's
+        // time would clash with one of them (an illegal split), so overlaps are
+        // fixed on the spot instead of at Create.
+        otherBlocks: [
+          for (var i = 0; i < _blocks.length; i++)
+            if (i != existingIndex) _blocks[i],
+        ],
         existing: editing,
         use24Hour: AppPreferences.use24HourOf(context),
       ),
@@ -633,18 +637,23 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
 /// The "Add Shift Block" paintbrush sheet: pick a type + start/end time, then
 /// tap the days of the cycle this block covers. Days already covered by another
 /// block are marked with an accent ring — tapping one adds a split shift on
-/// that day. Returns the composed [PaintedShiftBlock] via `Navigator.pop`, or
-/// null on cancel.
+/// that day. If this block's TIME would clash with another block on a shared
+/// day, those days turn red and Save is blocked LIVE (not deferred to Create).
+/// Returns the composed [PaintedShiftBlock] via `Navigator.pop`, or null on
+/// cancel.
 class _AddShiftBlockSheet extends StatefulWidget {
   const _AddShiftBlockSheet({
     required this.cycleLength,
-    required this.claimedDays,
+    required this.otherBlocks,
     required this.use24Hour,
     this.existing,
   });
 
   final int cycleLength;
-  final Set<int> claimedDays;
+
+  /// Every block already on the roster except the one being edited — the basis
+  /// for both the "shared day" marks and the live time-overlap check.
+  final List<PaintedShiftBlock> otherBlocks;
   final bool use24Hour;
   final PaintedShiftBlock? existing;
 
@@ -668,7 +677,22 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
     _selectedDays = {...?e?.dayIndices};
   }
 
-  bool get _canSave => _selectedDays.isNotEmpty && _startMinutes != _endMinutes;
+  /// Days any OTHER block covers — tapping one makes a (possibly valid) split.
+  Set<int> get _claimedDays => claimedDayIndices(widget.otherBlocks);
+
+  /// The selected days where THIS block's time clashes with another block —
+  /// recomputed every build so it tracks time + day edits live.
+  Set<int> get _conflictDays => conflictingPaintedDays(
+        startMinutes: _startMinutes,
+        endMinutes: _endMinutes,
+        dayIndices: _selectedDays,
+        others: widget.otherBlocks,
+      );
+
+  bool get _canSave =>
+      _selectedDays.isNotEmpty &&
+      _startMinutes != _endMinutes &&
+      _conflictDays.isEmpty;
 
   Future<void> _pickTime({required bool start}) async {
     final base = start ? _startMinutes : _endMinutes;
@@ -690,7 +714,8 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
 
   void _toggleDay(int day) {
     // Claimed days are NOT locked — tapping one adds this block as a split on
-    // that day. Time-overlap conflicts are caught by the generator on Create.
+    // that day. If the times clash the day turns red and Save blocks (see
+    // [_conflictDays]); a non-overlapping split is accepted.
     setState(() {
       if (_selectedDays.contains(day)) {
         _selectedDays.remove(day);
@@ -788,11 +813,30 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
               const SizedBox(height: 8),
               _buildDayGrid(theme),
               const SizedBox(height: 8),
-              Text(
-                'Un-tapped days are Off.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
+              if (_conflictDays.isEmpty)
+                Text(
+                  'Un-tapped days are Off.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                )
+              else
+                Row(
+                  key: const ValueKey('block-conflict-message'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.error_outline, size: 16, color: scheme.error),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'This time overlaps another shift on '
+                        'day ${formatDayIndexRanges(_conflictDays)} — '
+                        'change the time or those days.',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: scheme.error),
+                      ),
+                    ),
+                  ],
+                ),
               const SizedBox(height: 16),
               FilledButton(
                 key: const ValueKey('block-save'),
@@ -820,6 +864,8 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
   Widget _buildDayGrid(ThemeData theme) {
     final scheme = theme.colorScheme;
     final typeColor = visualFor(_type).color;
+    final claimed = _claimedDays;
+    final conflicts = _conflictDays;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -833,10 +879,15 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
       itemBuilder: (_, i) {
         final selected = _selectedDays.contains(i);
         // Covered by ANOTHER block → tapping makes it a split (still tappable).
-        final shared = widget.claimedDays.contains(i);
+        final shared = claimed.contains(i);
+        // Selected AND time-clashing with another block on that day → illegal.
+        final conflict = conflicts.contains(i);
         final Color bg;
         final Color fg;
-        if (selected) {
+        if (conflict) {
+          bg = scheme.errorContainer;
+          fg = scheme.onErrorContainer;
+        } else if (selected) {
           bg = typeColor;
           fg = scheme.onPrimary;
         } else {
@@ -852,10 +903,12 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
               color: bg,
               borderRadius: BorderRadius.circular(8),
               // A subtle accent ring flags "already has a shift" so the user
-              // knows a tap here creates a split.
-              border: (shared && !selected)
-                  ? Border.all(color: scheme.primary.withValues(alpha: 0.7))
-                  : null,
+              // knows a tap here creates a split; a red border marks a clash.
+              border: conflict
+                  ? Border.all(color: scheme.error)
+                  : (shared && !selected)
+                      ? Border.all(color: scheme.primary.withValues(alpha: 0.7))
+                      : null,
             ),
             alignment: Alignment.center,
             child: Stack(
@@ -868,7 +921,7 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                   ),
                 ),
-                if (shared && !selected)
+                if (shared && !selected && !conflict)
                   Positioned(
                     bottom: 3,
                     child: Container(

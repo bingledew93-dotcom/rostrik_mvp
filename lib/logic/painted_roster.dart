@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/models/shift_type.dart';
+import 'rotation_pattern_validator.dart' show timeIntervalsOverlap;
 import 'shift_block.dart';
 
 /// One shift "painted" onto a set of cycle-day positions — the data the
@@ -90,6 +91,39 @@ Set<int> claimedDayIndices(
 /// certainly a mistake).
 bool hasAnyPaintedDay(List<PaintedShiftBlock> blocks) =>
     blocks.any((b) => b.dayIndices.isNotEmpty);
+
+/// Minutes a shift spans, treating `end <= start` as crossing midnight — the
+/// SAME normalisation `findTimeOverlaps` applies, so the builder's inline
+/// overlap check and the generator's Create-time check can never disagree.
+int shiftSpanMinutes(int startMinutes, int endMinutes) =>
+    endMinutes <= startMinutes
+        ? endMinutes + 1440 - startMinutes
+        : endMinutes - startMinutes;
+
+/// The day positions where a prospective block ([startMinutes]/[endMinutes] on
+/// [dayIndices]) would TIME-overlap any of [others] on a shared day — i.e. an
+/// illegal split. Empty means the block is safe to add (including a valid
+/// non-overlapping split, e.g. a morning block beside an evening one). Uses
+/// [timeIntervalsOverlap] on midnight-normalised intervals, mirroring
+/// `findTimeOverlaps`. Pure/testable.
+Set<int> conflictingPaintedDays({
+  required int startMinutes,
+  required int endMinutes,
+  required Set<int> dayIndices,
+  required List<PaintedShiftBlock> others,
+}) {
+  final aEnd = startMinutes + shiftSpanMinutes(startMinutes, endMinutes);
+  final conflicts = <int>{};
+  for (final o in others) {
+    final shared = dayIndices.intersection(o.dayIndices);
+    if (shared.isEmpty) continue;
+    final oEnd = o.startMinutes + shiftSpanMinutes(o.startMinutes, o.endMinutes);
+    if (timeIntervalsOverlap(startMinutes, aEnd, o.startMinutes, oEnd)) {
+      conflicts.addAll(shared);
+    }
+  }
+  return conflicts;
+}
 
 /// "1–3, 8, 10–12" — compresses a set of 0-based day positions into 1-based
 /// human ranges for a block summary. Empty → "—". Pure/testable.

@@ -113,21 +113,55 @@ void main() {
     expect(sharedCell.onTap, isNotNull, reason: 'claimed day allows a split');
   });
 
-  testWidgets('a second block can be added on a day already covered',
-      (tester) async {
+  testWidgets('a second block on free days is added', (tester) async {
     await pumpBuilder(tester);
     await addBlock(tester, dayCount: 2); // block 0 covers days 0,1
 
-    // Second block, painting day 0 again (a split on that day).
+    // Second block on days 3,4 (free) — no clash, so it's added.
     await tester.tap(find.byKey(const ValueKey('roster-add-block')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('block-day-0')));
+    await tester.tap(find.byKey(const ValueKey('block-day-3')));
+    await tester.tap(find.byKey(const ValueKey('block-day-4')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('block-save')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('roster-block-0')), findsOneWidget);
     expect(find.byKey(const ValueKey('roster-block-1')), findsOneWidget);
+  });
+
+  testWidgets('a clashing split is flagged live and blocks Save', (tester) async {
+    await pumpBuilder(tester);
+    await addBlock(tester, dayCount: 3); // block 0: Day 07:00–15:00 on days 0,1,2
+
+    // Second block keeps the default 07:00–15:00 times; painting day 0 (shared)
+    // clashes → the conflict message shows and Save is disabled, immediately.
+    await tester.tap(find.byKey(const ValueKey('roster-add-block')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('block-day-0')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('block-conflict-message')),
+      findsOneWidget,
+    );
+    final save = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('block-save')),
+    );
+    expect(save.onPressed, isNull, reason: 'a time clash blocks Save live');
+
+    // Move to a free day (5) — conflict clears and Save enables.
+    await tester.tap(find.byKey(const ValueKey('block-day-0'))); // deselect
+    await tester.tap(find.byKey(const ValueKey('block-day-5'))); // free
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('block-conflict-message')),
+      findsNothing,
+    );
+    final save2 = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('block-save')),
+    );
+    expect(save2.onPressed, isNotNull);
   });
 
   testWidgets('Create Roster persists an anchored cycle + materialised shifts',

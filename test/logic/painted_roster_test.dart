@@ -75,6 +75,55 @@ void main() {
     });
   });
 
+  group('conflictingPaintedDays', () {
+    List<PaintedShiftBlock> others() => [
+          block(ShiftType.day, {0, 1, 2}, start: 6 * 60, end: 14 * 60),
+        ];
+
+    test('no shared day → no conflict', () {
+      final c = conflictingPaintedDays(
+        startMinutes: 6 * 60,
+        endMinutes: 14 * 60,
+        dayIndices: {5, 6},
+        others: others(),
+      );
+      expect(c, isEmpty);
+    });
+
+    test('shared day with overlapping time → that day conflicts', () {
+      // 10:00–18:00 overlaps the 06:00–14:00 block on day 1.
+      final c = conflictingPaintedDays(
+        startMinutes: 10 * 60,
+        endMinutes: 18 * 60,
+        dayIndices: {1},
+        others: others(),
+      );
+      expect(c, {1});
+    });
+
+    test('shared day with a non-overlapping (abutting) time → valid split', () {
+      // 14:00–22:00 abuts 06:00–14:00 (touching edge does not overlap).
+      final c = conflictingPaintedDays(
+        startMinutes: 14 * 60,
+        endMinutes: 22 * 60,
+        dayIndices: {0, 1, 2},
+        others: others(),
+      );
+      expect(c, isEmpty);
+    });
+
+    test('only the shared+overlapping days are flagged', () {
+      // Overlaps on days 0,1,2 (shared) but day 9 is not shared → only 0,1,2.
+      final c = conflictingPaintedDays(
+        startMinutes: 8 * 60,
+        endMinutes: 12 * 60,
+        dayIndices: {0, 1, 2, 9},
+        others: others(),
+      );
+      expect(c, {0, 1, 2});
+    });
+  });
+
   group('formatDayIndexRanges', () {
     test('compresses consecutive runs, 1-based', () {
       expect(formatDayIndexRanges({0, 1, 2}), '1–3');

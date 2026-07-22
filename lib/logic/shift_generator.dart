@@ -582,22 +582,26 @@ class ShiftGenerator {
     final union = [...existing, ...draft];
     final conflicts = findTimeOverlaps(union);
     if (conflicts.isEmpty) return;
-    // One human-readable line per pair; surface the first few so the
-    // SnackBar doesn't grow unbounded. (`min` would need a dart:math
-    // import; the conditional is clearer.)
-    final lines = <String>[];
+    // Every conflict here is the new roster against shifts ALREADY in the box:
+    // the builder's own blocks are checked for internal clashes before this
+    // point (inline in the paintbrush; sequential/single elsewhere). Lead with
+    // what the user can actually do, then list the first few offending dates so
+    // the message doesn't grow unbounded.
+    final lines = <String>[
+      'This roster clashes with shifts you already have. Remove the old '
+          'roster in Settings → Shift Cycles, or start it on a later date.',
+    ];
     final shown = conflicts.length > 3 ? 3 : conflicts.length;
     for (var i = 0; i < shown; i++) {
       final (a, b) = conflicts[i];
       lines.add(
-        'Shift blocks have overlapping times on '
-        '${a.date.year}-${_pad2(a.date.month)}-${_pad2(a.date.day)} '
-        '(${_pad2(a.startMinutes ~/ 60)}:${_pad2(a.startMinutes % 60)} '
-        'and ${_pad2(b.startMinutes ~/ 60)}:${_pad2(b.startMinutes % 60)}).',
+        '• ${a.date.year}-${_pad2(a.date.month)}-${_pad2(a.date.day)}: '
+        '${_pad2(a.startMinutes ~/ 60)}:${_pad2(a.startMinutes % 60)} '
+        'and ${_pad2(b.startMinutes ~/ 60)}:${_pad2(b.startMinutes % 60)}',
       );
     }
     if (conflicts.length > shown) {
-      lines.add('… and ${conflicts.length - shown} more conflicts.');
+      lines.add('…and ${conflicts.length - shown} more.');
     }
     throw RosterGenerationException(lines.join('\n'));
   }
