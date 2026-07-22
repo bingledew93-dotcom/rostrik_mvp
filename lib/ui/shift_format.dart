@@ -23,6 +23,16 @@ const _monthsFull = [
 String formatMonthYearHeader(DateTime date) =>
     '${_monthsFull[date.month - 1].toUpperCase()} ${date.year}';
 
+const _weekdaysFull = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+];
+
+/// "Monday, 9 March 2026" — the long form on the roster builder's start-date
+/// field (matches the New Shift Roster design).
+String formatFullDate(DateTime date) =>
+    '${_weekdaysFull[date.weekday - 1]}, ${date.day} '
+    '${_monthsFull[date.month - 1]} ${date.year}';
+
 /// Human alarm lead-time label: "0 min" / "45 min" / "1 h" / "1 h 30 min".
 /// Single source for both the Settings slider and the onboarding lead-time
 /// dropdown so the two surfaces can never phrase the same duration differently.

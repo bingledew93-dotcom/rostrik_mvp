@@ -2,27 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/shift_type.dart';
-import '../logic/rotation_pattern_validator.dart';
-import '../logic/shift_block.dart';
+import '../logic/painted_roster.dart';
+import '../logic/rotation_pattern_validator.dart' show RosterGenerationException;
 import '../logic/shift_generator.dart';
 import '../ocr/ocr_scanner_service.dart';
 import '../ocr/roster_injection.dart';
-import 'draft_roster_review_screen.dart';
 import '../state/app_preferences.dart';
+import 'draft_roster_review_screen.dart';
+import 'roster/shift_visuals.dart';
 import 'shift_format.dart';
 
-/// Draft-and-review custom roster builder.
+/// "New Shift Roster" — the redesigned custom-roster builder.
 ///
-/// Lets the user compose an arbitrary list of [ShiftBlock]s on top of a
-/// user-named cycle length, then hands the draft to
-/// [ShiftGenerator.generateAndPersistCustom]. Multiple blocks on the
-/// same cycle-day index are allowed (split shifts); time-overlap is
-/// rejected with the exception's message surfaced inline above the
-/// Generate button so the user can see exactly which times conflict.
+/// The old builder made a 6-week roster a slog: a numeric cycle-length field, a
+/// numeric repeat count, and one positional block at a time. This version cuts
+/// the friction the way the field feedback asked for:
+///   * **Cycle length is a chip row** (7/8/14/21/28/42 + Custom) — one tap.
+///   * **Shift blocks are painted** onto a day grid inside an "Add Shift Block"
+///     sheet: set the type + times once, then tap every day it covers. Any
+///     un-painted day is automatically Off.
+///   * **The roster repeats forever.** There is no repeat count — Create Roster
+///     persists an ANCHORED cycle ([ShiftGenerator.generateAndPersistAnchored])
+///     that the modulo resolver projects indefinitely, materialising a 365-day
+///     window for the alarm engine.
 ///
-/// Reachable from the "Build custom roster" entry on
-/// [PatternPickerScreen]. Persists nothing until the user taps Generate;
-/// the entire draft lives in this State.
+/// Reachable (unchanged route contract — pushed, pops `true` on a successful
+/// create) from the pattern-picker's "Build custom roster" escape hatch and the
+/// onboarding Custom card. The OCR scan path (Phase 6) is preserved as a
+/// secondary action.
 class CustomBuilderScreen extends StatefulWidget {
   const CustomBuilderScreen({super.key, this.scanner});
 
@@ -39,14 +46,16 @@ class CustomBuilderScreen extends StatefulWidget {
 class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
   static const int _minCycleDays = 1;
   static const int _maxCycleDays = 60;
-  static const int _minRepeats = 1;
-  static const int _maxRepeats = 200;
 
-  final TextEditingController _nameController =
-      TextEditingController(text: 'Custom roster');
-  int _cycleLengthDays = 7;
-  int _repeatCount = 4;
+  /// The preset chip values, matching the design. "Custom" is a 7th option that
+  /// reveals a stepper for any length in `[_minCycleDays, _maxCycleDays]`.
+  static const List<int> _presetLengths = <int>[7, 8, 14, 21, 28, 42];
+
+  final TextEditingController _nameController = TextEditingController();
+  int _cycleLengthDays = 14;
+  bool _customLength = false;
   DateTime? _startDate;
+  final List<PaintedShiftBlock> _blocks = <PaintedShiftBlock>[];
   bool _generating = false;
   bool _scanning = false;
   String? _validationError;
@@ -58,19 +67,12 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
   OcrScannerService get _scanner =>
       widget.scanner ?? (_ownedScanner ??= OcrScannerService());
 
-  // Default first block at 07:00–15:00, day 0 of a single-day span.
-  // Mirrors the picker's "first time-edit" defaults so the user can tap
-  // Add Block twice and edit one of them — testing the split-shift case
-  // takes ~5 taps from a cold open.
-  final List<ShiftBlock> _blocks = <ShiftBlock>[
-    const ShiftBlock(
-      type: ShiftType.day,
-      startDayIndex: 0,
-      endDayIndex: 0,
-      startMinutes: 7 * 60,
-      endMinutes: 15 * 60,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
+  }
 
   @override
   void dispose() {
@@ -79,35 +81,86 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     super.dispose();
   }
 
-  bool get _canGenerate {
-    if (_generating) return false;
-    if (_scanning) return false;
-    if (_blocks.isEmpty) return false;
-    if (_startDate == null) return false;
-    // Block generation while any scanned shift is still missing its end time
-    // (a non-Off zero-duration placeholder) — validateCustomRoster would
-    // reject it anyway; flagging up front is clearer than an error on submit.
-    if (_blocks.any(ScannedRosterInjection.needsEndTime)) return false;
-    return true;
+  bool get _canCreate =>
+      !_generating &&
+      !_scanning &&
+      _startDate != null &&
+      hasAnyPaintedDay(_blocks);
+
+  void _selectPresetLength(int v) {
+    setState(() {
+      _customLength = false;
+      _cycleLengthDays = v;
+      _pruneDaysBeyondCycle();
+      _validationError = null;
+    });
   }
 
-  void _addBlock() {
+  void _selectCustomLength() {
     setState(() {
-      // New blocks default to the day AFTER the previous block's end, so
-      // building a sequential rotation is friction-free (Block 1 = Day 1 →
-      // Block 2 = Day 2 → …). Clamped to the cycle's last day, so once you
-      // reach the end it stops advancing; a same-day split shift is then one
-      // stepper tap back. Empty list → Day 1 (index 0).
-      final defaultDayIndex = _blocks.isEmpty
-          ? 0
-          : (_blocks.last.endDayIndex + 1).clamp(0, _cycleLengthDays - 1);
-      _blocks.add(ShiftBlock(
-        type: ShiftType.day,
-        startDayIndex: defaultDayIndex,
-        endDayIndex: defaultDayIndex,
-        startMinutes: 7 * 60,
-        endMinutes: 15 * 60,
-      ));
+      _customLength = true;
+      _validationError = null;
+    });
+  }
+
+  void _setCustomLength(int v) {
+    setState(() {
+      _cycleLengthDays = v.clamp(_minCycleDays, _maxCycleDays);
+      _pruneDaysBeyondCycle();
+      _validationError = null;
+    });
+  }
+
+  /// Drops any painted day position that now sits past the cycle end (after the
+  /// length shrinks), and removes a block left with no days.
+  void _pruneDaysBeyondCycle() {
+    for (var i = _blocks.length - 1; i >= 0; i--) {
+      final kept = _blocks[i].dayIndices.where((d) => d < _cycleLengthDays);
+      if (kept.isEmpty) {
+        _blocks.removeAt(i);
+      } else if (kept.length != _blocks[i].dayIndices.length) {
+        _blocks[i] = _blocks[i].copyWith(dayIndices: kept.toSet());
+      }
+    }
+  }
+
+  Future<void> _pickStartDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? today,
+      firstDate: today,
+      lastDate: DateTime(today.year + 10, today.month, today.day),
+      helpText: 'Pick the roster start date',
+    );
+    if (!mounted || picked == null) return;
+    setState(() => _startDate = DateTime(picked.year, picked.month, picked.day));
+  }
+
+  /// Opens the paintbrush sheet to add a new block, or edit [existingIndex].
+  Future<void> _openBlockSheet({int? existingIndex}) async {
+    final editing = existingIndex != null ? _blocks[existingIndex] : null;
+    final result = await showModalBottomSheet<PaintedShiftBlock>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AddShiftBlockSheet(
+        cycleLength: _cycleLengthDays,
+        // Days already owned by OTHER blocks are locked in the grid so each day
+        // maps to exactly one shift (no same-day split shifts to disambiguate).
+        claimedDays: claimedDayIndices(_blocks, exclude: editing),
+        existing: editing,
+        use24Hour: AppPreferences.use24HourOf(context),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      if (existingIndex != null) {
+        _blocks[existingIndex] = result;
+      } else {
+        _blocks.add(result);
+      }
       _validationError = null;
     });
   }
@@ -119,95 +172,67 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     });
   }
 
-  void _updateBlock(int i, ShiftBlock next) {
+  Future<void> _create() async {
+    if (!_canCreate) return;
     setState(() {
-      _blocks[i] = next;
+      _generating = true;
       _validationError = null;
     });
+
+    // Capture before the awaits — BuildContext is unsafe across suspensions.
+    final generator = context.read<ShiftGenerator>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final start = _startDate!;
+    final name = _nameController.text.trim();
+
+    try {
+      final shifts = await generator.generateAndPersistAnchored(
+        label: name.isEmpty ? 'Custom roster' : name,
+        anchorDate: start,
+        blocks: foldPaintedBlocks(_cycleLengthDays, _blocks),
+        materialiseFrom: start,
+        // Forever: an anchored cycle projects indefinitely; we materialise a
+        // 365-day window for the scheduler, and the invisible extender rolls it
+        // forward. Calendar-day math (not Duration) for DST safety.
+        materialiseTo: DateTime(start.year, start.month, start.day + 365),
+        summary: 'Custom · $_cycleLengthDays-day cycle · repeats',
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Created — ${shifts.length} shifts scheduled')),
+      );
+      navigator.pop(true);
+    } on RosterGenerationException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _generating = false;
+        _validationError = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _generating = false;
+        _validationError = 'Could not create the roster: $e';
+      });
+    }
   }
 
-  void _setCycleLength(int v) {
-    setState(() {
-      _cycleLengthDays = v.clamp(_minCycleDays, _maxCycleDays);
-      // Clamp any block day indices that now sit past the new cycle end.
-      for (var i = 0; i < _blocks.length; i++) {
-        final b = _blocks[i];
-        final newEnd = b.endDayIndex.clamp(0, _cycleLengthDays - 1);
-        final newStart = b.startDayIndex.clamp(0, newEnd);
-        if (newEnd != b.endDayIndex || newStart != b.startDayIndex) {
-          _blocks[i] = b.copyWith(
-            startDayIndex: newStart,
-            endDayIndex: newEnd,
-          );
-        }
-      }
-      _validationError = null;
-    });
-  }
+  // ---- OCR roster scanner (Phase 6, preserved) --------------------------
 
-  void _setRepeatCount(int v) {
-    setState(() {
-      _repeatCount = v.clamp(_minRepeats, _maxRepeats);
-    });
-  }
-
-  Future<void> _pickStartDate() async {
+  /// Camera/gallery → [DraftRosterReviewScreen] (the human-in-the-loop review).
+  /// If the review commits (`true`), this screen pops `true` too so the caller
+  /// fires its post-create path, exactly like a manual Create.
+  Future<void> _scanEntry({required bool fromGallery}) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _startDate ?? today,
-      firstDate: today,
-      lastDate: DateTime(today.year + 10, today.month, today.day),
-    );
-    if (!mounted || picked == null) return;
-    setState(() => _startDate = picked);
-  }
-
-  Future<void> _pickBlockTime(int i, {required bool start}) async {
-    final b = _blocks[i];
-    final minutesNow = start ? b.startMinutes : b.endMinutes;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: minutesNow ~/ 60, minute: minutesNow % 60),
-      // Default to the tap-to-type number pad (no dial dragging).
-      initialEntryMode: TimePickerEntryMode.input,
-    );
-    if (!mounted || picked == null) return;
-    final m = picked.hour * 60 + picked.minute;
-    _updateBlock(
-      i,
-      start ? b.copyWith(startMinutes: m) : b.copyWith(endMinutes: m),
-    );
-  }
-
-  // ---- OCR roster scanner (Phase 6) -------------------------------------
-
-  /// Mandatory anchor pick for the camera flow. Returns the chosen date, or
-  /// null if the user backed out — in which case the camera must NOT open.
-  Future<DateTime?> _pickAnchorDate() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return showDatePicker(
+    final anchor = await showDatePicker(
       context: context,
       initialDate: _startDate ?? today,
       firstDate: today,
       lastDate: DateTime(today.year + 10, today.month, today.day),
       helpText: 'Pick the start date for the scanned roster',
     );
-  }
-
-  /// Entry shared by "Add Roster via Camera" and "Import Screenshot": the
-  /// anchor date is chosen BEFORE the picker opens (cancelling it aborts), then
-  /// a successful scan hands off to [DraftRosterReviewScreen] — the
-  /// Human-in-the-Loop surface where the user prunes phantom rows and fixes
-  /// types/times before anything is persisted. [fromGallery] selects the camera
-  /// vs the photo-gallery source; everything downstream is identical.
-  ///
-  /// If the review screen commits (pops `true`), this screen pops `true` too so
-  /// the pattern picker fires its `onGenerated`, exactly like a manual Generate.
-  Future<void> _scanEntry({required bool fromGallery}) async {
-    final anchor = await _pickAnchorDate();
     if (!mounted || anchor == null) return;
 
     setState(() => _scanning = true);
@@ -240,7 +265,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     final saved = await navigator.push<bool>(
       MaterialPageRoute(
         builder: (_) => DraftRosterReviewScreen(
-          anchorDate: anchor,
+          anchorDate: DateTime(anchor.year, anchor.month, anchor.day),
           blocks: ScannedRosterInjection.map(result.blocks),
           sourceImage: result.croppedImage,
           label: name.isEmpty ? 'Scanned roster' : name,
@@ -250,591 +275,348 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     if (saved == true && mounted) navigator.pop(true);
   }
 
-  /// Loop — "Scan & Append Next Block". Appends the new shifts to the end of
-  /// the existing draft. Falls back to an anchor pick if none is set yet (the
-  /// user could reach here via the manual flow).
-  Future<void> _scanAndAppend() async {
-    if (_startDate == null) {
-      final anchor = await _pickAnchorDate();
-      if (!mounted || anchor == null) return;
-      setState(() => _startDate = anchor);
-    }
-    await _runScan(append: true);
-  }
-
-  /// Shared capture → inject step. Each scanned block lands on its own
-  /// sequential cycle day (one block per day) starting at day 0 (replace) or
-  /// at the current block count (append), so the generator lays them onto
-  /// consecutive calendar dates from the anchor. `repeatCount` is pinned to 1
-  /// — a scanned roster is a literal sequence, not a repeating cycle.
-  Future<void> _runScan({
-    required bool append,
-    bool fromGallery = false,
-  }) async {
-    setState(() {
-      _scanning = true;
-      _validationError = null;
-    });
-    // Capture before the awaits — BuildContext is unsafe across suspensions.
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      final scanned = fromGallery
-          ? await _scanner.scanFromGallery()
-          : await _scanner.scanRoster();
-      if (!mounted) return;
-      if (scanned.isEmpty) {
-        setState(() => _scanning = false);
-        messenger.showSnackBar(const SnackBar(
-          content: Text('No shift times recognised. Try cropping tighter '
-              'around the grid.'),
-        ));
-        return;
-      }
-
-      final mapped = ScannedRosterInjection.map(
-        scanned,
-        fromDayIndex: append ? _blocks.length : 0,
-      );
-      setState(() {
-        _scanning = false;
-        if (!append) _blocks.clear();
-        _blocks.addAll(mapped);
-        _cycleLengthDays = _blocks.length.clamp(_minCycleDays, _maxCycleDays);
-        _repeatCount = 1;
-        _validationError = null;
-      });
-
-      final n = mapped.length;
-      messenger.showSnackBar(SnackBar(
-        content: Text('${append ? 'Appended' : 'Added'} $n '
-            'shift${n == 1 ? '' : 's'} from the scan'),
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _scanning = false);
-      messenger.showSnackBar(SnackBar(content: Text('Scan failed: $e')));
-    }
-  }
-
-  Future<void> _generate() async {
-    if (!_canGenerate) return;
-    setState(() {
-      _generating = true;
-      _validationError = null;
-    });
-
-    // Capture before any awaits — BuildContext is unsafe to read across
-    // suspensions.
-    final generator = context.read<ShiftGenerator>();
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    try {
-      final shifts = await generator.generateAndPersistCustom(
-        label: _nameController.text.trim().isEmpty
-            ? 'Custom roster'
-            : _nameController.text.trim(),
-        startDate: _startDate!,
-        cycleLengthDays: _cycleLengthDays,
-        repeatCount: _repeatCount,
-        blocks: List<ShiftBlock>.unmodifiable(_blocks),
-      );
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Generated ${shifts.length} shifts')),
-      );
-      // pop(true) signals "a roster was generated" to a caller that
-      // awaits the push result — the unified PatternPickerBody uses
-      // this to fire its `onGenerated` callback after a Custom
-      // Builder round-trip. Callers that ignore the value (Settings
-      // → Add another rotation) are unaffected.
-      navigator.pop(true);
-    } on RosterGenerationException catch (e) {
-      // Inline error banner above the Generate button — clearer than a
-      // SnackBar for multi-line validator output (a single overlap can
-      // list multiple offending pairs). The banner is what the task
-      // brief calls "red text banner above the save button".
-      if (!mounted) return;
-      setState(() {
-        _generating = false;
-        _validationError = e.message;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _generating = false;
-        _validationError = 'Generation failed: $e';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Build custom roster')),
-      // SafeArea(bottom: true) so the Generate button can't tuck under
-      // the Android gesture-navigation pill / 3-button bar. Top is left
-      // off because the AppBar already consumes the status-bar inset.
-      body: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+  void _showScanOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetCtx) => SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Roster name', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'e.g. Split-shift trial',
-              ),
+            ListTile(
+              key: const ValueKey('roster-scan-camera'),
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Scan with camera'),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                _scanEntry(fromGallery: false);
+              },
             ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              key: const ValueKey('custom-scan-camera'),
-              onPressed:
-                  _scanning ? null : () => _scanEntry(fromGallery: false),
-              icon: _scanning
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.photo_camera_outlined),
-              label: const Text('Add Roster via Camera'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              key: const ValueKey('custom-import-gallery'),
-              onPressed:
-                  _scanning ? null : () => _scanEntry(fromGallery: true),
-              icon: _scanning
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.image_outlined),
-              label: const Text('Import Screenshot'),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Scan a printed roster or import a digital screenshot: pick a '
-              'start date, then crop to YOUR row only — not the whole team. '
-              'Each cell becomes one day from that date.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 24),
-            _IntStepperRow(
-              key: const ValueKey('custom-cycle-length'),
-              label: 'Cycle length (days)',
-              value: _cycleLengthDays,
-              min: _minCycleDays,
-              max: _maxCycleDays,
-              onChanged: _setCycleLength,
-            ),
-            const SizedBox(height: 8),
-            _IntStepperRow(
-              key: const ValueKey('custom-repeat-count'),
-              label: 'Repeat cycle ×',
-              value: _repeatCount,
-              min: _minRepeats,
-              max: _maxRepeats,
-              onChanged: _setRepeatCount,
-            ),
-            const SizedBox(height: 16),
-            _DateRow(
-              label: 'Start date',
-              buttonKey: const ValueKey('custom-start-date'),
-              date: _startDate,
-              onPick: _pickStartDate,
-            ),
-            const SizedBox(height: 24),
-            Text('Blocks', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              'Two blocks on the same cycle day are allowed — that\'s how '
-              'you describe a split shift.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            for (var i = 0; i < _blocks.length; i++)
-              _BlockCard(
-                key: ValueKey('custom-block-$i'),
-                index: i,
-                block: _blocks[i],
-                cycleLengthDays: _cycleLengthDays,
-                onChanged: (b) => _updateBlock(i, b),
-                onRemove: _blocks.length == 1 ? null : () => _removeBlock(i),
-                onPickStartTime: () => _pickBlockTime(i, start: true),
-                onPickEndTime: () => _pickBlockTime(i, start: false),
-              ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.tonalIcon(
-                key: const ValueKey('custom-add-block'),
-                onPressed: _addBlock,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Block'),
-              ),
-            ),
-            const SizedBox(height: 24),
-            if (_blocks.any(ScannedRosterInjection.needsEndTime)) ...[
-              _IncompleteBlocksBanner(
-                count:
-                    _blocks.where(ScannedRosterInjection.needsEndTime).length,
-              ),
-              const SizedBox(height: 12),
-            ],
-            FilledButton.tonalIcon(
-              key: const ValueKey('custom-scan-append'),
-              onPressed: _scanning ? null : _scanAndAppend,
-              icon: _scanning
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Scan & Append Next Block'),
-            ),
-            const SizedBox(height: 12),
-            if (_validationError != null) ...[
-              _ValidationBanner(message: _validationError!),
-              const SizedBox(height: 12),
-            ],
-            FilledButton(
-              key: const ValueKey('custom-generate'),
-              onPressed: _canGenerate ? _generate : null,
-              child: _generating
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Generate & Save Roster'),
+            ListTile(
+              key: const ValueKey('roster-scan-gallery'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Import a screenshot'),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                _scanEntry(fromGallery: true);
+              },
             ),
           ],
         ),
       ),
-      ),
     );
   }
-}
-
-/// Per-block editor card. Inline (not modal) so the user can tweak a
-/// time and re-tap Generate without a sheet-dismiss round-trip — this
-/// is the fastest path to repeatedly testing the split-shift validator.
-class _BlockCard extends StatelessWidget {
-  const _BlockCard({
-    super.key,
-    required this.index,
-    required this.block,
-    required this.cycleLengthDays,
-    required this.onChanged,
-    required this.onRemove,
-    required this.onPickStartTime,
-    required this.onPickEndTime,
-  });
-
-  final int index;
-  final ShiftBlock block;
-  final int cycleLengthDays;
-  final ValueChanged<ShiftBlock> onChanged;
-  final VoidCallback? onRemove;
-  final VoidCallback onPickStartTime;
-  final VoidCallback onPickEndTime;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // A scanned single-time block lands as a zero-duration placeholder; flag
-    // it so the user completes the end time before Generate unlocks.
-    final needsEnd = ScannedRosterInjection.needsEndTime(block);
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+    final scheme = theme.colorScheme;
+    return Scaffold(
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Block ${index + 1}',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (onRemove != null)
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Remove block',
-                    onPressed: onRemove,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            SegmentedButton<ShiftType>(
-              segments: const [
-                ButtonSegment(value: ShiftType.day, label: Text('Day')),
-                ButtonSegment(
-                    value: ShiftType.afternoon, label: Text('Afternoon')),
-                ButtonSegment(value: ShiftType.night, label: Text('Night')),
-                ButtonSegment(value: ShiftType.off, label: Text('Off')),
-              ],
-              selected: {block.type},
-              onSelectionChanged: (s) =>
-                  onChanged(block.copyWith(type: s.single)),
-              showSelectedIcon: false,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                // UI presents day indices as 1-based (Day 1..Day N) for
-                // readability; storage stays 0-based so the generator
-                // payload matches the math engine's contract. The +1/-1
-                // hop happens at the stepper boundary only.
-                Expanded(
-                  child: _IntStepperRow(
-                    label: 'Start day',
-                    value: block.startDayIndex + 1,
-                    min: 1,
-                    max: cycleLengthDays,
-                    onChanged: (displayed) {
-                      final zeroBased = displayed - 1;
-                      // Keep end >= start to preserve the inclusive
-                      // range invariant; bump end forward if needed.
-                      final newEnd = zeroBased > block.endDayIndex
-                          ? zeroBased
-                          : block.endDayIndex;
-                      onChanged(block.copyWith(
-                        startDayIndex: zeroBased,
-                        endDayIndex: newEnd,
-                      ));
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _IntStepperRow(
-                    label: 'End day',
-                    value: block.endDayIndex + 1,
-                    min: block.startDayIndex + 1,
-                    max: cycleLengthDays,
-                    onChanged: (displayed) =>
-                        onChanged(block.copyWith(endDayIndex: displayed - 1)),
-                  ),
-                ),
-              ],
-            ),
-            if (block.type != ShiftType.off) ...[
-              const SizedBox(height: 12),
-              Row(
+            // Header: title + subtitle + close (pop with no result).
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+              child: Row(
                 children: [
                   Expanded(
-                    child: Text('Time', style: theme.textTheme.bodyLarge),
-                  ),
-                  OutlinedButton(
-                    key: ValueKey('custom-block-$index-start-time'),
-                    onPressed: onPickStartTime,
-                    child: Text(
-                      formatClock(
-                        block.startMinutes,
-                        use24Hour: AppPreferences.use24HourOf(context),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'New Shift Roster',
+                          style: theme.textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Set up your shift rotation pattern',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(
-                      Icons.arrow_forward,
-                      size: 16,
-                      color: theme.colorScheme.onSurfaceVariant,
+                  IconButton(
+                    key: const ValueKey('roster-close'),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                children: [
+                  TextField(
+                    key: const ValueKey('roster-name'),
+                    controller: _nameController,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'Roster name (e.g. My 14-Day Rotation)',
                     ),
                   ),
-                  OutlinedButton(
-                    key: ValueKey('custom-block-$index-end-time'),
-                    onPressed: onPickEndTime,
-                    style: needsEnd
-                        ? OutlinedButton.styleFrom(
-                            foregroundColor: theme.colorScheme.error,
-                            side: BorderSide(color: theme.colorScheme.error),
+                  const SizedBox(height: 24),
+                  _sectionLabel(theme, 'CYCLE LENGTH'),
+                  const SizedBox(height: 8),
+                  _buildCycleChips(theme),
+                  if (_customLength) ...[
+                    const SizedBox(height: 12),
+                    _buildCustomLengthStepper(theme),
+                  ],
+                  const SizedBox(height: 24),
+                  _sectionLabel(theme, 'START DATE'),
+                  const SizedBox(height: 8),
+                  _buildStartDateField(theme),
+                  const SizedBox(height: 24),
+                  _sectionLabel(theme, 'SHIFT BLOCKS'),
+                  const SizedBox(height: 8),
+                  _buildBlocksSection(theme),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const ValueKey('roster-add-block'),
+                    onPressed: (_generating || _scanning)
+                        ? null
+                        : () => _openBlockSheet(),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Shift Block'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  if (_validationError != null) ...[
+                    const SizedBox(height: 16),
+                    _buildErrorBanner(theme, _validationError!),
+                  ],
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    key: const ValueKey('roster-create'),
+                    onPressed: _canCreate ? _create : null,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    child: _generating
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : null,
-                    child: Text(
-                      needsEnd
-                          ? 'Set end'
-                          : formatClock(
-                              block.endMinutes,
-                              use24Hour: AppPreferences.use24HourOf(context),
-                            ),
+                        : const Text('Create Roster'),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton(
+                      key: const ValueKey('roster-back-to-options'),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Text('Back to options'),
+                    ),
+                  ),
+                  const Divider(height: 32),
+                  // OCR scan preserved as a secondary path (not in the primary
+                  // flow, but a shipped feature we don't want to lose).
+                  Center(
+                    child: TextButton.icon(
+                      key: const ValueKey('roster-scan-entry'),
+                      onPressed:
+                          (_generating || _scanning) ? null : _showScanOptions,
+                      icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                      label: Text(
+                        _scanning ? 'Scanning…' : 'Scan a roster photo instead',
+                      ),
                     ),
                   ),
                 ],
               ),
-              if (needsEnd) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      size: 16,
-                      color: theme.colorScheme.error,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Scanned without an end time — set it to enable '
-                        'Generate.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+            ),
           ],
         ),
       ),
     );
   }
-}
 
-/// Compact "- value +" stepper. Manual buttons (not a Slider) because
-/// the value range is small AND we want exact integer setting; sliders
-/// at 60-day max have too coarse a per-pixel resolution.
-class _IntStepperRow extends StatelessWidget {
-  const _IntStepperRow({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
+  Widget _sectionLabel(ThemeData theme, String text) => Text(
+        text,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.0,
+        ),
+      );
 
-  final String label;
-  final int value;
-  final int min;
-  final int max;
-  final ValueChanged<int> onChanged;
+  Widget _buildCycleChips(ThemeData theme) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final len in _presetLengths)
+          ChoiceChip(
+            key: ValueKey('cycle-chip-$len'),
+            label: Text('${len}d'),
+            selected: !_customLength && _cycleLengthDays == len,
+            onSelected: (_) => _selectPresetLength(len),
+          ),
+        ChoiceChip(
+          key: const ValueKey('cycle-chip-custom'),
+          label: const Text('Custom'),
+          selected: _customLength,
+          onSelected: (_) => _selectCustomLength(),
+        ),
+      ],
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final disabledDown = value <= min;
-    final disabledUp = value >= max;
+  Widget _buildCustomLengthStepper(ThemeData theme) {
     return Row(
       children: [
-        Expanded(
-          child: Text(label, style: theme.textTheme.bodyLarge),
+        Text('Cycle length', style: theme.textTheme.bodyMedium),
+        const Spacer(),
+        IconButton(
+          key: const ValueKey('cycle-custom-minus'),
+          icon: const Icon(Icons.remove_circle_outline),
+          onPressed: _cycleLengthDays > _minCycleDays
+              ? () => _setCustomLength(_cycleLengthDays - 1)
+              : null,
         ),
-        IconButton.outlined(
-          onPressed: disabledDown ? null : () => onChanged(value - 1),
-          icon: const Icon(Icons.remove),
+        Text(
+          '$_cycleLengthDays days',
+          key: const ValueKey('cycle-custom-value'),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 28),
-            child: Text(
-              '$value',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.primary,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+        IconButton(
+          key: const ValueKey('cycle-custom-plus'),
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: _cycleLengthDays < _maxCycleDays
+              ? () => _setCustomLength(_cycleLengthDays + 1)
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStartDateField(ThemeData theme) {
+    final start = _startDate;
+    return OutlinedButton.icon(
+      key: const ValueKey('roster-start-date'),
+      onPressed: _pickStartDate,
+      icon: const Icon(Icons.calendar_today_outlined, size: 18),
+      label: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(start == null ? 'Pick a date' : formatFullDate(start)),
+      ),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        alignment: Alignment.centerLeft,
+      ),
+    );
+  }
+
+  Widget _buildBlocksSection(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    if (_blocks.isEmpty) {
+      return Container(
+        key: const ValueKey('roster-blocks-empty'),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              'No blocks yet',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
             ),
+            const SizedBox(height: 4),
+            Text(
+              'Add shift blocks to define your rotation',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (var i = 0; i < _blocks.length; i++)
+          _buildBlockTile(theme, i, _blocks[i]),
+      ],
+    );
+  }
+
+  Widget _buildBlockTile(ThemeData theme, int index, PaintedShiftBlock block) {
+    final visual = visualFor(block.type);
+    final use24Hour = AppPreferences.use24HourOf(context);
+    final time = '${formatClock(block.startMinutes, use24Hour: use24Hour)} – '
+        '${formatClock(block.endMinutes, use24Hour: use24Hour)}';
+    final days = formatDayIndexRanges(block.dayIndices);
+    return Card(
+      key: ValueKey('roster-block-$index'),
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Container(
+          width: 6,
+          height: 40,
+          decoration: BoxDecoration(
+            color: visual.color,
+            borderRadius: BorderRadius.circular(3),
           ),
         ),
-        IconButton.outlined(
-          onPressed: disabledUp ? null : () => onChanged(value + 1),
-          icon: const Icon(Icons.add),
+        title: Text('${shiftTypeLabel(block.type)} · $time'),
+        subtitle: Text('Days $days'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              key: ValueKey('roster-block-edit-$index'),
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit block',
+              onPressed: () => _openBlockSheet(existingIndex: index),
+            ),
+            IconButton(
+              key: ValueKey('roster-block-delete-$index'),
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Remove block',
+              onPressed: () => _removeBlock(index),
+            ),
+          ],
         ),
-      ],
+        onTap: () => _openBlockSheet(existingIndex: index),
+      ),
     );
   }
-}
 
-/// Date row consistent with the pattern picker — keeps the visual rhythm
-/// across the two generation surfaces.
-class _DateRow extends StatelessWidget {
-  const _DateRow({
-    required this.label,
-    required this.buttonKey,
-    required this.date,
-    required this.onPick,
-  });
-
-  final String label;
-  final Key buttonKey;
-  final DateTime? date;
-  final VoidCallback onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: Text(label, style: theme.textTheme.bodyLarge),
-        ),
-        FilledButton.tonal(
-          key: buttonKey,
-          onPressed: onPick,
-          child: Text(date == null ? 'Pick date' : formatShiftDate(date!)),
-        ),
-      ],
-    );
-  }
-}
-
-/// Multi-line error banner. Used for the validator's output so a
-/// multi-pair overlap report wraps cleanly above the Generate button.
-class _ValidationBanner extends StatelessWidget {
-  const _ValidationBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget _buildErrorBanner(ThemeData theme, String message) {
+    final scheme = theme.colorScheme;
     return Container(
-      key: const ValueKey('custom-validation-banner'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      key: const ValueKey('roster-error-banner'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.error_outline,
-            color: theme.colorScheme.onErrorContainer,
-          ),
+          Icon(Icons.error_outline, color: scheme.onErrorContainer, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: scheme.onErrorContainer),
             ),
           ),
         ],
@@ -843,47 +625,242 @@ class _ValidationBanner extends StatelessWidget {
   }
 }
 
-/// Non-blocking attention banner shown above the Scan/Generate buttons when
-/// the draft still contains scanned blocks missing their end time. Distinct
-/// (tertiary) styling from the red [_ValidationBanner] so "finish this" reads
-/// differently from "this is wrong".
-class _IncompleteBlocksBanner extends StatelessWidget {
-  const _IncompleteBlocksBanner({required this.count});
+/// The "Add Shift Block" paintbrush sheet: pick a type + start/end time, then
+/// tap the days of the cycle this block covers. Days claimed by another block
+/// are locked. Returns the composed [PaintedShiftBlock] via `Navigator.pop`, or
+/// null on cancel.
+class _AddShiftBlockSheet extends StatefulWidget {
+  const _AddShiftBlockSheet({
+    required this.cycleLength,
+    required this.claimedDays,
+    required this.use24Hour,
+    this.existing,
+  });
 
-  final int count;
+  final int cycleLength;
+  final Set<int> claimedDays;
+  final bool use24Hour;
+  final PaintedShiftBlock? existing;
+
+  @override
+  State<_AddShiftBlockSheet> createState() => _AddShiftBlockSheetState();
+}
+
+class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
+  late ShiftType _type;
+  late int _startMinutes;
+  late int _endMinutes;
+  late Set<int> _selectedDays;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    _type = e?.type ?? ShiftType.day;
+    _startMinutes = e?.startMinutes ?? 7 * 60;
+    _endMinutes = e?.endMinutes ?? 15 * 60;
+    _selectedDays = {...?e?.dayIndices};
+  }
+
+  bool get _canSave => _selectedDays.isNotEmpty && _startMinutes != _endMinutes;
+
+  Future<void> _pickTime({required bool start}) async {
+    final base = start ? _startMinutes : _endMinutes;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: base ~/ 60, minute: base % 60),
+      initialEntryMode: TimePickerEntryMode.input,
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      final m = picked.hour * 60 + picked.minute;
+      if (start) {
+        _startMinutes = m;
+      } else {
+        _endMinutes = m;
+      }
+    });
+  }
+
+  void _toggleDay(int day) {
+    if (widget.claimedDays.contains(day)) return; // locked by another block
+    setState(() {
+      if (_selectedDays.contains(day)) {
+        _selectedDays.remove(day);
+      } else {
+        _selectedDays.add(day);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      key: const ValueKey('custom-incomplete-banner'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.schedule_outlined,
-            color: theme.colorScheme.onTertiaryContainer,
+    final scheme = theme.colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.existing == null ? 'Add shift block' : 'Edit shift block',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
+              // Off is excluded — an un-painted day is already Off.
+              SegmentedButton<ShiftType>(
+                key: const ValueKey('block-type'),
+                segments: const [
+                  ButtonSegment(value: ShiftType.day, label: Text('Day')),
+                  ButtonSegment(
+                    value: ShiftType.afternoon,
+                    label: Text('Afternoon'),
+                  ),
+                  ButtonSegment(value: ShiftType.night, label: Text('Night')),
+                ],
+                selected: {_type},
+                onSelectionChanged: (s) => setState(() => _type = s.single),
+                showSelectedIcon: false,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('block-start-time'),
+                      onPressed: () => _pickTime(start: true),
+                      child: Column(
+                        children: [
+                          Text('Start', style: theme.textTheme.labelSmall),
+                          Text(
+                            formatClock(_startMinutes,
+                                use24Hour: widget.use24Hour),
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('block-end-time'),
+                      onPressed: () => _pickTime(start: false),
+                      child: Column(
+                        children: [
+                          Text('End', style: theme.textTheme.labelSmall),
+                          Text(
+                            formatClock(_endMinutes,
+                                use24Hour: widget.use24Hour),
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Tap the days this shift covers',
+                  style: theme.textTheme.labelLarge,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildDayGrid(theme),
+              const SizedBox(height: 8),
+              Text(
+                'Un-tapped days are Off.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                key: const ValueKey('block-save'),
+                onPressed: _canSave
+                    ? () => Navigator.of(context).pop(
+                          PaintedShiftBlock(
+                            type: _type,
+                            startMinutes: _startMinutes,
+                            endMinutes: _endMinutes,
+                            dayIndices: _selectedDays,
+                          ),
+                        )
+                    : null,
+                child: Text(
+                  widget.existing == null ? 'Add block' : 'Save block',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayGrid(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    final typeColor = visualFor(_type).color;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: widget.cycleLength,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 7,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
+        childAspectRatio: 1,
+      ),
+      itemBuilder: (_, i) {
+        final selected = _selectedDays.contains(i);
+        final claimed = widget.claimedDays.contains(i);
+        final Color bg;
+        final Color fg;
+        if (selected) {
+          bg = typeColor;
+          fg = scheme.onPrimary;
+        } else if (claimed) {
+          bg = scheme.surfaceContainerHighest;
+          fg = scheme.onSurfaceVariant.withValues(alpha: 0.5);
+        } else {
+          bg = scheme.surfaceContainerHigh;
+          fg = scheme.onSurface;
+        }
+        return InkWell(
+          key: ValueKey('block-day-$i'),
+          onTap: claimed ? null : () => _toggleDay(i),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(8),
+              border: claimed
+                  ? Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4))
+                  : null,
+            ),
+            alignment: Alignment.center,
             child: Text(
-              count == 1
-                  ? '1 scanned shift is missing an end time. Tap its '
-                      'highlighted "Set end" button to finish.'
-                  : '$count scanned shifts are missing an end time. Tap each '
-                      'highlighted "Set end" button to finish.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onTertiaryContainer,
+              '${i + 1}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: fg,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
               ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
