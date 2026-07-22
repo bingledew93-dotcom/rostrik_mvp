@@ -230,12 +230,12 @@ class ShiftGenerator {
     required String label,
     required DateTime startDate,
     required int cycleLengthDays,
-    required int repeatCount,
     required List<ShiftBlock> blocks,
+    int repeatCount = 1,
+    DateTime? materialiseTo,
+    String? summary,
+    bool fillOffDays = false,
   }) async {
-    if (repeatCount <= 0) {
-      throw RosterGenerationException('Repeat count must be at least 1.');
-    }
     final structuralErrors = validateCustomRoster(cycleLengthDays, blocks);
     if (structuralErrors.isNotEmpty) {
       throw RosterGenerationException(structuralErrors.join('\n'));
@@ -245,12 +245,46 @@ class ShiftGenerator {
     // defence used by `generateAndPersistPattern`.
     final start = DateTime(startDate.year, startDate.month, startDate.day);
     final cycleId = _uuid.v4();
-    final totalDays = cycleLengthDays * repeatCount;
+
+    // Two materialisation modes:
+    //   * FIXED repeats (legacy): `cycleLengthDays * repeatCount` days.
+    //   * FOREVER window (`materialiseTo` set): every calendar day in
+    //     `[start, materialiseTo)`. The anchored cycle projects indefinitely
+    //     either way; this is just the slice written to Hive now, rolled
+    //     forward later by the invisible extender.
+    final int totalDays;
+    if (materialiseTo != null) {
+      final to = DateTime(
+        materialiseTo.year,
+        materialiseTo.month,
+        materialiseTo.day,
+      );
+      if (!to.isAfter(start)) {
+        throw RosterGenerationException(
+          'materialiseTo must be strictly after startDate.',
+        );
+      }
+      // DST-safe calendar-day count (Duration.inDays truncates across a
+      // 23/25h boundary day).
+      var n = 0;
+      var cursor = start;
+      while (cursor.isBefore(to)) {
+        n++;
+        cursor = _addCalendarDays(cursor, 1);
+      }
+      totalDays = n;
+    } else {
+      if (repeatCount <= 0) {
+        throw RosterGenerationException('Repeat count must be at least 1.');
+      }
+      totalDays = cycleLengthDays * repeatCount;
+    }
     final draft = <Shift>[];
 
     for (var dayIdx = 0; dayIdx < totalDays; dayIdx++) {
       final cyclePos = dayIdx % cycleLengthDays;
       final date = _addCalendarDays(start, dayIdx);
+      var covered = false;
       for (final block in blocks) {
         if (cyclePos < block.startDayIndex) continue;
         if (cyclePos > block.endDayIndex) continue;
@@ -260,6 +294,21 @@ class ShiftGenerator {
           type: block.type,
           startMinutes: block.startMinutes,
           endMinutes: block.endMinutes,
+          cycleId: cycleId,
+        ));
+        covered = true;
+      }
+      // When asked, a day no block covers is materialised as an explicit OFF
+      // shift (0/0) rather than left blank — the paintbrush builder wants
+      // un-painted days to render as rest days, matching the anchored/pattern
+      // paths. Legacy repeat-count callers leave this false (Off is implicit).
+      if (!covered && fillOffDays) {
+        draft.add(Shift(
+          id: _uuid.v4(),
+          date: date,
+          type: ShiftType.off,
+          startMinutes: 0,
+          endMinutes: 0,
           cycleId: cycleId,
         ));
       }
@@ -281,9 +330,10 @@ class ShiftGenerator {
     final cycle = ShiftCycle(
       id: cycleId,
       label: label.isEmpty ? 'Custom roster' : label,
-      summary: 'Custom · $cycleLengthDays-day cycle · '
-          '${blocks.length} block${blocks.length == 1 ? '' : 's'}'
-          '${repeatCount == 1 ? '' : ' × $repeatCount'}',
+      summary: summary ??
+          'Custom · $cycleLengthDays-day cycle · '
+              '${blocks.length} block${blocks.length == 1 ? '' : 's'}'
+              '${materialiseTo != null || repeatCount == 1 ? '' : ' × $repeatCount'}',
       startDate: start,
       endDate: endDateInclusive,
       createdAt: _clock(),

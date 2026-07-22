@@ -1,18 +1,16 @@
 import 'package:flutter/foundation.dart';
 
-import '../data/models/cycle_block.dart';
 import '../data/models/shift_type.dart';
+import 'shift_block.dart';
 
 /// One shift "painted" onto a set of cycle-day positions — the data the
 /// redesigned roster builder collects per "Add Shift Block".
 ///
-/// Unlike the legacy positional [ShiftBlock] (contiguous
-/// `startDayIndex..endDayIndex`), a painted block owns an arbitrary SET of
-/// 0-based day positions, so a worker can tap days 0,1,2 AND 7,8,9 for the same
-/// Day shift in one block. The builder guarantees each day position belongs to
-/// at most ONE block (a day already claimed by another block isn't selectable),
-/// so there are never same-day split shifts to fold — every position resolves
-/// to exactly one shift or Off.
+/// A painted block owns an arbitrary SET of 0-based day positions, so a worker
+/// can tap days 0,1,2 AND 7,8,9 for the same Day shift in one block. Two blocks
+/// MAY cover the same day — that's a split shift (e.g. a morning block plus an
+/// evening block on the same cycle day); the generator rejects only blocks
+/// whose TIMES overlap on a shared day.
 @immutable
 class PaintedShiftBlock {
   const PaintedShiftBlock({
@@ -45,59 +43,36 @@ class PaintedShiftBlock {
       );
 }
 
-/// Folds the builder's [blocks] into the sequential [CycleBlock] list the
-/// anchored generator + modulo resolver consume.
+/// Flattens the builder's painted [blocks] into the positional [ShiftBlock]
+/// list the generator materialises — one single-day [ShiftBlock] per painted
+/// day. Two painted blocks that share a day therefore become two same-position
+/// ShiftBlocks, i.e. a SPLIT SHIFT (both materialise on that calendar day). The
+/// generator's time-overlap validator is what forbids a split whose times
+/// actually clash; non-overlapping splits (morning + evening) pass.
 ///
-/// For each cycle position `0..cycleLength-1`:
-///   * the block whose [PaintedShiftBlock.dayIndices] contains it supplies the
-///     (type, start, end) — the builder enforces at-most-one, but if two ever
-///     claimed the same day the FIRST in [blocks] wins (deterministic);
-///   * an un-painted position resolves to an OFF day (0/0 times).
-/// Consecutive positions with an identical (type, start, end) merge into one
-/// [CycleBlock] run, so the resolver's "Day 3 of 4" reads naturally.
-///
-/// Pure (no Flutter, no Hive) so it unit-tests directly. Returns an unmodifiable
-/// list; [cycleLength] must be positive.
-List<CycleBlock> foldPaintedBlocks(
-  int cycleLength,
-  List<PaintedShiftBlock> blocks,
-) {
-  assert(cycleLength > 0, 'cycleLength must be positive');
-  final merged = <CycleBlock>[];
-  for (var pos = 0; pos < cycleLength; pos++) {
-    PaintedShiftBlock? hit;
-    for (final b in blocks) {
-      if (b.dayIndices.contains(pos)) {
-        hit = b;
-        break;
-      }
-    }
-    final type = hit?.type ?? ShiftType.off;
-    final start = hit?.startMinutes ?? 0;
-    final end = hit?.endMinutes ?? 0;
-    if (merged.isNotEmpty &&
-        merged.last.type == type &&
-        merged.last.startMinutes == start &&
-        merged.last.endMinutes == end) {
-      merged[merged.length - 1] = merged.last.copyWith(
-        consecutiveDays: merged.last.consecutiveDays + 1,
-      );
-    } else {
-      merged.add(CycleBlock(
-        type: type,
-        consecutiveDays: 1,
-        startMinutes: start,
-        endMinutes: end,
+/// Per-day (not compressed to ranges) keeps this trivially correct — the
+/// generator's own `_foldCustomBlocksToCycleBlocks` re-merges consecutive
+/// identical days for the anchored projection anyway. Pure/testable.
+List<ShiftBlock> paintedBlocksToShiftBlocks(List<PaintedShiftBlock> blocks) {
+  final out = <ShiftBlock>[];
+  for (final b in blocks) {
+    for (final day in b.dayIndices) {
+      out.add(ShiftBlock(
+        type: b.type,
+        startDayIndex: day,
+        endDayIndex: day,
+        startMinutes: b.startMinutes,
+        endMinutes: b.endMinutes,
       ));
     }
   }
-  return List<CycleBlock>.unmodifiable(merged);
+  return out;
 }
 
-/// The set of cycle-day positions already claimed across [blocks] — what the
-/// paintbrush grid greys out (and forbids) so each day maps to one shift.
-/// [exclude] omits the block currently being edited so its own days stay
-/// tappable.
+/// The set of cycle-day positions covered by other [blocks] — the paintbrush
+/// grid marks these as "already has a shift" so the user knows a tap there
+/// creates a SPLIT (rather than locking them out). [exclude] omits the block
+/// currently being edited so its own days aren't flagged against itself.
 Set<int> claimedDayIndices(
   List<PaintedShiftBlock> blocks, {
   PaintedShiftBlock? exclude,

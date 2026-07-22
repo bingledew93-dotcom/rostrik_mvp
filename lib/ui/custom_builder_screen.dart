@@ -147,8 +147,9 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
       showDragHandle: true,
       builder: (_) => _AddShiftBlockSheet(
         cycleLength: _cycleLengthDays,
-        // Days already owned by OTHER blocks are locked in the grid so each day
-        // maps to exactly one shift (no same-day split shifts to disambiguate).
+        // Days already covered by OTHER blocks are MARKED (not locked): tapping
+        // one adds a second shift to that day — a split. The generator rejects
+        // only splits whose times actually overlap.
         claimedDays: claimedDayIndices(_blocks, exclude: editing),
         existing: editing,
         use24Hour: AppPreferences.use24HourOf(context),
@@ -187,15 +188,19 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     final name = _nameController.text.trim();
 
     try {
-      final shifts = await generator.generateAndPersistAnchored(
+      final shifts = await generator.generateAndPersistCustom(
         label: name.isEmpty ? 'Custom roster' : name,
-        anchorDate: start,
-        blocks: foldPaintedBlocks(_cycleLengthDays, _blocks),
-        materialiseFrom: start,
-        // Forever: an anchored cycle projects indefinitely; we materialise a
-        // 365-day window for the scheduler, and the invisible extender rolls it
-        // forward. Calendar-day math (not Duration) for DST safety.
+        startDate: start,
+        cycleLengthDays: _cycleLengthDays,
+        // Per-day positional blocks — two blocks on the same day materialise as
+        // a SPLIT shift; the generator rejects only time-overlapping pairs.
+        blocks: paintedBlocksToShiftBlocks(_blocks),
+        // Forever: the cycle is anchored (projects indefinitely); we materialise
+        // a 365-day window now, rolled forward by the invisible extender.
+        // Calendar-day math (not Duration) for DST safety.
         materialiseTo: DateTime(start.year, start.month, start.day + 365),
+        // Un-painted days render as explicit Off/rest days on the calendar.
+        fillOffDays: true,
         summary: 'Custom · $_cycleLengthDays-day cycle · repeats',
       );
       if (!mounted) return;
@@ -626,8 +631,9 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
 }
 
 /// The "Add Shift Block" paintbrush sheet: pick a type + start/end time, then
-/// tap the days of the cycle this block covers. Days claimed by another block
-/// are locked. Returns the composed [PaintedShiftBlock] via `Navigator.pop`, or
+/// tap the days of the cycle this block covers. Days already covered by another
+/// block are marked with an accent ring — tapping one adds a split shift on
+/// that day. Returns the composed [PaintedShiftBlock] via `Navigator.pop`, or
 /// null on cancel.
 class _AddShiftBlockSheet extends StatefulWidget {
   const _AddShiftBlockSheet({
@@ -683,7 +689,8 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
   }
 
   void _toggleDay(int day) {
-    if (widget.claimedDays.contains(day)) return; // locked by another block
+    // Claimed days are NOT locked — tapping one adds this block as a split on
+    // that day. Time-overlap conflicts are caught by the generator on Create.
     setState(() {
       if (_selectedDays.contains(day)) {
         _selectedDays.remove(day);
@@ -825,38 +832,55 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
       ),
       itemBuilder: (_, i) {
         final selected = _selectedDays.contains(i);
-        final claimed = widget.claimedDays.contains(i);
+        // Covered by ANOTHER block → tapping makes it a split (still tappable).
+        final shared = widget.claimedDays.contains(i);
         final Color bg;
         final Color fg;
         if (selected) {
           bg = typeColor;
           fg = scheme.onPrimary;
-        } else if (claimed) {
-          bg = scheme.surfaceContainerHighest;
-          fg = scheme.onSurfaceVariant.withValues(alpha: 0.5);
         } else {
           bg = scheme.surfaceContainerHigh;
           fg = scheme.onSurface;
         }
         return InkWell(
           key: ValueKey('block-day-$i'),
-          onTap: claimed ? null : () => _toggleDay(i),
+          onTap: () => _toggleDay(i),
           borderRadius: BorderRadius.circular(8),
           child: Container(
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.circular(8),
-              border: claimed
-                  ? Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4))
+              // A subtle accent ring flags "already has a shift" so the user
+              // knows a tap here creates a split.
+              border: (shared && !selected)
+                  ? Border.all(color: scheme.primary.withValues(alpha: 0.7))
                   : null,
             ),
             alignment: Alignment.center,
-            child: Text(
-              '${i + 1}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: fg,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-              ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Text(
+                  '${i + 1}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  ),
+                ),
+                if (shared && !selected)
+                  Positioned(
+                    bottom: 3,
+                    child: Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: scheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         );

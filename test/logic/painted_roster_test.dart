@@ -16,60 +16,45 @@ void main() {
         dayIndices: days,
       );
 
-  group('foldPaintedBlocks', () {
-    test('un-painted positions become Off; painted runs merge', () {
-      // 7-day cycle: Day shift on days 0,1,2; the rest Off.
-      final folded = foldPaintedBlocks(7, [block(ShiftType.day, {0, 1, 2})]);
-      // Expect: Day×3, Off×4.
-      expect(folded.map((b) => b.type).toList(), [
-        ShiftType.day,
-        ShiftType.off,
+  group('paintedBlocksToShiftBlocks', () {
+    test('emits one single-day ShiftBlock per painted day, carrying the times',
+        () {
+      final out =
+          paintedBlocksToShiftBlocks([block(ShiftType.day, {0, 1, 2})]);
+      expect(out, hasLength(3));
+      expect(out.map((b) => b.startDayIndex).toSet(), {0, 1, 2});
+      // Each block is single-day and same type/time.
+      for (final b in out) {
+        expect(b.startDayIndex, b.endDayIndex);
+        expect(b.type, ShiftType.day);
+        expect(b.startMinutes, 7 * 60);
+        expect(b.endMinutes, 15 * 60);
+      }
+    });
+
+    test('two blocks sharing a day both emit at that position (a split shift)',
+        () {
+      final out = paintedBlocksToShiftBlocks([
+        block(ShiftType.day, {0}, start: 6 * 60, end: 10 * 60),
+        block(ShiftType.afternoon, {0}, start: 15 * 60, end: 19 * 60),
       ]);
-      expect(folded[0].consecutiveDays, 3);
-      expect(folded[0].startMinutes, 7 * 60);
-      expect(folded[0].endMinutes, 15 * 60);
-      expect(folded[1].type, ShiftType.off);
-      expect(folded[1].consecutiveDays, 4);
+      // Both land on day 0 → the generator will materialise two shifts there.
+      final atDay0 = out.where((b) => b.startDayIndex == 0).toList();
+      expect(atDay0, hasLength(2));
+      expect(atDay0.map((b) => b.type).toSet(),
+          {ShiftType.day, ShiftType.afternoon});
     });
 
-    test('total folded days always equals the cycle length', () {
-      final folded = foldPaintedBlocks(14, [
-        block(ShiftType.day, {0, 1, 2, 3}),
-        block(ShiftType.night, {7, 8, 9}, start: 19 * 60, end: 7 * 60),
-      ]);
-      final total = folded.fold<int>(0, (n, b) => n + b.consecutiveDays);
-      expect(total, 14);
+    test('non-contiguous days each become their own block', () {
+      final out =
+          paintedBlocksToShiftBlocks([block(ShiftType.day, {0, 1, 4})]);
+      expect(out.map((b) => b.startDayIndex).toSet(), {0, 1, 4});
     });
 
-    test('non-contiguous painted days split into separate runs', () {
-      // Day on 0,1 and 4,5 → Day×2, Off×2, Day×2, Off×1 over a 7-day cycle.
-      final folded = foldPaintedBlocks(7, [block(ShiftType.day, {0, 1, 4, 5})]);
-      expect(
-        folded.map((b) => (b.type, b.consecutiveDays)).toList(),
-        [
-          (ShiftType.day, 2),
-          (ShiftType.off, 2),
-          (ShiftType.day, 2),
-          (ShiftType.off, 1),
-        ],
-      );
-    });
-
-    test('adjacent blocks of different types stay distinct runs', () {
-      final folded = foldPaintedBlocks(4, [
-        block(ShiftType.day, {0, 1}),
-        block(ShiftType.night, {2, 3}, start: 19 * 60, end: 7 * 60),
-      ]);
-      expect(folded.map((b) => b.type).toList(),
-          [ShiftType.day, ShiftType.night]);
-      expect(folded.every((b) => b.consecutiveDays == 2), isTrue);
-    });
-
-    test('an all-Off cycle (no blocks) folds to a single Off run', () {
-      final folded = foldPaintedBlocks(5, const []);
-      expect(folded, hasLength(1));
-      expect(folded.single.type, ShiftType.off);
-      expect(folded.single.consecutiveDays, 5);
+    test('no painted days → no blocks', () {
+      expect(paintedBlocksToShiftBlocks(const []), isEmpty);
+      expect(paintedBlocksToShiftBlocks([block(ShiftType.day, <int>{})]),
+          isEmpty);
     });
   });
 

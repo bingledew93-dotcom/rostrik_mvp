@@ -99,22 +99,35 @@ void main() {
     expect(create.onPressed, isNotNull);
   });
 
-  testWidgets('a day claimed by one block is locked in the next block sheet',
+  testWidgets('a day covered by another block is still selectable (split)',
       (tester) async {
     await pumpBuilder(tester);
-    await addBlock(tester, dayCount: 3); // claims days 0,1,2
+    await addBlock(tester, dayCount: 3); // covers days 0,1,2
 
-    // Open a second block sheet — day 0 (claimed) must not be selectable.
+    // Open a second block sheet — day 0 stays tappable so it can take a split.
     await tester.tap(find.byKey(const ValueKey('roster-add-block')));
     await tester.pumpAndSettle();
-    final claimedCell = tester.widget<InkWell>(
+    final sharedCell = tester.widget<InkWell>(
       find.byKey(const ValueKey('block-day-0')),
     );
-    expect(claimedCell.onTap, isNull, reason: 'claimed day is locked');
-    final freeCell = tester.widget<InkWell>(
-      find.byKey(const ValueKey('block-day-5')),
-    );
-    expect(freeCell.onTap, isNotNull);
+    expect(sharedCell.onTap, isNotNull, reason: 'claimed day allows a split');
+  });
+
+  testWidgets('a second block can be added on a day already covered',
+      (tester) async {
+    await pumpBuilder(tester);
+    await addBlock(tester, dayCount: 2); // block 0 covers days 0,1
+
+    // Second block, painting day 0 again (a split on that day).
+    await tester.tap(find.byKey(const ValueKey('roster-add-block')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('block-day-0')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('block-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('roster-block-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('roster-block-1')), findsOneWidget);
   });
 
   testWidgets('Create Roster persists an anchored cycle + materialised shifts',
