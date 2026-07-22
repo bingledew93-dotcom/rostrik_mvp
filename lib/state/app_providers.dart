@@ -5,10 +5,12 @@ import '../alarms/alarm_scheduler.dart';
 import '../alarms/notification_id_map.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
+import '../data/models/calendar_activity.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/app_alarm_repository.dart';
+import '../data/repositories/calendar_activity_repository.dart';
 import '../data/repositories/shift_cycle_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
@@ -58,6 +60,9 @@ class AppProviders extends StatelessWidget {
         Provider<ShiftCycleRepository>.value(value: storage.cycles),
         Provider<AppAlarmRepository>.value(value: storage.alarms),
         Provider<AlarmSettingsRepository>.value(value: storage.alarmSettings),
+        // Non-shift calendar entries (events/tasks/birthdays). Fully separate
+        // from the alarm engine — the shift/alarm tree never reads these.
+        Provider<CalendarActivityRepository>.value(value: storage.activities),
         Provider<AlarmScheduler>.value(value: scheduler),
         // Exposed (read-only from the UI's perspective) so the timeline's
         // "kill snooze" affordance can resolve shiftId → notificationId
@@ -104,6 +109,10 @@ class AppProviders extends StatelessWidget {
         StreamProvider<AlarmSettings>(
           create: (_) => storage.alarmSettings.watch(),
           initialData: AlarmSettings.defaults,
+        ),
+        StreamProvider<List<CalendarActivity>>(
+          create: (_) => storage.activities.watch(),
+          initialData: const [],
         ),
         // UI-only display preferences (clock format, calendar week-start),
         // backed by the generic 'settings' Hive box. Constructed in main()

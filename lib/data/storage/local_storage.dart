@@ -3,14 +3,17 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 import '../../alarms/notification_id_map.dart';
 import '../models/alarm_settings.dart';
 import '../models/app_alarm.dart';
+import '../models/calendar_activity.dart';
 import '../models/cycle_block.dart';
 import '../models/shift.dart';
 import '../models/shift_cycle.dart';
 import '../models/shift_type.dart';
 import '../repositories/alarm_settings_repository.dart';
 import '../repositories/app_alarm_repository.dart';
+import '../repositories/calendar_activity_repository.dart';
 import '../repositories/hive_alarm_settings_repository.dart';
 import '../repositories/hive_app_alarm_repository.dart';
+import '../repositories/hive_calendar_activity_repository.dart';
 import '../repositories/hive_shift_cycle_repository.dart';
 import '../repositories/hive_shift_repository.dart';
 import '../repositories/shift_cycle_repository.dart';
@@ -28,6 +31,7 @@ class LocalStorage {
     required this.alarms,
     required this.alarmSettings,
     required this.notificationIds,
+    required this.activities,
   });
 
   final ShiftRepository shifts;
@@ -35,6 +39,7 @@ class LocalStorage {
   final AppAlarmRepository alarms;
   final AlarmSettingsRepository alarmSettings;
   final NotificationIdMap notificationIds;
+  final CalendarActivityRepository activities;
 
   static LocalStorage? _instance;
 
@@ -77,6 +82,12 @@ class LocalStorage {
     if (!Hive.isAdapterRegistered(7)) {
       Hive.registerAdapter(CycleBlockAdapter());
     }
+    if (!Hive.isAdapterRegistered(8)) {
+      Hive.registerAdapter(CalendarActivityAdapter());
+    }
+    if (!Hive.isAdapterRegistered(9)) {
+      Hive.registerAdapter(ActivityKindAdapter());
+    }
 
     final shiftBox = await Hive.openBox<Shift>(HiveShiftRepository.boxName);
     final cycleBox = await Hive.openBox<ShiftCycle>(
@@ -89,6 +100,9 @@ class LocalStorage {
       HiveAlarmSettingsRepository.boxName,
     );
     final idsBox = await Hive.openBox<int>(HiveNotificationIdMap.boxName);
+    final activityBox = await Hive.openBox<CalendarActivity>(
+      HiveCalendarActivityRepository.boxName,
+    );
 
     final storage = LocalStorage._(
       shifts: HiveShiftRepository(shiftBox),
@@ -96,6 +110,7 @@ class LocalStorage {
       alarms: HiveAppAlarmRepository(alarmBox),
       alarmSettings: HiveAlarmSettingsRepository(settingsBox),
       notificationIds: HiveNotificationIdMap(idsBox),
+      activities: HiveCalendarActivityRepository(activityBox),
     );
     _instance = storage;
     return storage;
@@ -116,5 +131,8 @@ class LocalStorage {
     await Hive.box<AppAlarm>(HiveAppAlarmRepository.boxName).clear();
     await Hive.box<AlarmSettings>(HiveAlarmSettingsRepository.boxName).clear();
     await Hive.box<int>(HiveNotificationIdMap.boxName).clear();
+    await Hive.box<CalendarActivity>(
+      HiveCalendarActivityRepository.boxName,
+    ).clear();
   }
 }
