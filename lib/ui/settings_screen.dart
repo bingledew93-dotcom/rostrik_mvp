@@ -13,6 +13,7 @@ import '../legal/legal.dart';
 import '../logic/cycle_service.dart';
 import '../state/app_preferences.dart';
 import 'onboarding/onboarding_flow.dart';
+import 'onboarding/walkthrough_flow.dart';
 import 'pattern_picker_screen.dart';
 import 'shift_format.dart';
 import 'work_history_screen.dart';
@@ -46,6 +47,8 @@ class SettingsScreen extends StatelessWidget {
             _WorkHistorySection(),
             Divider(height: 32),
             _PreferencesSection(),
+            Divider(height: 32),
+            _HelpSection(),
             Divider(height: 32),
             _FactoryResetSection(),
             Divider(height: 32),
@@ -107,6 +110,51 @@ class _LegalAboutSection extends StatelessWidget {
           title: const Text('Terms of Use'),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => _open(context, kTermsOfUseUrl),
+        ),
+      ],
+    );
+  }
+}
+
+/// "HELP" — a single tile that replays the first-launch walkthrough (paint-a-
+/// roster practice + shake-to-dismiss test-run). Pushes the SAME [WalkthroughFlow]
+/// the onboarding flow shows; here [WalkthroughFlow.onFinish] just pops back to
+/// Settings, so it's a pure, side-effect-free replay the user can revisit
+/// anytime.
+class _HelpSection extends StatelessWidget {
+  const _HelpSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'HELP',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        ListTile(
+          key: const ValueKey('settings-replay-tutorial'),
+          leading: const Icon(Icons.school_outlined),
+          title: const Text('How it works'),
+          subtitle: const Text('Replay the quick tour — paint a roster + '
+              'shake-to-dismiss'),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (routeContext) => WalkthroughFlow(
+                onFinish: () => Navigator.of(routeContext).pop(),
+              ),
+            ),
+          ),
         ),
       ],
     );
