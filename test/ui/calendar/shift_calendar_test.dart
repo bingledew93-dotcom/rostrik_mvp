@@ -110,6 +110,28 @@ void main() {
     expect(taps.single.$2.map((x) => x.id), ['paused']);
   });
 
+  testWidgets('a day in activityDays shows the activity marker dot',
+      (tester) async {
+    Key markerKey(DateTime d) =>
+        ValueKey('activity-marker-${d.year}-${d.month}-${d.day}');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShiftCalendarView(
+            shifts: const [],
+            activityDays: {dayInMonth(12)},
+            onDayTapped: (_, _) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The 12th carries an activity → its marker dot renders; a bare day doesn't.
+    expect(find.byKey(markerKey(dayInMonth(12))), findsOneWidget);
+    expect(find.byKey(markerKey(dayInMonth(13))), findsNothing);
+  });
+
   testWidgets('reports every shift on a day, earliest first', (tester) async {
     // Two shifts on the same day, seeded out of order — the index sorts them by
     // start, so tap reports earliest-first (the editor edits the earliest).

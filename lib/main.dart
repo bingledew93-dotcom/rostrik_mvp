@@ -15,6 +15,8 @@ import 'data/repositories/shift_repository.dart';
 import 'data/storage/local_storage.dart';
 import 'legal/legal.dart';
 import 'logic/adhoc_archive.dart';
+import 'reminders/activity_reminder_scheduler.dart';
+import 'reminders/activity_reminder_service.dart';
 import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
 import 'ui/app_theme.dart';
@@ -140,6 +142,20 @@ void main() async {
   Hive.box('settings')
       .listenable(keys: const <String>[isSchedulePausedKey])
       .addListener(syncService.syncAlarms);
+
+  // PHASE-3 OPTIONAL REMINDERS — a fully separate, lightweight path from the
+  // shift-alarm engine above. This service watches the activity box and keeps
+  // the OS's reminder set in sync (schedule/replace/cancel) via the native
+  // `rostrik/activity_reminders` channel. The initial reconcile here also
+  // re-arms reminders after a reboot (AlarmManager alarms don't survive one),
+  // covered on the next app open. Never stopped, for the same reason the alarm
+  // sync service isn't — but even if the process dies the armed reminders live
+  // in the OS.
+  final reminderService = ActivityReminderService(
+    activities: storage.activities,
+    scheduler: NativeActivityReminderScheduler(),
+  );
+  await reminderService.start();
 
   // Register the main-isolate liveness beacon — the background sync checks for
   // it (`mainIsolateIsAlive`) and bails rather than reconcile Hive concurrently

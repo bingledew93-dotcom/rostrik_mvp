@@ -20,6 +20,7 @@ class ShiftCalendarView extends StatefulWidget {
   const ShiftCalendarView({
     super.key,
     required this.shifts,
+    this.activityDays = const {},
     this.onDayTapped,
     this.startWeekOnMonday = true,
     this.compact = false,
@@ -29,6 +30,12 @@ class ShiftCalendarView extends StatefulWidget {
   /// rebuilt only when this changes identity (each stream emission is a new
   /// list), so calendar-swipe rebuilds stay O(1) per cell.
   final List<Shift> shifts;
+
+  /// Midnight-normalised days that carry at least one non-shift activity
+  /// (event / task / birthday). Days in this set get a small marker dot so the
+  /// calendar reads as a normal calendar too. Kept as a plain day-set so the
+  /// calendar stays decoupled from the `CalendarActivity` model.
+  final Set<DateTime> activityDays;
 
   /// Tapped a cell → (normalised date, shifts on that date, earliest-first).
   /// Null makes the calendar read-only (e.g. the Dashboard's glance preview).
@@ -87,6 +94,9 @@ class _ShiftCalendarViewState extends State<ShiftCalendarView> {
   List<Shift> _shiftsOn(DateTime day) =>
       _index[DateTime(day.year, day.month, day.day)] ?? const <Shift>[];
 
+  bool _hasActivityOn(DateTime day) =>
+      widget.activityDays.contains(DateTime(day.year, day.month, day.day));
+
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
     setState(() {
       _selectedDay = selectedDay;
@@ -132,21 +142,25 @@ class _ShiftCalendarViewState extends State<ShiftCalendarView> {
         defaultBuilder: (ctx, day, _) => _CalendarCell(
             day: day,
             shifts: _shiftsOn(day),
+            hasActivity: _hasActivityOn(day),
             state: _CellState.normal,
             compact: widget.compact),
         todayBuilder: (ctx, day, _) => _CalendarCell(
             day: day,
             shifts: _shiftsOn(day),
+            hasActivity: _hasActivityOn(day),
             state: _CellState.today,
             compact: widget.compact),
         outsideBuilder: (ctx, day, _) => _CalendarCell(
             day: day,
             shifts: _shiftsOn(day),
+            hasActivity: _hasActivityOn(day),
             state: _CellState.outside,
             compact: widget.compact),
         selectedBuilder: (ctx, day, _) => _CalendarCell(
             day: day,
             shifts: _shiftsOn(day),
+            hasActivity: _hasActivityOn(day),
             state: _CellState.selected,
             compact: widget.compact),
       ),
@@ -160,12 +174,14 @@ class _CalendarCell extends StatelessWidget {
   const _CalendarCell({
     required this.day,
     required this.shifts,
+    required this.hasActivity,
     required this.state,
     required this.compact,
   });
 
   final DateTime day;
   final List<Shift> shifts;
+  final bool hasActivity;
   final _CellState state;
   final bool compact;
 
@@ -227,9 +243,28 @@ class _CalendarCell extends StatelessWidget {
         children: [
           Padding(
             padding: numberPad,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('${day.day}', style: dayNumberStyle),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text('${day.day}', style: dayNumberStyle),
+                // Activity marker: a small dot when the day carries an event /
+                // task / birthday, so the calendar reads as a normal calendar.
+                if (hasActivity)
+                  Container(
+                    key: ValueKey(
+                      'activity-marker-${day.year}-${day.month}-${day.day}',
+                    ),
+                    width: compact ? 5 : 6,
+                    height: compact ? 5 : 6,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.tertiary.withValues(
+                        alpha: state == _CellState.outside ? 0.4 : 0.95,
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
             ),
           ),
           // Strictly data-driven: bars only when Hive has shift(s) for this day.
@@ -348,6 +383,12 @@ class ShiftCalendarLegend extends StatelessWidget {
             label: 'Paused / Leave',
             labelStyle: labelStyle,
           ),
+          _LegendChip(
+            color: scheme.tertiary,
+            label: 'Activity',
+            labelStyle: labelStyle,
+            dot: true,
+          ),
         ],
       ),
     );
@@ -360,6 +401,7 @@ class _LegendChip extends StatelessWidget {
     required this.label,
     required this.labelStyle,
     this.borderColor,
+    this.dot = false,
   });
 
   final Color color;
@@ -367,17 +409,22 @@ class _LegendChip extends StatelessWidget {
   final String label;
   final TextStyle? labelStyle;
 
+  /// Renders a small circle (the activity marker) instead of the square shift
+  /// swatch, so the legend chip matches what the cell actually draws.
+  final bool dot;
+
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 14,
-          height: 14,
+          width: dot ? 8 : 14,
+          height: dot ? 8 : 14,
           decoration: BoxDecoration(
             color: color.withValues(alpha: color == Colors.transparent ? 0 : 0.9),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: dot ? null : BorderRadius.circular(4),
+            shape: dot ? BoxShape.circle : BoxShape.rectangle,
             border: borderColor != null
                 ? Border.all(color: borderColor!, width: 1.5)
                 : null,

@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/models/calendar_activity.dart';
 import '../../data/models/shift.dart';
 import '../../state/app_preferences.dart';
 import '../app_theme.dart';
 import '../calendar/shift_calendar.dart';
+import '../day_actions_sheet.dart';
 import '../roster/shift_filter.dart';
 import '../roster/timeline_view.dart';
 import '../settings_screen.dart';
-import '../shift_editor_modal.dart';
 
 /// The unified **viewing** surface (post the "Great Migration"). Merges the old
 /// Calendar tab (resolver-driven month grid) and the old Roster tab
@@ -159,23 +160,33 @@ class _TimelineListBody extends StatelessWidget {
 /// projection), so a custom 1-week roster shows for exactly its materialised
 /// days and manual edits/deletions reflect the instant the stream re-emits.
 ///
-/// Tapping any day opens the shared Add/Edit editor: a day that already has a
-/// shift edits it; a blank day adds a new ad-hoc shift pre-filled to that date.
+/// Tapping any day opens the shared day chooser ([showDayActionsSheet]): edit
+/// an existing shift, add a shift, or add/edit a calendar activity (event, task,
+/// birthday). The calendar now doubles as a normal calendar without touching the
+/// alarm logic — activities live in their own box and their optional reminders
+/// ride a separate, lightweight channel.
 class _TimelineMonthBody extends StatelessWidget {
   const _TimelineMonthBody();
 
   @override
   Widget build(BuildContext context) {
     final shifts = context.watch<List<Shift>>();
+    final activities = context.watch<List<CalendarActivity>>();
+    // Which days carry an activity → marker dots. Midnight-normalised keys match
+    // the calendar's cell lookup.
+    final activityDays = <DateTime>{
+      for (final a in activities) DateTime(a.date.year, a.date.month, a.date.day),
+    };
     // Calendar at its natural height up top; the color legend fills the dead
     // space below the grid (pushed to the bottom by the Spacer).
     return Column(
       children: [
         ShiftCalendarView(
           shifts: shifts,
+          activityDays: activityDays,
           startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
           onDayTapped: (date, shiftsOnDate) =>
-              _onDayTapped(context, date, shiftsOnDate),
+              _onDayTapped(context, date, shiftsOnDate, activities),
         ),
         const Spacer(),
         const ShiftCalendarLegend(),
@@ -184,19 +195,30 @@ class _TimelineMonthBody extends StatelessWidget {
     );
   }
 
-  /// Existing shift on the tapped date → edit it (earliest first if the day has
-  /// several); blank date → add a new ad-hoc shift for that date. Uses the same
-  /// [showShiftEditorModal] the Manage tab uses, so both tabs share one editor
-  /// and one Hive write path.
+  /// Opens the day chooser for the tapped date, passing the shifts AND the
+  /// activities already on that day so each can be edited in place (or a new one
+  /// added). One entry point; the sheet routes to the right editor.
   void _onDayTapped(
     BuildContext context,
     DateTime date,
     List<Shift> shiftsOnDate,
+    List<CalendarActivity> allActivities,
   ) {
-    showShiftEditorModal(
+    final key = DateTime(date.year, date.month, date.day);
+    final activitiesOnDate = [
+      for (final a in allActivities)
+        if (a.date == key) a,
+    ]..sort((a, b) {
+        // All-day first, then by time; stable enough for the chooser list.
+        final at = a.timeMinutes ?? -1;
+        final bt = b.timeMinutes ?? -1;
+        return at.compareTo(bt);
+      });
+    showDayActionsSheet(
       context,
-      initialDate: date,
-      existing: shiftsOnDate.isEmpty ? null : shiftsOnDate.first,
+      date: date,
+      shiftsOnDate: shiftsOnDate,
+      activitiesOnDate: activitiesOnDate,
     );
   }
 }

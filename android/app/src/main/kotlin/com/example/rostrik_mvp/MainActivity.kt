@@ -60,6 +60,7 @@ class MainActivity : FlutterActivity() {
     private var alarmChannel: MethodChannel? = null
     private var ringtoneChannel: MethodChannel? = null
     private var nativeAlarmsChannel: MethodChannel? = null
+    private var activityRemindersChannel: MethodChannel? = null
 
     /// EDITOR PREVIEW ("Play Now") engine — in-activity tone preview for the
     /// create/edit sheet. Dies with the activity (it never reaches a lock
@@ -137,6 +138,15 @@ class MainActivity : FlutterActivity() {
         // so the SAME handler is also available in the headless background
         // engine ([AlarmSyncWorker]) the boot re-sync spins up.
         nativeAlarmsChannel = NativeAlarmScheduling.register(
+            flutterEngine.dartExecutor.binaryMessenger,
+            applicationContext,
+        )
+
+        // Phase-3 optional ACTIVITY REMINDERS — a fully separate, lightweight
+        // channel (plain notification, its own receiver, AllowWhileIdle alarm,
+        // no wake activity/audio/boot-store). Only on the foreground engine:
+        // reminders are scheduled from the app, never by the boot re-sync.
+        activityRemindersChannel = ActivityReminderScheduling.register(
             flutterEngine.dartExecutor.binaryMessenger,
             applicationContext,
         )

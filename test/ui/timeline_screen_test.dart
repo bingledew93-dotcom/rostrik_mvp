@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:rostrik_mvp/data/models/calendar_activity.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_cycle.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
+import 'package:rostrik_mvp/data/repositories/calendar_activity_repository.dart';
 import 'package:rostrik_mvp/data/repositories/shift_repository.dart';
 import 'package:rostrik_mvp/ui/calendar/shift_calendar.dart';
 import 'package:rostrik_mvp/ui/shift_editor_modal.dart';
@@ -11,6 +13,7 @@ import 'package:rostrik_mvp/ui/shift_format.dart';
 import 'package:rostrik_mvp/ui/timeline/timeline_screen.dart';
 
 import '../alarms/fakes.dart';
+import '../reminders/fakes.dart';
 
 void main() {
   // Far-future date keeps shifts "upcoming" independent of wall-clock time.
@@ -20,23 +23,31 @@ void main() {
     WidgetTester tester, {
     required List<Shift> shifts,
     List<ShiftCycle> cycles = const [],
+    List<CalendarActivity> activities = const [],
   }) async {
     final repo = FakeShiftRepository();
     for (final s in shifts) {
       await repo.upsert(s);
     }
     addTearDown(repo.dispose);
+    final activityRepo = FakeCalendarActivityRepository();
+    addTearDown(activityRepo.dispose);
 
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           // The month-view day-tap editor reads this to save an add/edit.
           Provider<ShiftRepository>.value(value: repo),
+          // The day chooser routes "Add/edit activity" into the activity editor,
+          // which reads this repo on save.
+          Provider<CalendarActivityRepository>.value(value: activityRepo),
           // Both bodies sit under the IndexedStack and watch List<Shift> — the
           // calendar is now bound to the same shift stream as the list. The
           // cycles provider is retained only for a pushed Settings screen.
           Provider<List<Shift>>.value(value: shifts),
           Provider<List<ShiftCycle>>.value(value: cycles),
+          // Month view watches this to paint activity markers + feed the chooser.
+          Provider<List<CalendarActivity>>.value(value: activities),
         ],
         child: const MaterialApp(home: TimelineScreen()),
       ),
@@ -245,19 +256,26 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('tapping a blank day opens the Add editor', (tester) async {
-      // No shifts at all → every cell is blank; tapping one adds a new shift.
+    testWidgets('tapping a blank day opens the chooser → Add shift editor',
+        (tester) async {
+      // No shifts at all → every cell is blank; tapping one opens the day
+      // chooser, and "Add shift" routes to the Add editor.
       await pumpTimeline(tester, shifts: const []);
       await tester.tap(find.text('Month View'));
       await tester.pumpAndSettle();
 
       await tapDay(tester, dayInMonth(10));
+      // The chooser is up; there is no shift row yet, only the add actions.
+      expect(find.byKey(const ValueKey('day-shift-0')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('day-add-shift')));
+      await tester.pumpAndSettle();
 
       expect(find.byType(ShiftEditorModal), findsOneWidget);
       expect(find.text('Add shift'), findsOneWidget);
     });
 
-    testWidgets('tapping a day that has a Hive shift opens the Edit editor',
+    testWidgets(
+        'tapping a day with a Hive shift → chooser lists it → Edit editor',
         (tester) async {
       // The calendar reads the SAME shift list as the List view; a day with a
       // materialised shift edits it in place rather than projecting a pattern.
@@ -269,9 +287,38 @@ void main() {
       await tester.pumpAndSettle();
 
       await tapDay(tester, dayInMonth(15));
+      // The chooser lists the existing shift; tapping it edits in place.
+      await tester.tap(find.byKey(const ValueKey('day-shift-0')));
+      await tester.pumpAndSettle();
 
       expect(find.byType(ShiftEditorModal), findsOneWidget);
       expect(find.text('Edit shift'), findsOneWidget);
+    });
+
+    testWidgets('a day with an activity paints a marker dot in the grid',
+        (tester) async {
+      final marked = dayInMonth(12);
+      await pumpTimeline(
+        tester,
+        shifts: const [],
+        activities: [
+          CalendarActivity(
+            id: 'act1',
+            date: marked,
+            title: 'Dentist',
+            kind: ActivityKind.event,
+          ),
+        ],
+      );
+      await tester.tap(find.text('Month View'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          ValueKey('activity-marker-${marked.year}-${marked.month}-${marked.day}'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('shows the color legend below the grid', (tester) async {

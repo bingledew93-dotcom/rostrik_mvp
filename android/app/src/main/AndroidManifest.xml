@@ -154,6 +154,17 @@
             android:name=".AlarmReceiver"
             android:exported="false"
             android:directBootAware="true"/>
+        <!-- Phase-3 optional ACTIVITY REMINDERS receiver. AlarmManager delivers
+             an EXPLICIT PendingIntent (action REMINDER_FIRE) built by
+             ActivityReminderScheduling, so no intent-filter is needed and it
+             MUST stay exported="false" — private receiver, no other app can
+             spoof a reminder. Deliberately NOT directBootAware: a reminder is a
+             convenience nudge on a credential-encrypted (post-unlock) channel,
+             fully separate from the shift-alarm fire chain. onReceive only posts
+             a plain notification — no audio service, no wake activity. -->
+        <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false"/>
         <!-- Foreground service that owns FIRING-ALARM custom audio. type
              mediaPlayback raises the process to foreground oom-priority so a
              ringing alarm survives the keyguard occluding/destroying the
