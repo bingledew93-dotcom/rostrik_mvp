@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 
 import 'alarms_screen.dart';
 import 'dashboard_screen.dart';
 import 'manage/manage_screen.dart';
 import 'sleep/sleep_screen.dart';
 import 'timeline/timeline_screen.dart';
+import 'tips/screen_tip.dart';
+import 'tips/screen_tip_overlay.dart';
 
 /// Root navigation chassis.
 ///
@@ -69,9 +72,18 @@ class _MainLayoutState extends State<MainLayout> {
       const SleepScreen(),
     ];
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: tabs,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _currentIndex,
+            children: tabs,
+          ),
+          // First-run coaching tip for the CURRENT tab. Overlaid at the layout
+          // level (not inside each screen) so it works uniformly whether or not
+          // a screen has its own AppBar, and so only the foregrounded tab's tip
+          // ever shows despite every tab staying mounted in the IndexedStack.
+          _CurrentTabTip(tabIndex: _currentIndex),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -104,6 +116,41 @@ class _MainLayoutState extends State<MainLayout> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Renders the one-time coaching tip for [tabIndex], or nothing when tips are
+/// off / already seen / the settings box isn't available. Subscribes to the
+/// settings box so a dismissal or a "Show screen tips" re-enable from Settings
+/// updates the overlay live.
+class _CurrentTabTip extends StatelessWidget {
+  const _CurrentTabTip({required this.tabIndex});
+
+  final int tabIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    // The box is opened in main() before runApp; guard anyway so a stray
+    // MainLayout pump (e.g. a future test) degrades to no overlay, not a throw.
+    if (!Hive.isBoxOpen('settings')) return const SizedBox.shrink();
+    if (tabIndex < 0 || tabIndex >= kScreenTips.length) {
+      return const SizedBox.shrink();
+    }
+    final box = Hive.box('settings');
+    final tip = kScreenTips[tabIndex];
+    return ValueListenableBuilder<Box>(
+      valueListenable: box.listenable(keys: ScreenTipsPrefs.watchedKeys),
+      builder: (context, box, _) {
+        if (!ScreenTipsPrefs.shouldShow(box, tip)) {
+          return const SizedBox.shrink();
+        }
+        return ScreenTipOverlay(
+          tip: tip,
+          onDismiss: () => ScreenTipsPrefs.markSeen(box, tip.tipKey),
+          onDisable: () => ScreenTipsPrefs.setEnabled(box, false),
+        );
+      },
     );
   }
 }

@@ -16,6 +16,7 @@ import 'onboarding/onboarding_flow.dart';
 import 'onboarding/walkthrough_flow.dart';
 import 'pattern_picker_screen.dart';
 import 'shift_format.dart';
+import 'tips/screen_tip.dart';
 import 'work_history_screen.dart';
 
 /// Global alarm-settings screen. Reads via `context.watch<AlarmSettings>()`,
@@ -156,7 +157,35 @@ class _HelpSection extends StatelessWidget {
             ),
           ),
         ),
+        const _ScreenTipsToggle(),
       ],
+    );
+  }
+}
+
+/// "Show screen tips" — the master switch for the one-time per-screen coach
+/// cards. Turning it ON REPLAYS every tip (clears the per-screen seen flags via
+/// [ScreenTipsPrefs.setEnabled]), so it doubles as "show them to me again".
+/// Reactive: bound to the `settings` box so the switch reflects a tip's
+/// "Don't show tips" dismissal the moment it happens.
+class _ScreenTipsToggle extends StatelessWidget {
+  const _ScreenTipsToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Hive.isBoxOpen('settings')) return const SizedBox.shrink();
+    final box = Hive.box('settings');
+    return ValueListenableBuilder<Box>(
+      valueListenable: box.listenable(keys: [ScreenTipsPrefs.enabledKey]),
+      builder: (context, box, _) => SwitchListTile(
+        key: const ValueKey('settings-screen-tips-toggle'),
+        secondary: const Icon(Icons.lightbulb_outline),
+        title: const Text('Show screen tips'),
+        subtitle: const Text('One-time hints on each screen. Turn on to see '
+            'them again.'),
+        value: ScreenTipsPrefs.isEnabled(box),
+        onChanged: (v) => ScreenTipsPrefs.setEnabled(box, v),
+      ),
     );
   }
 }
