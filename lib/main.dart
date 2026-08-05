@@ -2,52 +2,60 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'alarms/alarm_payload.dart';
 import 'alarms/alarm_sync_service.dart';
-import 'alarms/local_notifications_alarm_scheduler.dart';
-import 'alarms/notification_action_dispatcher.dart';
+import 'alarms/main_isolate_liveness.dart';
+import 'alarms/native_alarm_scheduler.dart';
+import 'alarms/pending_alarm_delete_guard.dart';
+import 'alarms/pending_dismissal_guard.dart';
+import 'alarms/pending_snooze_guard.dart';
+import 'data/repositories/app_alarm_repository.dart';
+import 'data/repositories/shift_repository.dart';
 import 'data/storage/local_storage.dart';
+import 'legal/legal.dart';
+import 'logic/adhoc_archive.dart';
+import 'purchase/entitlement_service.dart';
+import 'purchase/purchase_gate.dart';
+import 'reminders/activity_reminder_scheduler.dart';
+import 'reminders/activity_reminder_service.dart';
 import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
 import 'ui/app_theme.dart';
+import 'ui/legal_consent_screen.dart';
 import 'ui/main_layout.dart';
 import 'ui/onboarding/onboarding_flow.dart';
-import 'ui/wake_up_screen.dart';
 import 'util/clock.dart';
 
-/// Global Navigator handle. Used by the alarm-routing method channel to
-/// push WakeUpScreen from a callback that has no BuildContext (the
-/// channel handler runs at the top of the Flutter isolate, not inside
-/// the widget tree).
+/// Global Navigator handle for [MaterialApp] — lets navigation happen from
+/// callbacks that have no BuildContext.
 final navigatorKey = GlobalKey<NavigatorState>();
 
-/// Same channel name as MainActivity.kt's CHANNEL constant. Receives an
-/// "alarmFired" call with the notification payload as the argument when
-/// the OS routes a FullScreenIntent through onNewIntent.
+/// Same channel name as MainActivity.kt's alarm-routing CHANNEL. Now used ONLY
+/// to drain the native `pending_dismissals` ledger (`getPendingDismissals` /
+/// `clearPendingDismissals`) — the firing-alarm UI is the native AlarmActivity,
+/// so the old `alarmFired` / WakeUpScreen routing is gone.
 const _alarmRoutingChannel = MethodChannel('rostrik/alarm_routing');
 
 /// Bootstrap order is load-bearing:
 ///   1. Bind the Flutter engine.
 ///   2. Open Hive boxes — repositories required by the sync service live here.
-///   3. Init the OS scheduler (timezone DB, notification channel, both
-///      notification-response callbacks).
-///   4. Request runtime permissions BEFORE the first sync, so anything the
-///      sync service schedules can actually fire.
-///   5. Start the AlarmSyncService: initial sync + subscribe to the
-///      AppAlarmRepository AND ShiftCycleRepository streams. Future alarm
-///      edits and roster generations are now live.
-///   6. Install [NotificationActionDispatcher] — the bridge from the
-///      foreground notification-response callback and the cold-launch
-///      handler to the live `ShiftRepository`/`AlarmScheduler`/navigator.
-///      Must happen BEFORE we read cold-launch details so any action
-///      button dispatched on cold launch finds a live dispatcher.
-///   7. Handle any cold-launch notification: dispatch action buttons if
-///      present, never route to WakeUpScreen here (that path belongs to
-///      the FullScreenIntent MethodChannel exclusively).
-///   8. Wire the FullScreenIntent MethodChannel for warm-launch.
-///   9. runApp — home is always MainLayout on cold launch; WakeUpScreen
-///      is pushed on top by the FullScreenIntent path when applicable.
+///   3. Init the native AlarmManager scheduler ([NativeAlarmScheduler]).
+///   4. Drain the native `pending_dismissals` ledger into Hive BEFORE the first
+///      reconcile, so a killed-app/native dismiss is acknowledged.
+///   5. Request runtime permissions BEFORE the first sync, so anything the sync
+///      service schedules can actually fire.
+///   6. Start the AlarmSyncService: initial sync + subscribe to the alarm /
+///      cycle / in-horizon shift / settings streams.
+///   7. Register the main-isolate liveness port the background sync probes
+///      ([registerMainIsolatePort]).
+///   8. Register the app-lifecycle observer that re-drains the dismissal ledger
+///      on resume (a native AlarmActivity dismiss while the app was
+///      backgrounded must still reconcile Hive).
+///   9. runApp — home is always MainLayout (or the legal/onboarding gate). The
+///      firing-alarm UI is the native AlarmActivity, drawn over whatever is on
+///      screen; the Flutter process is never the alarm surface.
 ///
 /// `syncService.stop()` is deliberately never called: the alarms are owned
 /// by the OS's AlarmManager, not the Flutter process. Killing the service
@@ -73,9 +81,45 @@ void main() async {
   // without an async hop. The bg isolate has its own VM/Hive instance and
   // opens this box in `_ensureBackgroundIsolateInit`.
   await Hive.openBox('settings');
-  final scheduler = await LocalNotificationsAlarmScheduler.init();
+  // OS scheduling now goes through the native AlarmManager bridge — no
+  // flutter_local_notifications plugin, no timezone DB. NativeAlarmScheduler
+  // implements the same AlarmScheduler interface, so AlarmSyncService's
+  // idempotent reconcile is unchanged.
+  final scheduler = await NativeAlarmScheduler.init();
 
-  await _requestAlarmPermissions(scheduler);
+  // NATIVE DISMISS FAIL-SAFE — replay killed-app dismissals from the
+  // Kotlin-readable ledger into Hive BEFORE the first reconcile and before
+  // any wake routing. Pixel-9-class battery management can reap the
+  // background isolate before its Hive write lands; the ledger (written by
+  // that isolate's first instruction, kernel-synchronous) is the surviving
+  // record. Replaying here means the sync service's initial reconcile sees
+  // `isAcknowledged` and tears down any stale OS entry in the same boot.
+  await _syncNativePendingDismissals(storage.shifts);
+
+  // NATIVE SNOOZE FAIL-SAFE — replay native AlarmActivity snoozes into Hive
+  // (set `snoozedUntil`) BEFORE the first reconcile, so a shift snoozed while
+  // the app was dead/backgrounded keeps its re-armed alarm instead of having it
+  // cancelled as an orphan. Drained AFTER dismissals so a dismiss (final) wins
+  // over any stale snooze for the same shift.
+  await drainPendingSnoozesIntoHive(storage.shifts);
+
+  // FIRED ONE-TIME CLEANUP — delete any one-time alarm that fired (and was
+  // dismissed or auto-timed-out) natively, BEFORE the first reconcile, so the
+  // engine doesn't re-project a spent one-shot into tomorrow (a one-time alarm
+  // silently becoming a daily cycle). The native dismiss/auto-timeout records
+  // the fired `appAlarmId` in the `pending_alarm_deletes` ledger; this drain
+  // resolves each to its AppAlarm and deletes the one-time ones.
+  await drainPendingAlarmDeletesIntoHive(storage.alarms);
+
+  // SELF-CLEANING AD-HOC SHIFTS — archive (NEVER delete) any one-off shift
+  // whose end is >24h past, keeping the active roster/alarm set lean as
+  // one-offs accumulate. Runs before the first reconcile; archived shifts are
+  // already behind the engine's future-fire gate, so this can never disarm a
+  // live alarm. The Shift record stays in Hive for the historical calendar
+  // (the payslip-verification record) — only `isArchived` is flipped.
+  await archiveExpiredAdHocShifts(storage.shifts, now: DateTime.now());
+
+  await _requestAlarmPermissions();
 
   // Alarm-rule-driven scheduling. AlarmSyncService watches the AppAlarm,
   // ShiftCycle, in-horizon Shift, AND AlarmSettings streams, recomputes the
@@ -102,162 +146,215 @@ void main() async {
       .listenable(keys: const <String>[isSchedulePausedKey])
       .addListener(syncService.syncAlarms);
 
-  // Install the dispatcher BEFORE the cold-launch handler runs. The
-  // dispatcher captures process-global references (shift repo, scheduler,
-  // navigatorKey); installing it once here means both the foreground
-  // notification-response callback in [LocalNotificationsAlarmScheduler]
-  // and the cold-launch path below find a live dispatcher.
-  NotificationActionDispatcher.setup(
-    shifts: storage.shifts,
-    alarms: storage.alarms,
-    scheduler: scheduler,
-    navigatorKey: navigatorKey,
+  // PHASE-3 OPTIONAL REMINDERS — a fully separate, lightweight path from the
+  // shift-alarm engine above. This service watches the activity box and keeps
+  // the OS's reminder set in sync (schedule/replace/cancel) via the native
+  // `rostrik/activity_reminders` channel. The initial reconcile here also
+  // re-arms reminders after a reboot (AlarmManager alarms don't survive one),
+  // covered on the next app open. Never stopped, for the same reason the alarm
+  // sync service isn't — but even if the process dies the armed reminders live
+  // in the OS.
+  final reminderScheduler = NativeActivityReminderScheduler();
+  final reminderService = ActivityReminderService(
+    activities: storage.activities,
+    scheduler: reminderScheduler,
+  );
+  await reminderService.start();
+
+  // FEATURE #4 — 14-day free trial + one-time full-access purchase. Records the
+  // trial clock on first launch, writes the lock + horizon-cap gates the alarm
+  // sync reads (a locked app fires NO alarms; an in-trial app arms nothing past
+  // the trial), schedules the "trial ends tomorrow" nudge on the isolated
+  // reminder channel, and drives Google Play Billing for the unlock.
+  // `onEntitlementChanged` re-runs the reconcile so alarms disarm on lock and
+  // restore on purchase. init() runs AFTER syncService.start() so its refresh
+  // re-syncs with the gates applied.
+  final entitlementService = EntitlementService(
+    settingsBox: Hive.box('settings'),
+    reminderScheduler: reminderScheduler,
+    onEntitlementChanged: syncService.syncAlarms,
+  );
+  await entitlementService.init();
+
+  // Register the main-isolate liveness beacon — the background sync checks for
+  // it (`mainIsolateIsAlive`) and bails rather than reconcile Hive concurrently
+  // with this live isolate (which would race the id-map counter + scheduled-
+  // fire-at persistence).
+  registerMainIsolatePort();
+
+  // RESUME-TIME LEDGER DRAIN. The firing-alarm UI is the native AlarmActivity;
+  // when it dismisses an alarm WHILE THE FLUTTER APP IS ALIVE (backgrounded
+  // behind the alarm's own task), it records the dismissal in the native
+  // `pending_dismissals` ledger but cannot touch Hive — the Flutter isolate is
+  // the SOLE Hive writer, which is exactly what prevents cross-side state
+  // corruption. This observer drains the ledger into Hive on every resume; the
+  // resulting `isAcknowledged` shift write trips AlarmSyncService's shift
+  // watcher, which reconciles away any now-stale OS alarm. Cold-launch is
+  // covered by the drain above; there is no longer any FSI payload to pull —
+  // AlarmActivity, not MainActivity, owns the alarm event end to end.
+  WidgetsBinding.instance.addObserver(
+    _AlarmDismissalDrain(storage.shifts, storage.alarms, syncService),
   );
 
-  // Install the warm-launch handler FIRST so any `alarmFired` call
-  // initiated from MainActivity.onNewIntent (rare during boot, but
-  // possible if an alarm fires while main() is still running) is
-  // captured rather than dropped.
-  _alarmRoutingChannel.setMethodCallHandler((call) async {
-    if (call.method != 'alarmFired' || call.arguments is! String) return;
-    _routeToWakeUp(call.arguments as String);
-  });
-
-  // PULL the cold-launch FSI payload from MainActivity. Earlier
-  // attempts pushed via `invokeMethod('alarmFired', ...)` from
-  // `configureFlutterEngine`, but that fires before Dart `main()` runs,
-  // so the call is dropped on the floor. Inverting the direction —
-  // Kotlin buffers, Dart pulls when ready — makes the delivery
-  // deterministic.
-  //
-  // Method name must exactly match MainActivity.METHOD_GET_INITIAL_PAYLOAD.
-  final String? initialFsiPayload = await _alarmRoutingChannel
-      .invokeMethod<String>('getInitialAlarmPayload');
-
-  if (initialFsiPayload == null) {
-    // No FSI cold-launch. Fall through to FLN's launch-details path,
-    // which handles body taps (no-op routing — home is RosterScreen)
-    // and defensively dispatches any action buttons that somehow
-    // reached cold launch despite `showsUserInterface: false`.
-    await _handleColdLaunchNotification(scheduler);
-  } else {
-    debugPrint(
-      '[main] cold-launch FSI payload pulled — '
-      'skipping FLN launch-details path: $initialFsiPayload',
-    );
-  }
+  // LEGAL CONSENT GATE — read the accepted legal version from
+  // shared_preferences (the source of truth the consent screen writes). If it
+  // doesn't match the version currently in force, the app routes through
+  // [LegalConsentScreen] before onboarding or the dashboard. Read here (async,
+  // pre-runApp) so RostrikApp can decide its home synchronously.
+  final sharedPrefs = await SharedPreferences.getInstance();
+  final legalAccepted =
+      sharedPrefs.getString(kAcceptedLegalVersionKey) == kCurrentLegalVersion;
 
   runApp(AppProviders(
     storage: storage,
     scheduler: scheduler,
     // UI display preferences ride the already-opened generic 'settings' box.
     preferences: AppPreferences(Hive.box('settings')),
-    child: const RostrikApp(),
+    entitlementService: entitlementService,
+    child: RostrikApp(legalAccepted: legalAccepted),
   ));
 
-  // If we pulled an FSI payload, push WakeUpScreen on top of the
-  // freshly-built RosterScreen home. The post-frame callback ensures
-  // `navigatorKey.currentState` is attached before `_routeToWakeUp`
-  // tries to use it — otherwise the push silently no-ops. From the
-  // user's perspective the lock screen flashes RosterScreen for one
-  // frame at most, which is invisible during the device wake animation.
-  if (initialFsiPayload != null) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _routeToWakeUp(initialFsiPayload);
-    });
+}
+
+/// App-lifecycle observer that drains the native `pending_dismissals` ledger
+/// into Hive whenever the app returns to the foreground.
+///
+/// The firing-alarm UI is the native [AlarmActivity], which can dismiss an
+/// alarm while the Flutter app is merely backgrounded (behind the alarm's own
+/// task). It records the dismissal in the file ledger but never touches Hive —
+/// the Flutter isolate is the sole Hive writer, which is exactly what keeps the
+/// two sides from corrupting each other. On resume we replay the ledger into
+/// Hive ([_syncNativePendingDismissals]); the resulting per-ring
+/// `dismissedAlarmIds` write trips AlarmSyncService's shift watcher, which
+/// cancels the dismissed ring's now-stale OS alarm — and ONLY that one.
+class _AlarmDismissalDrain with WidgetsBindingObserver {
+  _AlarmDismissalDrain(this._shifts, this._alarms, this._syncService);
+
+  final ShiftRepository _shifts;
+  final AppAlarmRepository _alarms;
+  final AlarmSyncService _syncService;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    // Fire-and-forget the sequenced drain; every helper swallows its own
+    // errors (a channel miss / missing dir off-Android is a no-op).
+    _drainNativeLedgers();
+  }
+
+  /// Dismissals first (a dismiss is final and clears any snooze), then snoozes,
+  /// then fired-one-time cleanup. Each resulting Hive write trips
+  /// AlarmSyncService's alarm/shift watchers, which reconcile the OS alarm set
+  /// to match (and stop re-projecting a deleted one-time).
+  ///
+  /// The tail sync is the WINDOW-ROLL guarantee (audit F1): the drains only
+  /// trigger a reconcile when a ledger actually had entries, so a long-lived
+  /// process resumed after days of quiet would otherwise keep a stale 14-day
+  /// window. An explicit sync is safe to run unconditionally — it's
+  /// idempotent and issues zero platform calls when nothing changed.
+  Future<void> _drainNativeLedgers() async {
+    await _syncNativePendingDismissals(_shifts);
+    await drainPendingSnoozesIntoHive(_shifts);
+    await drainPendingAlarmDeletesIntoHive(_alarms);
+    await _syncService.syncAlarms();
   }
 }
 
-/// Pushes WakeUpScreen on top of whatever's currently on the navigator,
-/// clearing the rest of the stack so back-button has nowhere to go (the
-/// alarm IS the foreground task — escaping via back is the wrong
-/// affordance). Slide-to-dismiss inside WakeUpScreen replaces itself
-/// with RosterScreen on success, leaving a clean single-route stack.
-void _routeToWakeUp(String payload) {
-  final wakeUp = _parseWakeUpRoute(payload);
-  if (wakeUp == null) return;
-  final navigator = navigatorKey.currentState;
-  if (navigator == null) return;
-  navigator.pushAndRemoveUntil(
-    MaterialPageRoute(builder: (_) => wakeUp),
-    (_) => false,
+/// Drains the native dismiss fail-safe ledger into Hive, then clears it.
+///
+/// The read and clear go through the alarm-routing MethodChannel —
+/// MainActivity answers both with plain synchronous `java.io.File` ops on
+/// `filesDir/pending_dismissals`, the ledger the background isolate's first
+/// instruction writes on a killed-app Dismiss. Ordering is load-bearing:
+///   1. READ the native store;
+///   2. WRITE the dismissal into Hive ([ackPendingDismissalsInHive] —
+///      idempotent, per-ring via `Shift.dismissedAlarmIds`, exactly the
+///      write the reaped isolate would have made);
+///   3. only then CLEAR the store — a crash between 2 and 3 re-replays on
+///      the next boot instead of ever losing a dismissal.
+///
+/// Channel errors (iOS — no MainActivity handler; widget tests — no
+/// platform) read as "nothing pending": the fail-safe is Android-only by
+/// nature, because only Android kills the FLN background isolate this way.
+///
+/// Each ledger line is `<shiftId>|<appAlarmId>` — a PER-OCCURRENCE dismissal
+/// that lands in `Shift.dismissedAlarmIds` and suppresses only that ring, so
+/// a shift's remaining alarms survive the reconcile. A legacy bare
+/// `<shiftId>` line (no alarm identity) degrades to the whole-shift ack.
+Future<void> _syncNativePendingDismissals(ShiftRepository shifts) async {
+  List<PendingDismissal> dismissals;
+  try {
+    final raw = await _alarmRoutingChannel
+        .invokeMethod<List<Object?>>('getPendingDismissals');
+    dismissals = (raw ?? const <Object?>[])
+        .whereType<String>()
+        .map(parsePendingDismissalLine)
+        .whereType<PendingDismissal>()
+        .toList();
+  } catch (_) {
+    return; // no native handler on this platform — nothing to drain
+  }
+  if (dismissals.isEmpty) return;
+
+  final acked = await ackPendingDismissalsInHive(
+    shifts: shifts,
+    dismissals: dismissals,
   );
-}
+  debugPrint(
+    '[main] native dismiss fail-safe: replayed $acked dismissal(s) '
+    'from ${dismissals.length} ledger '
+    'entr${dismissals.length == 1 ? 'y' : 'ies'} into Hive',
+  );
 
-/// Cold-launch notification handler.
-///
-/// Called once during boot, after the dispatcher is installed. If the OS
-/// launched the app from a notification, this:
-///
-///   - **Action button tap (Snooze / Dismiss).** In practice rare on cold
-///     launch — both actions are `showsUserInterface: false`, so they fire
-///     [notificationBackgroundHandler] in a separate isolate instead of
-///     relaunching the app. The branch is kept for defensive correctness
-///     on platforms / OEMs where the OS still surfaces the action via
-///     launch details. Dispatched through the live
-///     [NotificationActionDispatcher] so the action runs against the
-///     in-memory repos (no Hive re-open, no tz re-init).
-///   - **Body tap.** No state mutation required; the user just wants the
-///     app open. Falls through — the home route is already RosterScreen.
-///
-/// Critically, **this function never routes to WakeUpScreen**. The
-/// firing-alarm UI is owned exclusively by the FullScreenIntent
-/// MethodChannel (`alarmFired`) path, which is wired separately in main().
-Future<void> _handleColdLaunchNotification(
-  LocalNotificationsAlarmScheduler scheduler,
-) async {
-  final details = await scheduler.getNotificationAppLaunchDetails();
-  if (details == null || !details.didNotificationLaunchApp) return;
-
-  final response = details.notificationResponse;
-  if (response == null) return;
-
-  final payload = response.payload;
-  if (payload == null) return;
-
-  switch (response.actionId) {
-    case actionIdSnooze:
-      await NotificationActionDispatcher.instance?.snooze(payload);
-      break;
-    case actionIdDismiss:
-      await NotificationActionDispatcher.instance?.dismiss(payload);
-      break;
-    default:
-      // Body tap (actionId == null) — no-op. Cold launch already lands on
-      // RosterScreen so there's nothing to navigate.
-      break;
+  try {
+    await _alarmRoutingChannel.invokeMethod<void>('clearPendingDismissals');
+  } catch (_) {
+    // Best-effort: an uncleared ledger just replays idempotently next boot.
   }
 }
 
-/// Two layers of permission requests on purpose:
-///   - `permission_handler` for the cross-platform happy path.
-///   - The plugin's own Android-specific calls as a fallback, because some
-///     OEM ROMs ignore `permission_handler`'s POST_NOTIFICATIONS shortcut.
-/// All calls are idempotent — the OS suppresses re-prompts after the user
-/// has answered, so calling on every cold start is safe.
-Future<void> _requestAlarmPermissions(
-  LocalNotificationsAlarmScheduler scheduler,
-) async {
-  // Android 13+ runtime permission. No-op on iOS / older Android.
+/// Runtime permissions for the native alarm stack, all via `permission_handler`
+/// (the project's existing cross-platform permission layer — there's no
+/// plugin-specific fallback now that flutter_local_notifications is gone). All
+/// calls are idempotent: the OS suppresses re-prompts after the user answers.
+Future<void> _requestAlarmPermissions() async {
+  // Android 13+ POST_NOTIFICATIONS — needed for AlarmReceiver's full-screen-
+  // intent notification to show. No-op on iOS / older Android.
   await Permission.notification.request();
 
-  // Android 12+ — required for setAlarmClock-quality scheduling. If denied,
-  // flutter_local_notifications falls back to inexact mode; the engine
-  // still works, alarms just lose their lock-screen "next alarm" treatment.
-  // A future Settings screen can re-prompt; we don't block the app here.
+  // Android 12+ exact-alarm. `setAlarmClock` itself is exempt and always
+  // allowed, but requesting keeps the lock-screen "next alarm" treatment and
+  // makes the capability explicit. Auto-granted where USE_EXACT_ALARM is
+  // declared (this app qualifies as an alarm clock).
   await Permission.scheduleExactAlarm.request();
 
-  await scheduler.requestSystemPermissions();
+  // SYSTEM_ALERT_WINDOW (maps to Settings.canDrawOverlays on Android) — lets the
+  // alarm draw over other apps when the device is UNLOCKED and in active use.
+  // Best-effort: the full-screen intent is the primary surface, so a denial is
+  // non-fatal and we never hard-gate the app on it. Only prompt when not
+  // already granted; a future Settings screen can own re-prompting so this
+  // isn't a per-launch nag.
+  if (!await Permission.systemAlertWindow.isGranted) {
+    await Permission.systemAlertWindow.request();
+  }
 }
 
 class RostrikApp extends StatelessWidget {
-  const RostrikApp({super.key});
+  const RostrikApp({super.key, required this.legalAccepted});
+
+  /// Whether the user has already accepted the current legal version. When
+  /// false the home is gated behind [LegalConsentScreen].
+  final bool legalAccepted;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Rostrik',
       navigatorKey: navigatorKey,
+      // No corner "DEBUG" ribbon on dev installs. Release builds never show
+      // it, but field-testing happens on debug builds too and the banner
+      // reads as broken UI to a beta tester.
+      debugShowCheckedModeBanner: false,
       // Forced dark mode: most app activity is around alarm-fire time
       // (early morning / late night) where dark is correct regardless
       // of OS setting. WakeUpScreen and the notification audio are
@@ -282,47 +379,56 @@ class RostrikApp extends StatelessWidget {
       // `runApp`), so no FutureBuilder gymnastics — the right home is
       // known by the time MaterialApp builds.
       //
-      // Cold launch always lands on either chassis. The FullScreenIntent
-      // MethodChannel pushes WakeUpScreen on top via [_routeToWakeUp]
-      // when applicable; heads-up body taps reach the same `alarmFired`
-      // handler so they also end up on WakeUpScreen, which is the right
-      // UX with the FLAG_INSISTENT audio model. (FSI routing during
-      // onboarding is theoretically possible if an old alarm fires
-      // during a re-onboarding — degraded but not broken; WakeUpScreen
-      // just pushes over the onboarding stack.)
-      home: Hive.box('settings').get(
-        onboardingCompleteKey,
-        defaultValue: false,
-      ) as bool
-          ? const MainLayout()
-          : const OnboardingFlow(),
+      // Cold launch always lands on either chassis (or the legal/onboarding
+      // gate). The firing alarm is no longer a Flutter route at all: the native
+      // AlarmActivity draws over whatever is here when an alarm fires, in its
+      // own task, so nothing in this widget tree needs to react to it.
+      home: _RootGate(legalAccepted: legalAccepted),
     );
   }
 }
 
-/// Parses the notification payload into a WakeUpScreen, or null if the
-/// payload is missing/malformed (in which case we just open the normal
-/// roster).
-///
-/// Decoding is delegated to the shared [AlarmPayload] codec (the single source
-/// of truth for the
-/// `<shiftId>|<notificationId>|<dismissCode>|<soundKey>|<appAlarmId>|<ringtone>`
-/// contract). A null result (missing / empty shiftId / non-int notificationId)
-/// falls through to the normal roster. `shiftId` may be the `'NONE'` sentinel
-/// for an alarm with no linked shift — WakeUpScreen renders a generic title in
-/// that case without hitting the ShiftRepository. The bundled-tone `soundKey`
-/// is irrelevant here (the OS channel owns that audio), but the custom
-/// `customRingtoneUri` IS threaded through: when present, WakeUpScreen plays it
-/// via the native player (the notification was scheduled on the silent channel).
-Widget? _parseWakeUpRoute(String? payload) {
-  final parsed = AlarmPayload.decode(payload);
-  if (parsed == null) return null;
-  return WakeUpScreen(
-    shiftId: parsed.shiftId,
-    notificationId: parsed.notificationId,
-    isCritical: parsed.isCritical,
-    appAlarmId: parsed.appAlarmId,
-    customRingtoneUri: parsed.customRingtoneUri,
-    vibrationEnabled: parsed.vibrationEnabled,
-  );
+/// The root routing gate. The LEGAL gate sits in front of the onboarding gate:
+/// until the current legal version is accepted, nothing else is reachable. On
+/// acceptance the consent screen has already persisted the version to
+/// shared_preferences, so [_legalAccepted] flips locally and the onboarding /
+/// dashboard gate takes over in place — no navigation needed.
+class _RootGate extends StatefulWidget {
+  const _RootGate({required this.legalAccepted});
+
+  final bool legalAccepted;
+
+  @override
+  State<_RootGate> createState() => _RootGateState();
 }
+
+class _RootGateState extends State<_RootGate> {
+  late bool _legalAccepted = widget.legalAccepted;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_legalAccepted) {
+      return LegalConsentScreen(
+        onAccepted: () => setState(() => _legalAccepted = true),
+      );
+    }
+    // FEATURE #4 — full lock once the 14-day trial lapses without a purchase.
+    // Sits AFTER legal (consent still comes first) and in front of everything
+    // else; `context.watch` rebuilds the instant a purchase clears the lock.
+    // A fresh install is inside its trial, so new users flow straight to
+    // onboarding — the wall only ever appears after the trial ends.
+    final entitlement = context.watch<EntitlementService>();
+    if (entitlement.locked) {
+      return PurchaseGate(service: entitlement);
+    }
+    // First-launch onboarding gate: read the synchronously-available
+    // `onboarding_complete` flag off the already-open `settings` box.
+    return Hive.box('settings').get(
+      onboardingCompleteKey,
+      defaultValue: false,
+    ) as bool
+        ? const MainLayout()
+        : const OnboardingFlow();
+  }
+}
+

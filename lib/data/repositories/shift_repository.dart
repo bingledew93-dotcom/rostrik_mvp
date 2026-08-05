@@ -10,6 +10,13 @@ abstract class ShiftRepository {
 
   Future<void> delete(String id);
 
+  /// Returns every shift in the store, unsorted. The full-scan primitive the
+  /// init-time ad-hoc archive sweep needs: it must inspect shifts of ANY age
+  /// (an ad-hoc shift backfilled a year ago is still a sweep candidate), which
+  /// the date-windowed [getInRange] can't express without a synthetic lower
+  /// bound. Linear at app scale — callers that need order should sort.
+  Future<List<Shift>> getAll();
+
   Future<Shift?> getById(String id);
 
   /// Returns shifts whose `date` falls in `[fromInclusive, toExclusive)`.

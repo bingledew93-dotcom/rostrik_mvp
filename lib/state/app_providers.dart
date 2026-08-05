@@ -5,15 +5,18 @@ import '../alarms/alarm_scheduler.dart';
 import '../alarms/notification_id_map.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
+import '../data/models/calendar_activity.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/app_alarm_repository.dart';
+import '../data/repositories/calendar_activity_repository.dart';
 import '../data/repositories/shift_cycle_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
 import '../logic/cycle_service.dart';
 import '../logic/shift_generator.dart';
+import '../purchase/entitlement_service.dart';
 import 'app_preferences.dart';
 
 /// Root-level provider tree. Sits between LocalStorage (constructed in
@@ -23,23 +26,24 @@ import 'app_preferences.dart';
 /// Deliberately does NOT expose AlarmEngine: the UI must remain ignorant
 /// of alarm logic. Engine lifecycle stays owned by main().
 ///
-/// [AlarmScheduler] IS exposed, but only so the WakeUpScreen can cancel
-/// the OS notification it was launched from, and `CycleService` can
-/// cancel orphans on cascade-delete. This is a controlled leak: the UI
-/// is reaching back to the OS layer it was launched by, not into the
-/// engine's reconciliation state.
+/// [AlarmScheduler] IS exposed, but only so `CycleService` can cancel orphan
+/// alarms on cascade-delete and the timeline's "kill snooze" affordance can
+/// cancel a single OS alarm. This is a controlled leak: the UI reaches back to
+/// the OS scheduling layer, not into the engine's reconciliation state.
 class AppProviders extends StatelessWidget {
   const AppProviders({
     super.key,
     required this.storage,
     required this.scheduler,
     required this.preferences,
+    required this.entitlementService,
     required this.child,
   });
 
   final LocalStorage storage;
   final AlarmScheduler scheduler;
   final AppPreferences preferences;
+  final EntitlementService entitlementService;
   final Widget child;
 
   // Generous symmetric window around app-start `now`. Wide enough that
@@ -59,6 +63,9 @@ class AppProviders extends StatelessWidget {
         Provider<ShiftCycleRepository>.value(value: storage.cycles),
         Provider<AppAlarmRepository>.value(value: storage.alarms),
         Provider<AlarmSettingsRepository>.value(value: storage.alarmSettings),
+        // Non-shift calendar entries (events/tasks/birthdays). Fully separate
+        // from the alarm engine — the shift/alarm tree never reads these.
+        Provider<CalendarActivityRepository>.value(value: storage.activities),
         Provider<AlarmScheduler>.value(value: scheduler),
         // Exposed (read-only from the UI's perspective) so the timeline's
         // "kill snooze" affordance can resolve shiftId → notificationId
@@ -106,11 +113,21 @@ class AppProviders extends StatelessWidget {
           create: (_) => storage.alarmSettings.watch(),
           initialData: AlarmSettings.defaults,
         ),
+        StreamProvider<List<CalendarActivity>>(
+          create: (_) => storage.activities.watch(),
+          initialData: const [],
+        ),
         // UI-only display preferences (clock format, calendar week-start),
         // backed by the generic 'settings' Hive box. Constructed in main()
         // (which owns the box) and provided by value so this tree never
         // disposes it. Reactive: a Settings toggle write notifies watchers.
         ChangeNotifierProvider<AppPreferences>.value(value: preferences),
+        // 14-day trial + one-time full-access gate (feature #4). The root gate
+        // watches this to show the purchase wall the moment the app locks, and
+        // it re-checks entitlement on resume. Constructed + init'd in main().
+        ChangeNotifierProvider<EntitlementService>.value(
+          value: entitlementService,
+        ),
       ],
       child: child,
     );

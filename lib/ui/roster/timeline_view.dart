@@ -5,6 +5,7 @@ import '../../data/models/shift.dart';
 import '../../data/models/shift_type.dart';
 import '../../data/repositories/shift_repository.dart';
 import '../../state/app_preferences.dart';
+import '../shift_editor_modal.dart';
 import '../shift_format.dart';
 import 'shift_filter.dart';
 import 'shift_visuals.dart';
@@ -40,6 +41,53 @@ class _TimelineViewState extends State<TimelineView>
   @override
   bool get wantKeepAlive => true;
 
+  // Approximate rendered heights (px) used to estimate the scroll offset of
+  // today's shift so the list opens ON today instead of a year in the past.
+  // Only an estimate — a post-jump `ensureVisible` refines it to the pixel.
+  static const double _topSpacer = 4;
+  static const double _headerHeight = _MonthHeaderDelegate._height;
+  static const double _workingCardHeight = 84;
+  static const double _offRowHeight = 38;
+
+  final ScrollController _controller = ScrollController();
+
+  /// The card the initial scroll should land on (today's shift, or the next
+  /// upcoming one). Re-created each build; only the current one is attached.
+  final GlobalKey _anchorKey = GlobalKey();
+
+  /// One-shot: auto-scroll to today only on the FIRST build with data. The
+  /// keep-alive mixin preserves the user's manual scroll position across tab
+  /// switches, and a later stream re-emit (e.g. after an edit) must not yank
+  /// them back to today.
+  bool _didInitialScroll = false;
+
+  /// Estimated offset of the anchor card, computed during build.
+  double _anchorEstimate = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Jumps to the estimated offset (so the anchor region builds), then refines
+  /// with [Scrollable.ensureVisible] once the anchor card exists — placing it
+  /// just below the pinned month header.
+  void _scrollToAnchor() {
+    if (_didInitialScroll || !_controller.hasClients) return;
+    _didInitialScroll = true;
+    final max = _controller.position.maxScrollExtent;
+    _controller.jumpTo(_anchorEstimate.clamp(0.0, max));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _anchorKey.currentContext;
+      if (ctx == null || !_controller.hasClients) return;
+      final vp = _controller.position.viewportDimension;
+      // Leave room for the pinned header so the anchor isn't tucked under it.
+      final headerFraction = vp > 0 ? (_headerHeight / vp).clamp(0.0, 0.4) : 0.0;
+      Scrollable.ensureVisible(ctx, alignment: headerFraction);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Required first call when using AutomaticKeepAliveClientMixin —
@@ -53,15 +101,119 @@ class _TimelineViewState extends State<TimelineView>
     // the view from any future repo-level reordering.
     final sorted = [...widget.shifts]
       ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: sorted.length,
-      itemBuilder: (_, i) => ShiftCard(
-        key: ValueKey('shift-card-${sorted[i].id}'),
-        shift: sorted[i],
+
+    // The anchor: the first shift on or after today (else the last shift, if
+    // the whole roster is in the past).
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var anchorIndex = sorted.indexWhere((s) => !s.date.isBefore(today));
+    if (anchorIndex < 0) anchorIndex = sorted.length - 1;
+    final anchorId = sorted[anchorIndex].id;
+
+    // Group consecutive shifts by calendar month (already sorted → contiguous
+    // runs) so each month gets one sticky header — breaking the wall of cards.
+    final groups = <({DateTime month, List<Shift> shifts})>[];
+    for (final s in sorted) {
+      final month = DateTime(s.date.year, s.date.month);
+      if (groups.isEmpty || groups.last.month != month) {
+        groups.add((month: month, shifts: <Shift>[s]));
+      } else {
+        groups.last.shifts.add(s);
+      }
+    }
+
+    _anchorEstimate = _estimateAnchorOffset(groups, anchorId);
+    if (!_didInitialScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToAnchor());
+    }
+
+    return CustomScrollView(
+      controller: _controller,
+      slivers: [
+        const SliverToBoxAdapter(child: SizedBox(height: _topSpacer)),
+        for (final g in groups) ...[
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _MonthHeaderDelegate(label: formatMonthYearHeader(g.month)),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (_, i) {
+                final card = ShiftCard(
+                  key: ValueKey('shift-card-${g.shifts[i].id}'),
+                  shift: g.shifts[i],
+                );
+                // Wrap only the anchor in a KeyedSubtree so `ensureVisible` has
+                // a context to land on, WITHOUT stealing the card's ValueKey.
+                return g.shifts[i].id == anchorId
+                    ? KeyedSubtree(key: _anchorKey, child: card)
+                    : card;
+              },
+              childCount: g.shifts.length,
+            ),
+          ),
+        ],
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+      ],
+    );
+  }
+
+  /// Estimates the scroll offset of the anchor card by summing the approximate
+  /// heights of everything above it (top spacer + one header per month + each
+  /// card/off-row). Rough by design — [_scrollToAnchor] refines it.
+  double _estimateAnchorOffset(
+    List<({DateTime month, List<Shift> shifts})> groups,
+    String anchorId,
+  ) {
+    var offset = _topSpacer;
+    for (final g in groups) {
+      offset += _headerHeight;
+      for (final s in g.shifts) {
+        if (s.id == anchorId) return offset;
+        offset += s.type == ShiftType.off ? _offRowHeight : _workingCardHeight;
+      }
+    }
+    return offset;
+  }
+}
+
+/// Pinned, opaque month header ("JUNE 2026") that sticks to the top as its
+/// section scrolls and is pushed up by the next month's header.
+class _MonthHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _MonthHeaderDelegate({required this.label});
+
+  final String label;
+
+  static const double _height = 34;
+
+  @override
+  double get minExtent => _height;
+  @override
+  double get maxExtent => _height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final theme = Theme.of(context);
+    return Container(
+      height: _height,
+      alignment: Alignment.centerLeft,
+      // Opaque so scrolling cards never bleed through the pinned header.
+      color: theme.colorScheme.surface,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.3,
+        ),
       ),
     );
   }
+
+  @override
+  bool shouldRebuild(covariant _MonthHeaderDelegate oldDelegate) =>
+      oldDelegate.label != label;
 }
 
 class _EmptyTimeline extends StatelessWidget {
@@ -111,14 +263,17 @@ class ShiftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final visual = visualFor(shift.type);
+    final paused = shift.isPaused;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final isOff = shift.type == ShiftType.off;
 
     return Dismissible(
       key: ValueKey(shift.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.symmetric(
+        margin: EdgeInsets.symmetric(
           horizontal: _cardHorizontalMargin,
-          vertical: _cardVerticalMargin,
+          vertical: isOff ? 3 : _cardVerticalMargin,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 24),
         alignment: Alignment.centerRight,
@@ -138,41 +293,143 @@ class ShiftCard extends StatelessWidget {
       onDismissed: (_) {
         context.read<ShiftRepository>().delete(shift.id);
       },
-      child: Card(
-        margin: const EdgeInsets.symmetric(
-          horizontal: _cardHorizontalMargin,
-          vertical: _cardVerticalMargin,
+      // Working shifts are dominant Cards; OFF days render as a slim,
+      // low-contrast row so the working blocks read as the primary shapes.
+      // (Paused working shifts stay dimmed + struck-through with a badge.)
+      child: isOff
+          ? _buildOffRow(context, theme)
+          : Opacity(
+        opacity: paused ? 0.6 : 1.0,
+        child: Card(
+          clipBehavior: Clip.antiAlias,
+          margin: const EdgeInsets.symmetric(
+            horizontal: _cardHorizontalMargin,
+            vertical: _cardVerticalMargin,
+          ),
+          child: InkWell(
+            // Tap-to-edit — opens the SAME editor the calendar uses, so a shift
+            // can be paused or modified straight from the list.
+            onTap: () => showShiftEditorModal(
+              context,
+              initialDate: shift.date,
+              existing: shift,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor:
+                      (paused ? Colors.grey : visual.color).withValues(alpha: 0.18),
+                  foregroundColor: paused ? Colors.grey : visual.color,
+                  child: Icon(paused ? Icons.pause : visual.icon),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatShiftDate(shift.date),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          decoration:
+                              paused ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${shiftTypeLabel(shift.type)} · '
+                        '${_timeRange(shift, AppPreferences.use24HourOf(context))}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: muted,
+                          decoration:
+                              paused ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      if (paused) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.do_not_disturb_on_outlined,
+                                size: 14, color: muted),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                shift.pauseReason == null
+                                    ? 'Paused'
+                                    : 'Paused · ${shift.pauseReason}',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: muted,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Slim, low-contrast OFF-day row — a hollow dot + date + a faint "Off"
+  /// label, no card chrome, so working shifts read as the dominant shapes.
+  /// Still tap-to-edit (and swipe-to-delete via the shared Dismissible).
+  Widget _buildOffRow(BuildContext context, ThemeData theme) {
+    final faint = theme.colorScheme.onSurfaceVariant;
+    // "Rest day" (not "Off") — friendlier for tired eyes, and avoids colliding
+    // with the "Off" filter chip.
+    final trailing = (shift.isPaused && shift.pauseReason != null)
+        ? 'Rest day · ${shift.pauseReason}'
+        : 'Rest day';
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () => showShiftEditorModal(
+          context,
+          initialDate: shift.date,
+          existing: shift,
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           child: Row(
             children: [
-              CircleAvatar(
-                backgroundColor: visual.color.withValues(alpha: 0.18),
-                foregroundColor: visual.color,
-                child: Icon(visual.icon),
+              // Hollow low-contrast dot — deliberately not a filled glyph.
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: faint.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      formatShiftDate(shift.date),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${shiftTypeLabel(shift.type)} · '
-                      '${_timeRange(shift, AppPreferences.use24HourOf(context))}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  formatShiftDate(shift.date),
+                  style: theme.textTheme.bodyMedium?.copyWith(color: faint),
+                ),
+              ),
+              Text(
+                trailing,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: faint.withValues(alpha: 0.85),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                 ),
               ),
             ],

@@ -9,6 +9,22 @@ const String use24HourTimeKey = 'use24HourTime';
 /// Hive key for the calendar week-start preference. Default true = Monday.
 const String startWeekOnMondayKey = 'startWeekOnMonday';
 
+/// Hive key for which Timeline view opens first. Default false = List view.
+const String timelineDefaultMonthKey = 'timelineDefaultMonth';
+
+/// Hive key for the preferred time-picker entry mode. Default false = the
+/// tap-to-type keyboard (number pad); true = the analog dial. Whichever mode
+/// the user last switched to inside a picker is remembered here so every time
+/// picker opens the way they left it. Pure UI preference — never affects the
+/// time that's picked or any alarm logic.
+const String timePickerUseDialKey = 'timePickerUseDial';
+
+/// Hive key for the Alarms-tab sort order. Default false = by ring time (the
+/// clock time each alarm fires, earliest first); true = grouped by shift type
+/// (Day → Afternoon → Night, then non-rotation), earliest ring within a group.
+/// Display-only ordering; the alarm engine is entirely unaffected.
+const String alarmSortByShiftTypeKey = 'alarmSortByShiftType';
+
 /// Hive key for the nightly sleep target, in whole hours. Default 8.
 const String sleepGoalHoursKey = 'sleepGoalHours';
 
@@ -51,6 +67,12 @@ class AppPreferences extends ChangeNotifier {
       keys: const <String>[
         use24HourTimeKey,
         startWeekOnMondayKey,
+        timelineDefaultMonthKey,
+        // Note: timePickerUseDialKey is deliberately NOT watched here — it's
+        // read via `listen: false` only when a picker opens, and nothing on
+        // screen reflects it live, so notifying every watcher on each toggle
+        // would be a wasted rebuild.
+        alarmSortByShiftTypeKey,
         sleepGoalHoursKey,
         windDownMinutesKey,
         bedtimeReminderEnabledKey,
@@ -68,6 +90,22 @@ class AppPreferences extends ChangeNotifier {
 
   bool get startWeekOnMonday =>
       _box.get(startWeekOnMondayKey, defaultValue: true) as bool;
+
+  /// Whether the Timeline opens on the Month calendar (true) or the List (false,
+  /// default). Read once when the Timeline mounts to pick its initial view.
+  bool get timelineDefaultsToMonth =>
+      _box.get(timelineDefaultMonthKey, defaultValue: false) as bool;
+
+  /// Whether time pickers should open on the analog dial (true) or the
+  /// tap-to-type keyboard (false, default). Read when a picker opens.
+  bool get timePickerUsesDial =>
+      _box.get(timePickerUseDialKey, defaultValue: false) as bool;
+
+  /// Whether the Alarms tab groups by shift type (true) or orders purely by
+  /// ring time (false, default). Watched — the list re-sorts the instant it
+  /// changes.
+  bool get alarmSortByShiftType =>
+      _box.get(alarmSortByShiftTypeKey, defaultValue: false) as bool;
 
   // ── Sleep MVP preferences ────────────────────────────────────────────────
   // Pure UI/planning settings (no engine or notification wiring yet). Stored
@@ -89,22 +127,46 @@ class AppPreferences extends ChangeNotifier {
   bool get isSchedulePaused =>
       _box.get(isSchedulePausedKey, defaultValue: false) as bool;
 
-  void setUse24HourTime(bool value) => _box.put(use24HourTimeKey, value);
+  void setUse24HourTime(bool value) => _putAndFlush(use24HourTimeKey, value);
 
   void setStartWeekOnMonday(bool value) =>
-      _box.put(startWeekOnMondayKey, value);
+      _putAndFlush(startWeekOnMondayKey, value);
 
-  void setSleepGoalHours(int value) => _box.put(sleepGoalHoursKey, value);
+  void setTimelineDefaultsToMonth(bool value) =>
+      _putAndFlush(timelineDefaultMonthKey, value);
 
-  void setWindDownMinutes(int value) => _box.put(windDownMinutesKey, value);
+  void setTimePickerUsesDial(bool value) =>
+      _putAndFlush(timePickerUseDialKey, value);
+
+  void setAlarmSortByShiftType(bool value) =>
+      _putAndFlush(alarmSortByShiftTypeKey, value);
+
+  void setSleepGoalHours(int value) => _putAndFlush(sleepGoalHoursKey, value);
+
+  void setWindDownMinutes(int value) => _putAndFlush(windDownMinutesKey, value);
 
   void setBedtimeReminderEnabled(bool value) =>
-      _box.put(bedtimeReminderEnabledKey, value);
+      _putAndFlush(bedtimeReminderEnabledKey, value);
 
   void setWindDownReminderEnabled(bool value) =>
-      _box.put(windDownReminderEnabledKey, value);
+      _putAndFlush(windDownReminderEnabledKey, value);
 
-  void setIsSchedulePaused(bool value) => _box.put(isSchedulePausedKey, value);
+  void setIsSchedulePaused(bool value) => _putAndFlush(isSchedulePausedKey, value);
+
+  /// Writes [value] then schedules a durability flush. The in-memory `put`
+  /// updates the box AND fires its [ValueListenable] synchronously, so the UI
+  /// and every `get` reflect the change instantly (this stays a `void` setter —
+  /// callers are fire-and-forget UI toggles). The flush is the reap-durability
+  /// guard the AppAlarm repo also makes: on an aggressive-reap OEM device a bare
+  /// `put` can be lost if the process is killed before Hive's lazy flush lands,
+  /// silently reverting the setting (the "app doesn't remember its settings"
+  /// bug). Kept synchronous (no `await`) so a fire-and-forget UI callback can't
+  /// leak a pending-I/O Future into a widget test's async zone; flush errors are
+  /// swallowed — the next successful write (or app foreground) re-persists.
+  void _putAndFlush(String key, Object value) {
+    _box.put(key, value);
+    _box.flush().catchError((Object _) {});
+  }
 
   @override
   void dispose() {
@@ -124,8 +186,27 @@ class AppPreferences extends ChangeNotifier {
   static bool startWeekOnMondayOf(BuildContext context) =>
       context.watch<AppPreferences?>()?.startWeekOnMonday ?? true;
 
+  /// Tolerant reader for the Timeline default-view preference (default List).
+  /// Read once via `context.read` when the Timeline mounts, so no listen.
+  static bool timelineDefaultsToMonthOf(BuildContext context) =>
+      Provider.of<AppPreferences?>(context, listen: false)
+          ?.timelineDefaultsToMonth ??
+      false;
+
   /// Tolerant reader for Holiday Mode (default false = armed). Same
   /// provider-absent fallback contract as [use24HourOf].
   static bool isSchedulePausedOf(BuildContext context) =>
       context.watch<AppPreferences?>()?.isSchedulePaused ?? false;
+
+  /// Tolerant reader for the preferred time-picker entry mode (default false =
+  /// keyboard). Read via `listen: false` at picker-open time — never a watch.
+  static bool timePickerUsesDialOf(BuildContext context) =>
+      Provider.of<AppPreferences?>(context, listen: false)
+          ?.timePickerUsesDial ??
+      false;
+
+  /// Tolerant reader for the Alarms-tab sort order (default false = by ring
+  /// time). Watched, so the list re-sorts when the user flips the toggle.
+  static bool alarmSortByShiftTypeOf(BuildContext context) =>
+      context.watch<AppPreferences?>()?.alarmSortByShiftType ?? false;
 }

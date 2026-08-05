@@ -6,6 +6,7 @@ import '../logic/rotation_pattern_validator.dart';
 import '../logic/shift_generator.dart';
 import '../state/app_preferences.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// Bulk roster generator. Picks a pattern (start/end time + type) and a
 /// block (start date + length), then asks [ShiftGenerator] to produce
@@ -56,15 +57,19 @@ class _TemplateScreenState extends State<TemplateScreen> {
   }
 
   Future<void> _pickStartTime() async {
-    final picked =
-        await showTimePicker(context: context, initialTime: _startTime);
+    final picked = await pickPreferredTime(
+      context,
+      initialTime: _startTime,
+    );
     if (!mounted || picked == null) return;
     setState(() => _startTime = picked);
   }
 
   Future<void> _pickEndTime() async {
-    final picked =
-        await showTimePicker(context: context, initialTime: _endTime);
+    final picked = await pickPreferredTime(
+      context,
+      initialTime: _endTime,
+    );
     if (!mounted || picked == null) return;
     setState(() => _endTime = picked);
   }

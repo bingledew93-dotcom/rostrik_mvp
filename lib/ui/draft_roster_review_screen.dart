@@ -10,6 +10,7 @@ import '../state/draft_roster_controller.dart';
 import 'roster/shift_visuals.dart';
 import '../state/app_preferences.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// Human-in-the-Loop review of a freshly scanned roster.
 ///
@@ -100,8 +101,8 @@ class _DraftRosterReviewViewState extends State<_DraftRosterReviewView> {
     final controller = context.read<DraftRosterController>();
     final block = controller.days[index].block;
     final current = start ? block.startMinutes : block.endMinutes;
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
     );
     if (picked == null) return;

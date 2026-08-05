@@ -5,13 +5,22 @@ import '../../state/app_preferences.dart';
 import '../pattern_picker_screen.dart';
 import '../settings_screen.dart';
 import '../shift_editor_modal.dart';
+import 'mark_leave_screen.dart';
 
 /// The roster **manipulation** hub (post the "Great Migration"). Viewing lives
 /// on the Timeline tab; this tab is purely for acting on the roster.
 ///
-/// Three action cards, UI-first: only "Generate Rotation" is wired (to the
-/// existing pattern-picker setup flow). "Add Custom Shift" and "Pause Schedule"
-/// are intentionally inert placeholders for upcoming phases.
+/// Three action cards, all live:
+///   * "Generate Rotation" → the pattern-picker setup flow (365-day
+///     materialisation, anchored cycle).
+///   * "Add Custom Shift" (Phase 3, ad-hoc shifts) → [showShiftEditorModal] —
+///     inserts a single, non-rotating shift (`cycleId == null`, so it is
+///     never touched by a cycle cascade-delete). Alarms attach themselves:
+///     the AlarmSyncService shift-stream reconcile schedules any matching
+///     follows-rotation rule automatically, and once the occurrence's fire
+///     date passes the trigger bookkeeping is purged — but the Shift record
+///     itself is immutable history and stays in Hive for the calendar view.
+///   * "Pause Schedule" → Holiday Mode ([AppPreferences.isSchedulePaused]).
 class ManageScreen extends StatelessWidget {
   const ManageScreen({super.key});
 
@@ -65,6 +74,18 @@ class ManageScreen extends StatelessWidget {
               // The quick-add modal that used to hang off the Timeline FAB now
               // lives here, on the manipulation hub.
               onTap: () => showShiftEditorModal(context),
+            ),
+            const SizedBox(height: 12),
+            _ActionCard(
+              key: const ValueKey('manage-mark-leave'),
+              icon: Icons.beach_access_outlined,
+              title: 'Mark Leave / Time Off',
+              subtitle: 'Paint the days you\'re off (annual leave, sick) in one '
+                  'go.',
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MarkLeaveScreen()),
+              ),
             ),
             const SizedBox(height: 12),
             const _PauseScheduleCard(),

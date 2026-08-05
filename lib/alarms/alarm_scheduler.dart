@@ -1,9 +1,9 @@
-/// OS-level scheduling contract used by [AlarmEngine].
+/// OS-level scheduling contract used by `AlarmSyncService`.
 ///
-/// The concrete production implementation is `LocalNotificationsAlarmScheduler`
-/// (added later) — it is the only file allowed to import
-/// `flutter_local_notifications`. Tests inject a `FakeAlarmScheduler` instead
-/// so reconciliation logic can be verified without touching the OS.
+/// The concrete production implementation is `NativeAlarmScheduler`, which
+/// drives the native Android AlarmManager bridge. Tests inject a
+/// `FakeAlarmScheduler` instead so reconciliation logic can be verified without
+/// touching the OS.
 abstract class AlarmScheduler {
   /// Schedules a single one-shot notification to fire at [fireAt].
   /// If [id] already exists, implementations must replace it.

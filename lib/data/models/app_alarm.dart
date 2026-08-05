@@ -43,13 +43,20 @@ enum AppAlarmRepeatType {
 /// Lifetime: created on the AlarmsScreen, edited via the create/edit sheet,
 /// deleted via swipe-or-button.
 ///
-/// **Lead-time model (followsRotation):** an alarm NEVER fires at an absolute
-/// clock time — the whole point is that it tracks the shift start, so an exact
-/// time that can't adapt when the shift moves is an anti-pattern. Instead the
-/// fire time is `shiftStart − leadTime`, where `leadTime` is:
-///   * the per-alarm [relativeOffsetMinutes] when it is set (an OVERRIDE), or
-///   * the global [AlarmSettings.leadTime] when [relativeOffsetMinutes] is null
-///     (the PRIMARY default — the single source of truth for standard alarms).
+/// **Timing model (followsRotation):** a follows-rotation alarm has two mutually
+/// exclusive timing modes, selected by [isExactTime]:
+///   * **Lead-time (default, `isExactTime == false`):** fire at
+///     `shiftStart − leadTime`, where `leadTime` is the per-alarm
+///     [relativeOffsetMinutes] when set (an OVERRIDE), else the global
+///     [AlarmSettings.leadTime] (the PRIMARY default). This tracks the shift —
+///     move the shift and the alarm follows.
+///   * **Exact-time (`isExactTime == true`):** fire at the absolute
+///     [exactTimeMinutes] on each matching shift's DATE, ignoring the lead time
+///     entirely. Still roster-anchored (it only rings on days the linked shift
+///     occurs) but pinned to a fixed wall-clock time the user chose.
+///
+/// The fire-time arithmetic for BOTH modes lives in one place —
+/// `rotationAlarmFireAt` — so the engine and the Dashboard preview never drift.
 @HiveType(typeId: 6)
 class AppAlarm {
   AppAlarm({
@@ -67,6 +74,9 @@ class AppAlarm {
     this.customRingtoneUri,
     this.customRingtoneName,
     this.ringtoneSource = RingtoneSource.classic,
+    this.isExactTime = false,
+    this.exactTimeMinutes,
+    this.skippedThrough,
   })  : assert(
           minutesOfDay >= 0 && minutesOfDay < 1440,
           'minutesOfDay must be 0..1439',
@@ -75,6 +85,11 @@ class AppAlarm {
           relativeOffsetMinutes == null || relativeOffsetMinutes > 0,
           'relativeOffsetMinutes, when set, must be positive — a zero/negative '
           'offset would fire at or after the shift starts, defeating the point',
+        ),
+        assert(
+          exactTimeMinutes == null ||
+              (exactTimeMinutes >= 0 && exactTimeMinutes < 1440),
+          'exactTimeMinutes, when set, must be a valid minute-of-day (0..1439)',
         );
 
   @HiveField(0)
@@ -157,14 +172,16 @@ class AppAlarm {
   @HiveField(10, defaultValue: 0)
   final int weekdaysBitmask;
 
-  /// When true, the alarm record is permanently deleted from Hive the instant
-  /// the user dismisses it — instead of lingering as a fired, stale config.
-  /// Only meaningful for (and only ever set on) [AppAlarmRepeatType.oneTime]
-  /// alarms; the create/edit sheet exposes the toggle for one-time only. The
-  /// dismiss handlers (in-app wake screen, foreground dispatcher, killed-app
-  /// background isolate) consult [shouldAutoDeleteOnDismiss] and delete via the
-  /// `appAlarmId` carried in the notification payload. Legacy records (no field
-  /// 11) read back `false`.
+  /// Legacy opt-in (one-time only) to delete the record from Hive after it
+  /// fires. NOTE: one-time alarms are now ALWAYS removed after firing (see
+  /// [shouldDeleteAfterFiring]) — a fired one-time left in Hive re-projects
+  /// daily — so this flag is effectively subsumed and the create/edit toggle is
+  /// redundant; it's retained for the persisted schema (HiveField 11) and as an
+  /// explicit opt-in should a non-one-time alarm type ever want post-fire
+  /// cleanup. The native [AlarmActivity] dismiss / auto-timeout records the fired
+  /// `appAlarmId` in the `pending_alarm_deletes` ledger, which the Dart drain
+  /// replays through [deleteAlarmAfterFiring]. Legacy records (no field 11) read
+  /// back `false`.
   @HiveField(11, defaultValue: false)
   final bool autoDeleteAfterFiring;
 
@@ -189,6 +206,83 @@ class AppAlarm {
   @HiveField(14)
   final RingtoneSource ringtoneSource;
 
+  /// Exact-time mode for a followsRotation alarm. When true the alarm fires at
+  /// the absolute [exactTimeMinutes] on each matching shift's date instead of
+  /// `shiftStart − leadTime` — the lead time (global default AND any
+  /// [relativeOffsetMinutes] override) is ignored. Default false (lead-time
+  /// mode); legacy records (no field 15) read back false via the adapter.
+  /// Meaningless for weekly / oneTime alarms (they already fire at an absolute
+  /// [minutesOfDay]); the create sheet only ever sets it on followsRotation.
+  @HiveField(15, defaultValue: false)
+  final bool isExactTime;
+
+  /// The absolute fire time (minute-of-day, 0..1439) for an [isExactTime]
+  /// followsRotation alarm — e.g. `255` for 04:15. Null in lead-time mode (and
+  /// on legacy records, no field 16). When [isExactTime] is true but this is
+  /// null, the fire-time math falls back to lead-time mode rather than crashing.
+  @HiveField(16)
+  final int? exactTimeMinutes;
+
+  /// PER-OCCURRENCE skip for SHIFT-LESS alarms (weekly; defensively honoured
+  /// for one-time too): the projection suppresses any occurrence whose fireAt
+  /// is at-or-before this instant. The Dashboard's early-skip writes the
+  /// skipped ring's fireAt here — next week's occurrence fires later, so it
+  /// stays armed. This is the shift-less counterpart of
+  /// `Shift.dismissedAlarmIds`: rotation rings record their dismissal on the
+  /// shift row; weekly/one-time rings have no shift, so the rule itself
+  /// carries it. Riding the AppAlarm (not a side store) is load-bearing — the
+  /// upsert flows through the watched alarms stream, so the engine reconciles
+  /// (cancelling the pending OS alarm) and every UI projection retargets,
+  /// with zero extra wiring.
+  ///
+  /// Only ever advanced (monotonic max at the write site); a past instant is
+  /// inert because the projector's future-only gate already excludes rings
+  /// at-or-before now, so it never needs clearing. Never consulted for
+  /// follows-rotation rings. Null on legacy records (no field 17).
+  ///
+  /// NOT used for skipping a one-time alarm: `_nextDailyOccurrence` rolls a
+  /// one-time forward daily, so a suppressed-instant skip would resurrect it
+  /// TOMORROW — the early-skip disables the rule (`enabled: false`) instead.
+  @HiveField(17)
+  final DateTime? skippedThrough;
+
+  /// The exact-time fire clock when exact-time mode is ACTIVE and well-formed,
+  /// else null (= lead-time mode). This is the single mode-decision gate shared
+  /// by the engine (`rotationAlarmFireAt`) and every UI projection
+  /// ([displayFireClockMinutes]) — including the defensive malformed-record
+  /// rule ([isExactTime] true but a null clock falls back to lead-time math
+  /// rather than crashing) — so the engine and the display can never disagree
+  /// about WHICH mode an alarm is in.
+  int? get activeExactTimeMinutes => isExactTime ? exactTimeMinutes : null;
+
+  /// The lead applied in lead-time mode: this alarm's [relativeOffsetMinutes]
+  /// override when set, else the caller's [globalLeadMinutes] default.
+  int leadMinutesWith(int globalLeadMinutes) =>
+      relativeOffsetMinutes ?? globalLeadMinutes;
+
+  /// The clock face (minute-of-day, 0..1439) this follows-rotation alarm will
+  /// RING for a shift starting at [shiftStartMinutes] — the single display
+  /// source of truth for every UI text widget (Alarms-tab card hero, create
+  /// sheet, etc.). Respects [isExactTime]: returns [exactTimeMinutes] in
+  /// exact-time mode, else `shiftStart − lead` wrapped across midnight (a
+  /// 90-min lead before a 00:30 shift renders 23:00).
+  ///
+  /// Display projection ONLY — the authoritative date-anchored instant the OS
+  /// is armed with comes from `rotationAlarmFireAt`, which shares
+  /// [activeExactTimeMinutes] / [leadMinutesWith] so the two stay in lock-step.
+  /// (Field bug this fixes: an exact-time 04:15 alarm was armed correctly but
+  /// cards still rendered the old `shiftStart − leadTime` hand-math → 05:00.)
+  int displayFireClockMinutes({
+    required int shiftStartMinutes,
+    required int globalLeadMinutes,
+  }) {
+    final exact = activeExactTimeMinutes;
+    if (exact != null) return exact;
+    final raw =
+        (shiftStartMinutes - leadMinutesWith(globalLeadMinutes)) % 1440;
+    return raw < 0 ? raw + 1440 : raw;
+  }
+
   /// `clearLinkedShiftType` / `clearRelativeOffset` let a caller reset a field
   /// back to `null` — without them, passing `null` is indistinguishable from
   /// "leave unchanged". `clearRelativeOffset` is how the create/edit sheet
@@ -210,6 +304,10 @@ class AppAlarm {
     String? customRingtoneUri,
     String? customRingtoneName,
     RingtoneSource? ringtoneSource,
+    bool? isExactTime,
+    int? exactTimeMinutes,
+    bool clearExactTime = false,
+    DateTime? skippedThrough,
   }) =>
       AppAlarm(
         id: id ?? this.id,
@@ -231,6 +329,13 @@ class AppAlarm {
         customRingtoneUri: customRingtoneUri ?? this.customRingtoneUri,
         customRingtoneName: customRingtoneName ?? this.customRingtoneName,
         ringtoneSource: ringtoneSource ?? this.ringtoneSource,
+        isExactTime: isExactTime ?? this.isExactTime,
+        exactTimeMinutes: clearExactTime
+            ? null
+            : (exactTimeMinutes ?? this.exactTimeMinutes),
+        // No clear flag: the skip watermark only ever advances (a past value
+        // is inert), so `null` always means "leave unchanged".
+        skippedThrough: skippedThrough ?? this.skippedThrough,
       );
 
   @override
@@ -251,7 +356,10 @@ class AppAlarm {
           autoDeleteAfterFiring == other.autoDeleteAfterFiring &&
           customRingtoneUri == other.customRingtoneUri &&
           customRingtoneName == other.customRingtoneName &&
-          ringtoneSource == other.ringtoneSource;
+          ringtoneSource == other.ringtoneSource &&
+          isExactTime == other.isExactTime &&
+          exactTimeMinutes == other.exactTimeMinutes &&
+          skippedThrough == other.skippedThrough;
 
   @override
   int get hashCode => Object.hash(
@@ -269,6 +377,9 @@ class AppAlarm {
         customRingtoneUri,
         customRingtoneName,
         ringtoneSource,
+        isExactTime,
+        exactTimeMinutes,
+        skippedThrough,
       );
 
   @override
@@ -282,17 +393,23 @@ class AppAlarm {
       'autoDeleteAfterFiring: $autoDeleteAfterFiring, '
       'customRingtoneUri: $customRingtoneUri, '
       'customRingtoneName: $customRingtoneName, '
-      'ringtoneSource: $ringtoneSource)';
+      'ringtoneSource: $ringtoneSource, '
+      'isExactTime: $isExactTime, exactTimeMinutes: $exactTimeMinutes, '
+      'skippedThrough: $skippedThrough)';
 }
 
-/// Whether the alarm [a] should be permanently deleted from Hive the instant it
-/// is dismissed, rather than left as a fired, stale config. Pure so the three
-/// dismiss sites (in-app wake screen, foreground dispatcher, killed-app
-/// background isolate) share one decision and one unit-test target. `null`
-/// (record already gone, or no `appAlarmId` in the payload) → never delete.
-/// Only one-time alarms with the flag qualify — `autoDeleteAfterFiring` is only
-/// ever set on one-time alarms, but the explicit type guard is belt-and-braces.
-bool shouldAutoDeleteOnDismiss(AppAlarm? a) =>
-    a != null &&
-    a.autoDeleteAfterFiring &&
-    a.repeatType == AppAlarmRepeatType.oneTime;
+/// Whether the alarm [a] should be permanently removed from Hive once it has
+/// fired and been dismissed (or auto-timed-out), rather than left to re-project.
+///
+/// EVERY one-time alarm qualifies: a one-time alarm fires exactly once, so if it
+/// lingers the engine's daily next-occurrence projection re-arms it the
+/// following day — a one-shot alarm silently becoming a daily cycle (the bug
+/// this guards). Gating on `repeatType == oneTime` (rather than the
+/// [AppAlarm.autoDeleteAfterFiring] opt-in) both covers every flagged alarm —
+/// the flag is only ever set on one-time alarms, so one-time subsumes it — AND
+/// protects recurring alarms: a weekly/follows-rotation rule is never cleaned up
+/// after firing even if some bug set the flag on it. `null` (record already
+/// gone, or no `appAlarmId` in the payload) → never delete. Pure so the dismiss
+/// path and its unit tests share one decision.
+bool shouldDeleteAfterFiring(AppAlarm? a) =>
+    a != null && a.repeatType == AppAlarmRepeatType.oneTime;

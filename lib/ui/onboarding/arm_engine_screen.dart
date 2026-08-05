@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/models/alarm_settings.dart';
 import '../../data/models/shift_cycle.dart';
 import '../../data/models/shift_type.dart';
+import '../../data/repositories/alarm_settings_repository.dart';
 import '../../data/repositories/app_alarm_repository.dart';
 import '../../data/repositories/shift_cycle_repository.dart';
 import '../../data/repositories/shift_repository.dart';
+import '../../logic/cycle_service.dart';
 import '../../logic/default_alarm_seeder.dart';
 import '../shift_format.dart';
 import 'onboarding_progress.dart';
@@ -28,26 +31,36 @@ class ArmEngineScreen extends StatefulWidget {
   const ArmEngineScreen({
     super.key,
     required this.onArmComplete,
-    this.onBack,
   });
 
   /// Invoked once after alarms are seeded. The flow flips the completion flag
   /// and routes to the Dashboard here.
   final Future<void> Function() onArmComplete;
 
-  /// Optional back affordance (returns to the pattern picker).
-  final VoidCallback? onBack;
-
   @override
   State<ArmEngineScreen> createState() => _ArmEngineScreenState();
 }
 
 class _ArmEngineScreenState extends State<ArmEngineScreen> {
+  /// Lead-time presets offered here (minutes). Mirrors the Settings slider's
+  /// sane starting points; labelled via the shared [formatLeadTime].
+  static const List<int> _leadPresets = [15, 30, 45, 60, 90, 120];
+
   bool _loading = true;
   bool _arming = false;
+  // Guards the back-rollback path against re-entry (a second tap / gesture while
+  // the cascade-delete is in flight) so we can never pop twice.
+  bool _backing = false;
   List<ShiftType> _workTypes = const [];
   String? _cycleLabel;
   DateTime? _anchor;
+  // Retained so back-nav can cascade-delete exactly the roster this screen is
+  // confirming (rolls the generation back so a re-pick starts clean).
+  ShiftCycle? _cycle;
+  // The global alarm settings, read on load and rewritten when the user picks a
+  // lead time. Kept whole (not just the minutes) so a lead change preserves the
+  // other fields (e.g. vibrationEnabled) via copyWith.
+  AlarmSettings _settings = AlarmSettings.defaults;
 
   @override
   void initState() {
@@ -62,6 +75,7 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
   Future<void> _load() async {
     final shiftRepo = context.read<ShiftRepository>();
     final cycleRepo = context.read<ShiftCycleRepository>();
+    final settingsRepo = context.read<AlarmSettingsRepository>();
     final now = DateTime.now();
     final shifts = await shiftRepo.getInRange(
       DateTime(now.year, now.month, now.day),
@@ -72,6 +86,7 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
         if (s.type != ShiftType.off) s.type,
     };
     final cycle = _latestCycle(await cycleRepo.getAll());
+    final settings = await settingsRepo.read();
 
     if (!mounted) return;
     setState(() {
@@ -79,8 +94,10 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
       _workTypes = const [ShiftType.day, ShiftType.afternoon, ShiftType.night]
           .where(present.contains)
           .toList();
+      _cycle = cycle;
       _cycleLabel = cycle?.label;
       _anchor = cycle?.anchorDate;
+      _settings = settings;
       _loading = false;
     });
   }
@@ -91,6 +108,51 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
       if (best == null || c.createdAt.isAfter(best.createdAt)) best = c;
     }
     return best;
+  }
+
+  /// Snaps an arbitrary lead-time to the nearest preset so the dropdown always
+  /// has a matching item (never trips DropdownButton's value-must-match assert).
+  int _nearestPreset(int minutes) {
+    var best = _leadPresets.first;
+    for (final p in _leadPresets) {
+      if ((p - minutes).abs() < (best - minutes).abs()) best = p;
+    }
+    return best;
+  }
+
+  /// Persists the picked lead time immediately so it's captured BEFORE arming
+  /// (seeded alarms carry a null offset → they fire on this global lead).
+  void _onLeadChanged(int minutes) {
+    final updated = _settings.copyWith(leadTime: Duration(minutes: minutes));
+    setState(() => _settings = updated);
+    context.read<AlarmSettingsRepository>().write(updated);
+  }
+
+  /// Back out of arming: cascade-delete the just-generated cycle (and its
+  /// shifts + any pending OS alarms) so re-selecting a template doesn't stack a
+  /// duplicate roster, THEN dismiss the route. Wired to BOTH the AppBar button
+  /// and the system back-gesture (via a `canPop: false` PopScope), since the
+  /// gesture would otherwise bypass this cleanup entirely.
+  ///
+  /// The PopScope vetoes the implicit pop, so we MUST pop explicitly here once
+  /// the async cleanup resolves — the previous version handed off to an injected
+  /// callback that the still-`canPop:false` route swallowed, leaving the screen
+  /// stuck behind a spinner (the "death wheel"). Capturing the navigator before
+  /// the await and gating on `mounted` keeps the context use safe; `_backing`
+  /// blocks a second tap from popping twice.
+  Future<void> _handleBack() async {
+    if (_arming || _backing) return;
+    setState(() => _backing = true);
+    final navigator = Navigator.of(context);
+    final cycleService = context.read<CycleService>();
+    final cycle = _cycle;
+    if (cycle != null) {
+      await cycleService.deleteCycle(cycle.id);
+    }
+    if (!mounted) return;
+    // Direct pop (not maybePop) so PopScope's canPop:false veto doesn't apply —
+    // this is the explicit dismissal the gesture/button asked for.
+    navigator.pop();
   }
 
   Future<void> _arm() async {
@@ -114,15 +176,22 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Scaffold(
+    return PopScope(
+      // Always intercept: the back-gesture must run the roster rollback, then
+      // _handleBack pops explicitly. canPop stays false so the implicit pop
+      // never races the cleanup.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        leading: widget.onBack == null
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _arming ? null : widget.onBack,
-              ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: (_arming || _backing) ? null : _handleBack,
+        ),
         title: const Text('Arm your alarms'),
         bottom: const OnboardingProgressBar(step: 3),
       ),
@@ -190,6 +259,17 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
                           ],
                         ),
                       ),
+                    if (_workTypes.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      // Lead time lives here (not on the Welcome screen) so it's
+                      // captured in context — right next to the alarms it shapes
+                      // — and persisted before arming.
+                      _LeadTimeField(
+                        value: _nearestPreset(_settings.leadTime.inMinutes),
+                        presets: _leadPresets,
+                        onChanged: _onLeadChanged,
+                      ),
+                    ],
                     const Spacer(flex: 3),
                     // The massive, high-vis primary action.
                     SizedBox(
@@ -227,6 +307,45 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
                 ),
         ),
       ),
+      ),
+    );
+  }
+}
+
+/// Outlined "Default alarm lead time" dropdown. Pure presentation — the parent
+/// owns the value + persistence.
+class _LeadTimeField extends StatelessWidget {
+  const _LeadTimeField({
+    required this.value,
+    required this.presets,
+    required this.onChanged,
+  });
+
+  final int value;
+  final List<int> presets;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DropdownButtonFormField<int>(
+      key: const ValueKey('arm-engine-lead-time'),
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Alarm lead time',
+        helperText: 'How early the alarm rings before a shift starts.',
+        prefixIcon:
+            Icon(Icons.timer_outlined, color: theme.colorScheme.primary),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      items: [
+        for (final m in presets)
+          DropdownMenuItem<int>(value: m, child: Text(formatLeadTime(m))),
+      ],
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
     );
   }
 }

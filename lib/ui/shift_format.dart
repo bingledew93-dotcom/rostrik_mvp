@@ -13,6 +13,38 @@ const _months = [
 String formatShiftDate(DateTime date) =>
     '${_weekdays[date.weekday - 1]}, ${_months[date.month - 1]} ${date.day}';
 
+const _monthsFull = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/// "JUNE 2026" — the upper-cased month + year used as the Timeline list's
+/// sticky section header.
+String formatMonthYearHeader(DateTime date) =>
+    '${_monthsFull[date.month - 1].toUpperCase()} ${date.year}';
+
+const _weekdaysFull = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+];
+
+/// "Monday, 9 March 2026" — the long form on the roster builder's start-date
+/// field (matches the New Shift Roster design).
+String formatFullDate(DateTime date) =>
+    '${_weekdaysFull[date.weekday - 1]}, ${date.day} '
+    '${_monthsFull[date.month - 1]} ${date.year}';
+
+/// Human alarm lead-time label: "0 min" / "45 min" / "1 h" / "1 h 30 min".
+/// Single source for both the Settings slider and the onboarding lead-time
+/// dropdown so the two surfaces can never phrase the same duration differently.
+String formatLeadTime(int totalMinutes) {
+  if (totalMinutes == 0) return '0 min';
+  final h = totalMinutes ~/ 60;
+  final m = totalMinutes % 60;
+  if (h == 0) return '$m min';
+  if (m == 0) return '$h h';
+  return '$h h $m min';
+}
+
 /// 24-hour zero-padded — matches roster card subtitle for consistency.
 String formatHhmm(int minutesOfDay) {
   final h = (minutesOfDay ~/ 60).toString().padLeft(2, '0');

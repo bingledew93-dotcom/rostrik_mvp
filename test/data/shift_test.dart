@@ -37,6 +37,61 @@ void main() {
     });
   });
 
+  group('Shift — isAlarmHandledAt (Zombie-UI route/self-destruct gate)', () {
+    final now = DateTime(2026, 6, 11, 6, 0);
+
+    Shift mk({
+      bool isAcknowledged = false,
+      DateTime? snoozedUntil,
+      bool isMuted = false,
+      bool isAlarmSkipped = false,
+    }) =>
+        Shift(
+          id: 'h1',
+          date: DateTime(2026, 6, 11),
+          type: ShiftType.day,
+          startMinutes: 7 * 60,
+          endMinutes: 15 * 60,
+          isAcknowledged: isAcknowledged,
+          snoozedUntil: snoozedUntil,
+          isMuted: isMuted,
+          isAlarmSkipped: isAlarmSkipped,
+        );
+
+    test('an untouched ringing occurrence is NOT handled', () {
+      expect(mk().isAlarmHandledAt(now), isFalse);
+    });
+
+    test('a dismissed occurrence (isAcknowledged) is handled', () {
+      // THE Zombie-UI case: Dismiss from the notification panel set this
+      // flag; a stale FSI payload must not resurrect a wake screen.
+      expect(mk(isAcknowledged: true).isAlarmHandledAt(now), isTrue);
+    });
+
+    test('a still-active snooze is handled (alarm is not ringing NOW)', () {
+      expect(
+        mk(snoozedUntil: now.add(const Duration(minutes: 9)))
+            .isAlarmHandledAt(now),
+        isTrue,
+      );
+    });
+
+    test('an EXPIRED snooze is not handled — the re-fire is live', () {
+      expect(
+        mk(snoozedUntil: now.subtract(const Duration(minutes: 1)))
+            .isAlarmHandledAt(now),
+        isFalse,
+      );
+    });
+
+    test('muted / skipped do NOT count as handled', () {
+      // Those flags suppress future scheduling; if an alarm fired anyway the
+      // wake screen is the only dismiss surface and must not be gated away.
+      expect(mk(isMuted: true).isAlarmHandledAt(now), isFalse);
+      expect(mk(isAlarmSkipped: true).isAlarmHandledAt(now), isFalse);
+    });
+  });
+
   group('Shift — isOvernight', () {
     test('day shift 07:00–15:00 is not overnight', () {
       expect(_shift(start: 7 * 60, end: 15 * 60).isOvernight, isFalse);
@@ -222,6 +277,91 @@ void main() {
         endMinutes: 15 * 60,
       );
       expect(s.isMuted, isFalse);
+    });
+  });
+
+  group('Shift — isAdHoc / isArchived (Phase 3 self-cleaning)', () {
+    Shift base() => Shift(
+          id: 'p3',
+          date: DateTime(2026, 5, 1),
+          type: ShiftType.day,
+          startMinutes: 7 * 60,
+          endMinutes: 15 * 60,
+        );
+
+    test('both default to false when constructed without the flags', () {
+      // Every existing call site (generator, templates) omits these — they
+      // must read back as a non-ad-hoc, non-archived rotation shift.
+      final s = base();
+      expect(s.isAdHoc, isFalse);
+      expect(s.isArchived, isFalse);
+    });
+
+    test('copyWith flips isArchived without disturbing other fields', () {
+      final adhoc = base().copyWith(isAdHoc: true);
+      final archived = adhoc.copyWith(isArchived: true);
+      expect(archived.isArchived, isTrue);
+      expect(archived.isAdHoc, isTrue, reason: 'archiving preserves ad-hoc');
+      expect(archived.id, adhoc.id);
+      expect(archived.date, adhoc.date);
+      expect(archived.startMinutes, adhoc.startMinutes);
+    });
+
+    test('differing isAdHoc ⇒ not equal', () {
+      expect(base(), isNot(equals(base().copyWith(isAdHoc: true))));
+    });
+
+    test('differing isArchived ⇒ not equal', () {
+      expect(base(), isNot(equals(base().copyWith(isArchived: true))));
+    });
+
+    test('same flags ⇒ equal and same hashCode', () {
+      final a = base().copyWith(isAdHoc: true, isArchived: true);
+      final b = base().copyWith(isAdHoc: true, isArchived: true);
+      expect(a, equals(b));
+      expect(a.hashCode, b.hashCode);
+    });
+  });
+
+  group('Shift — isPaused / pauseReason (Exception Layer)', () {
+    Shift base() => Shift(
+          id: 'ex',
+          date: DateTime(2026, 5, 1),
+          type: ShiftType.day,
+          startMinutes: 7 * 60,
+          endMinutes: 15 * 60,
+        );
+
+    test('defaults to not-paused with a null reason', () {
+      final s = base();
+      expect(s.isPaused, isFalse);
+      expect(s.pauseReason, isNull);
+    });
+
+    test('copyWith sets paused + reason', () {
+      final s = base().copyWith(isPaused: true, pauseReason: 'Sick');
+      expect(s.isPaused, isTrue);
+      expect(s.pauseReason, 'Sick');
+    });
+
+    test('clearPauseReason wipes the reason (un-pause)', () {
+      final paused = base().copyWith(isPaused: true, pauseReason: 'Sick');
+      final cleared = paused.copyWith(isPaused: false, clearPauseReason: true);
+      expect(cleared.isPaused, isFalse);
+      expect(cleared.pauseReason, isNull);
+    });
+
+    test('copyWith without clear preserves the reason', () {
+      final paused = base().copyWith(isPaused: true, pauseReason: 'Leave');
+      expect(paused.copyWith(type: ShiftType.night).pauseReason, 'Leave');
+    });
+
+    test('differing isPaused / pauseReason ⇒ not equal', () {
+      expect(base(), isNot(equals(base().copyWith(isPaused: true))));
+      expect(
+        base().copyWith(isPaused: true, pauseReason: 'A'),
+        isNot(equals(base().copyWith(isPaused: true, pauseReason: 'B'))),
+      );
     });
   });
 

@@ -5,6 +5,7 @@
 import 'package:hive_ce/hive_ce.dart';
 import 'package:rostrik_mvp/data/models/alarm_settings.dart';
 import 'package:rostrik_mvp/data/models/app_alarm.dart';
+import 'package:rostrik_mvp/data/models/calendar_activity.dart';
 import 'package:rostrik_mvp/data/models/cycle_block.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_cycle.dart';
@@ -12,9 +13,11 @@ import 'package:rostrik_mvp/data/models/shift_type.dart';
 
 extension HiveRegistrar on HiveInterface {
   void registerAdapters() {
+    registerAdapter(ActivityKindAdapter());
     registerAdapter(AlarmSettingsAdapter());
     registerAdapter(AppAlarmAdapter());
     registerAdapter(AppAlarmRepeatTypeAdapter());
+    registerAdapter(CalendarActivityAdapter());
     registerAdapter(CycleBlockAdapter());
     registerAdapter(ShiftAdapter());
     registerAdapter(ShiftCycleAdapter());
@@ -24,9 +27,11 @@ extension HiveRegistrar on HiveInterface {
 
 extension IsolatedHiveRegistrar on IsolatedHiveInterface {
   void registerAdapters() {
+    registerAdapter(ActivityKindAdapter());
     registerAdapter(AlarmSettingsAdapter());
     registerAdapter(AppAlarmAdapter());
     registerAdapter(AppAlarmRepeatTypeAdapter());
+    registerAdapter(CalendarActivityAdapter());
     registerAdapter(CycleBlockAdapter());
     registerAdapter(ShiftAdapter());
     registerAdapter(ShiftCycleAdapter());

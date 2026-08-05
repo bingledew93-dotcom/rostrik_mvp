@@ -79,6 +79,8 @@ class RingtoneChannel {
     required RingtoneSource source,
     String? uri,
     bool vibrate = false,
+    bool asAlarm = false,
+    String? bundledResource,
   }) async {
     if (!Platform.isAndroid) return;
     try {
@@ -89,28 +91,25 @@ class RingtoneChannel {
         // alongside the audio (and cancels it on stop). The editor preview
         // passes false; a firing alarm passes the user's vibration setting.
         'vibrate': vibrate,
+        // FIRING-ALARM playback is lifecycle-immune on the native side: it runs
+        // in the foreground AlarmAudioService, which survives activity
+        // pause/stop/destroy (Android 14 finishes the occluded FSI activity
+        // when the shade covers the keyguard) and only an explicit
+        // [stopPreview] — Dismiss/Snooze — ends it. Editor previews stay false
+        // so they still die with the activity.
+        'asAlarm': asAlarm,
+        // PRESET internal tone: a `res/raw` name (from
+        // `AlarmSound.androidResource`). Non-null makes the native engine play
+        // the bundled tone — the route that puts EVERY fire-time alarm, preset
+        // or custom, on the protected foreground service. Null for a custom
+        // vault/system URI.
+        'bundledResource': bundledResource,
       });
     } on PlatformException catch (e) {
       debugPrint('[ringtone] previewRingtone failed: $e');
     } on MissingPluginException {
       // off-Android / no native handler (tests) — silent no-op.
     }
-  }
-
-  /// Plays [uri] as the FIRING alarm tone (single-notification architecture):
-  /// `WakeUpScreen` calls this when the FSI launches it and the alarm's payload
-  /// carried a custom ringtone. Same native engine + classic-fallback ladder as
-  /// [previewRingtone] — only the entry point differs. The [RingtoneSource] is
-  /// inferred from the URI scheme: a `content://` URI is a system tone (read via
-  /// ContentResolver), anything else is a durable vault file path. When
-  /// [vibrate] is true the native engine also runs a continuous looping
-  /// vibration until stopped. Stop it with [stopPreview]. No-op off Android / in
-  /// tests.
-  Future<void> playAlarmUri(String uri, {bool vibrate = false}) {
-    final source = uri.startsWith('content://')
-        ? RingtoneSource.system
-        : RingtoneSource.vault;
-    return previewRingtone(source: source, uri: uri, vibrate: vibrate);
   }
 
   /// Stops and releases the native player (preview OR a firing alarm tone — same

@@ -35,13 +35,22 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       ringtoneSource: fields[14] == null
           ? RingtoneSource.classic
           : RingtoneSource.values[(fields[14] as num).toInt()],
+      // Fields 15-16 (Lead Time vs Exact Time) added in the time-entry-friction
+      // migration. Absent on legacy records → isExactTime defaults false, exact
+      // time null, so every pre-migration alarm reads back as lead-time mode.
+      isExactTime: fields[15] == null ? false : fields[15] as bool,
+      exactTimeMinutes: (fields[16] as num?)?.toInt(),
+      // Field 17 (per-occurrence skip watermark for shift-less alarms) added
+      // in the early-skip coverage migration. Absent on legacy records → null
+      // (nothing skipped).
+      skippedThrough: fields[17] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppAlarm obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -69,7 +78,13 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       ..writeByte(13)
       ..write(obj.customRingtoneName)
       ..writeByte(14)
-      ..write(obj.ringtoneSource.index);
+      ..write(obj.ringtoneSource.index)
+      ..writeByte(15)
+      ..write(obj.isExactTime)
+      ..writeByte(16)
+      ..write(obj.exactTimeMinutes)
+      ..writeByte(17)
+      ..write(obj.skippedThrough);
   }
 
   @override

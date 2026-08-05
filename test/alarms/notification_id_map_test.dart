@@ -83,6 +83,51 @@ void main() {
     });
   });
 
+  group('releaseWhere', () {
+    test('releases every matching key and keeps the rest', () async {
+      await idMap.idFor('alarm-a@2026-05-30');
+      await idMap.idFor('alarm-a@2026-06-01');
+      await idMap.idFor('alarm-b@2026-05-30');
+
+      await idMap.releaseWhere((k) => k.endsWith('@2026-05-30'));
+
+      expect(idMap.has('alarm-a@2026-05-30'), isFalse);
+      expect(idMap.has('alarm-b@2026-05-30'), isFalse);
+      expect(idMap.has('alarm-a@2026-06-01'), isTrue);
+    });
+
+    test('the reserved counter key is never offered to the predicate', () async {
+      await idMap.idFor('a');
+      await idMap.idFor('b');
+      final offered = <String>[];
+
+      // A greedy predicate that matches EVERYTHING must still leave the
+      // counter intact — the next allocation continues the sequence rather
+      // than restarting at 1 (an id collision with a pending OS alarm).
+      await idMap.releaseWhere((k) {
+        offered.add(k);
+        return true;
+      });
+
+      expect(offered, isNot(contains('__counter__')));
+      expect(await idMap.idFor('c'), 3,
+          reason: 'counter must survive a full purge — ids never rewind');
+    });
+
+    test('no matches is a no-op', () async {
+      await idMap.idFor('a');
+      await idMap.releaseWhere((_) => false);
+      expect(idMap.has('a'), isTrue);
+    });
+
+    test('released keys re-allocate with fresh ids', () async {
+      final original = await idMap.idFor('alarm-a@2026-05-30');
+      await idMap.releaseWhere((k) => k == 'alarm-a@2026-05-30');
+      final fresh = await idMap.idFor('alarm-a@2026-05-30');
+      expect(fresh, greaterThan(original));
+    });
+  });
+
   group('has', () {
     test('false for never-seen ids', () {
       expect(idMap.has('nope'), isFalse);

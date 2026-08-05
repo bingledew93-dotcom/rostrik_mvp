@@ -2,11 +2,15 @@ package com.example.rostrik_mvp
 
 import android.content.Context
 import android.util.Log
+import androidx.work.Configuration
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import java.util.concurrent.TimeUnit
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -31,9 +35,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  * Why not the `workmanager` Flutter plugin: per Phase-5 architectural
  * stance we don't run a long-lived Dart isolate in a periodic worker.
- * This Worker is one-shot per boot / package-replace — it starts an
- * engine, runs one sync, tears down. The engine does not persist
- * across `doWork()` calls.
+ * Every run — one-shot (boot / package-replace / clock-change) or the
+ * periodic window-roll refresh — starts an engine, runs one sync,
+ * tears down. The engine does not persist across `doWork()` calls.
  *
  * Hand-off contract with Dart (identical to the iOS path):
  *   1. Native creates the engine, registers plugins, starts the
@@ -86,6 +90,44 @@ class AlarmSyncWorker(
         /// expected runtime.
         private const val SYNC_TIMEOUT_MS = 30_000L
 
+        /// Unique name for the PERIODIC window-roll refresh — distinct from
+        /// the one-shot boot name so the two never collide in WorkManager.
+        private const val UNIQUE_PERIODIC_NAME = "rostrik_alarm_sync_periodic"
+
+        /// How often the periodic refresh runs. The OS pending set covers a
+        /// rolling 14-DAY window, so a 12-hour cadence has ~27 chances to
+        /// land before the window could ever empty — WorkManager may defer
+        /// individual runs for Doze/battery, and that slack is exactly why
+        /// the cadence is this dense relative to the deadline. Battery cost
+        /// is negligible: the sync is a ≤30s one-shot reconcile that issues
+        /// zero platform calls when nothing changed.
+        private const val PERIODIC_INTERVAL_HOURS = 12L
+
+        /** [WorkManager.getInstance] with the DIRECT-BOOT repair (Pixel 9 XL
+         *  field bug): on FBE devices LOCKED_BOOT_COMPLETED starts this app's
+         *  process BEFORE first unlock, where androidx-startup's
+         *  WorkManagerInitializer is skipped (non-direct-boot-aware providers
+         *  don't run, and the Room DB is credential-encrypted anyway). The
+         *  post-unlock BOOT_COMPLETED then lands in that SAME process, where
+         *  getInstance STILL throws "WorkManager is not initialized" — the
+         *  boot reconcile silently died this way on every reboot. Initialize
+         *  on demand and retry; pre-unlock the initialize itself fails and
+         *  the exception propagates to the caller's catch (the native store
+         *  re-arm has already restored the alarms by then). */
+        private fun workManager(context: Context): WorkManager =
+            try {
+                WorkManager.getInstance(context)
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "WorkManager uninitialized (direct-boot-born process) — initializing on demand")
+                try {
+                    WorkManager.initialize(context, Configuration.Builder().build())
+                } catch (ignored: IllegalStateException) {
+                    // Lost a race with another initializer — getInstance below
+                    // now succeeds either way.
+                }
+                WorkManager.getInstance(context)
+            }
+
         fun enqueueOneShot(context: Context) {
             val request = OneTimeWorkRequestBuilder<AlarmSyncWorker>()
                 // No constraints — boot recovery must run regardless
@@ -93,9 +135,32 @@ class AlarmSyncWorker(
                 // light and the user expects alarms to be ready
                 // immediately after unlock.
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
+            workManager(context).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.KEEP,
+                request,
+            )
+        }
+
+        /** The 14-day-window ROLL guarantee (audit F1): without this, the OS
+         *  pending set only advanced when the app was opened, data changed,
+         *  or the device rebooted — a user who did none of those for two
+         *  weeks silently stopped getting alarms on day 15. Registered from
+         *  MainActivity on every launch; KEEP makes re-enqueuing a no-op and
+         *  WorkManager persists the schedule across reboots. Safe alongside
+         *  a live app: the Dart entrypoint bails when the main isolate is
+         *  alive (it owns reconciliation while the app runs). */
+        fun enqueuePeriodicRefresh(context: Context) {
+            val request = PeriodicWorkRequestBuilder<AlarmSyncWorker>(
+                PERIODIC_INTERVAL_HOURS,
+                TimeUnit.HOURS,
+            )
+                // No constraints — same rationale as the boot path: the roll
+                // must happen regardless of charging/network/idle state.
+                .build()
+            workManager(context).enqueueUniquePeriodicWork(
+                UNIQUE_PERIODIC_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
                 request,
             )
         }
@@ -133,13 +198,24 @@ class AlarmSyncWorker(
 
             engine.dartExecutor.executeDartEntrypoint(entrypoint)
 
-            // GeneratedPluginRegistrant is the auto-generated file in
-            // io.flutter.plugins. It registers every plugin in the
-            // app — including flutter_local_notifications, which the
-            // Dart entrypoint needs to talk to AlarmManager. Without
-            // this call, the entrypoint's plugin method calls return
+            // GeneratedPluginRegistrant registers every Flutter plugin the app
+            // uses (path_provider, shared_preferences, …) into this headless
+            // engine. Without it the entrypoint's plugin calls return
             // MissingPluginException.
             GeneratedPluginRegistrant.registerWith(engine)
+
+            // Wire the SAME native exact-alarm handler MainActivity uses, so the
+            // background sync's NativeAlarmScheduler.scheduleAt / .cancel land on
+            // a live handler in THIS engine. This is the flutter_local_
+            // notifications replacement: FLN self-registered via the plugin
+            // registrant above, but our hand-written AlarmManager bridge has to
+            // be registered explicitly in each engine — without this the boot
+            // re-sync would MissingPluginException on the first scheduleAt and
+            // alarms would never re-arm after a reboot.
+            NativeAlarmScheduling.register(
+                engine.dartExecutor.binaryMessenger,
+                applicationContext,
+            )
 
             val channel = MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
             val syncCompleted = CompletableDeferred<Boolean>()

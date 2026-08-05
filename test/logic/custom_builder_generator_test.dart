@@ -308,6 +308,88 @@ void main() {
     });
   });
 
+  group('generateAndPersistCustom — forever window (materialiseTo)', () {
+    test('materialises every calendar day in [start, materialiseTo) and anchors',
+        () async {
+      // 2-day cycle: work on day 0, nothing (Off) on day 1.
+      const day = ShiftBlock(
+        type: ShiftType.day,
+        startDayIndex: 0,
+        endDayIndex: 0,
+        startMinutes: 7 * 60,
+        endMinutes: 15 * 60,
+      );
+      final generated = await generator.generateAndPersistCustom(
+        label: 'Forever',
+        startDate: DateTime(2026, 6, 1),
+        cycleLengthDays: 2,
+        blocks: const [day],
+        materialiseTo: DateTime(2026, 7, 1), // 30-day window
+      );
+
+      // 30 calendar days; the block only covers cycle position 0 (every other
+      // day) → 15 Day shifts.
+      expect(generated, hasLength(15));
+      // The cycle is anchored → the resolver projects it indefinitely.
+      final cycle = (await cycles.getAll()).single;
+      expect(cycle.isAnchored, isTrue);
+      expect(cycle.anchorDate, DateTime(2026, 6, 1));
+    });
+
+    test('splits materialise across the whole window (2 shifts per day)',
+        () async {
+      const morning = ShiftBlock(
+        type: ShiftType.day,
+        startDayIndex: 0,
+        endDayIndex: 0,
+        startMinutes: 6 * 60,
+        endMinutes: 10 * 60,
+      );
+      const evening = ShiftBlock(
+        type: ShiftType.afternoon,
+        startDayIndex: 0,
+        endDayIndex: 0,
+        startMinutes: 15 * 60,
+        endMinutes: 19 * 60,
+      );
+      final generated = await generator.generateAndPersistCustom(
+        label: 'Split forever',
+        startDate: DateTime(2026, 6, 1),
+        cycleLengthDays: 1, // every day carries both
+        blocks: const [morning, evening],
+        materialiseTo: DateTime(2026, 6, 11), // 10 days
+      );
+
+      expect(generated, hasLength(20)); // 10 days × 2 shifts
+      final byDate = <DateTime, int>{};
+      for (final s in generated) {
+        byDate[s.date] = (byDate[s.date] ?? 0) + 1;
+      }
+      expect(byDate.values, everyElement(equals(2)));
+    });
+
+    test('materialiseTo not after start throws, writes nothing', () async {
+      const b = ShiftBlock(
+        type: ShiftType.day,
+        startDayIndex: 0,
+        endDayIndex: 0,
+        startMinutes: 7 * 60,
+        endMinutes: 15 * 60,
+      );
+      expect(
+        () => generator.generateAndPersistCustom(
+          label: 'x',
+          startDate: DateTime(2026, 6, 1),
+          cycleLengthDays: 1,
+          blocks: const [b],
+          materialiseTo: DateTime(2026, 6, 1),
+        ),
+        throwsA(isA<RosterGenerationException>()),
+      );
+      expect(await cycles.getAll(), isEmpty);
+    });
+  });
+
   test('zero repeatCount throws RosterGenerationException, writes nothing',
       () async {
     const b = ShiftBlock(

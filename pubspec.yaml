@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.5+6
 
 environment:
   sdk: ^3.11.4
@@ -40,16 +40,11 @@ dependencies:
   hive_ce_flutter: ^2.0.0
   uuid: ^4.0.0
 
-  # Alarm engine. flutter_local_notifications drives delivery via
-  # AndroidScheduleMode.alarmClock (AlarmManager.setAlarmClock under the hood),
-  # which bypasses Doze and battery optimization on modern Android without
-  # requiring USE_EXACT_ALARM. timezone is required by zonedSchedule for DST.
-  # permission_handler covers POST_NOTIFICATIONS (Android 13+) + iOS auth.
-  flutter_local_notifications: ^21.0.0
-  timezone: ^0.11.0
-  # Resolves the device's IANA tz id at runtime so zonedSchedule pins to a
-  # real location (DST-correct) instead of guessing.
-  flutter_timezone: ^5.0.2
+  # Alarm engine. Delivery is a fully native Android layer (AlarmManager.
+  # setAlarmClock → AlarmReceiver → AlarmAudioService + native AlarmActivity),
+  # so there's no notification plugin or timezone DB dependency.
+  # permission_handler covers POST_NOTIFICATIONS (Android 13+), the exact-alarm
+  # capability, and SYSTEM_ALERT_WINDOW (overlay).
   permission_handler: ^12.0.1
 
   # State management bridge — exposes repository streams to the widget
@@ -69,12 +64,6 @@ dependencies:
   google_mlkit_text_recognition: ^0.15.1
   sensors_plus: ^7.0.0
 
-  # In-app preview of the bundled alarm tones in the create/edit sheet. NOT in
-  # the alarm-firing path — the OS owns alarm audio (Android channel sound +
-  # FLAG_INSISTENT, iOS notification sound). The previewer configures an
-  # alarm-usage audio context with transient (duck-others) focus so the preview
-  # plays at alarm loudness without permanently stealing audio focus.
-  audioplayers: ^6.0.0
   # iOS-only at runtime: resolves the app container's Library/ dir so the
   # bundled WAV assets can be copied into Library/Sounds/, where
   # UNNotificationSound resolves them by name (no Xcode bundle membership).
@@ -82,6 +71,10 @@ dependencies:
   # we import it.
   path_provider: ^2.1.0
   file_picker: ^11.0.2
+  share_plus: ^12.0.2
+  shared_preferences: ^2.5.5
+  url_launcher: ^6.3.2
+  in_app_purchase: ^3.3.0
 
 dev_dependencies:
   flutter_test:
@@ -97,6 +90,8 @@ dev_dependencies:
   # Generates Hive TypeAdapters for @HiveType-annotated classes/enums.
   hive_ce_generator: ^1.0.0
   build_runner: ^2.4.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -109,11 +104,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Bundled alarm tones (16-bit PCM WAV @ 44.1 kHz). Master copies used by the
-  # in-app previewer (audioplayers AssetSource) AND copied to iOS Library/Sounds
-  # at startup. The Android notification-channel copies live separately in
-  # android/app/src/main/res/raw/. See assets/sounds/README.md for prep + the
-  # res/raw mp3→wav swap note.
+  # Bundled alarm tones (16-bit PCM WAV @ 44.1 kHz). Master copies, copied to
+  # iOS Library/Sounds at startup. The Android notification-channel copies live
+  # separately in android/app/src/main/res/raw/. See assets/sounds/README.md
+  # for prep + the res/raw mp3→wav swap note.
   assets:
     - assets/sounds/
     # Branding (app logo etc.). Folder registration: any file dropped in is
@@ -151,3 +145,34 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# ── App launcher icons (flutter_launcher_icons) ──────────────────────────────
+# Generates Android mipmaps + iOS AppIcon set from one master PNG. Run after
+# dropping the source in: `dart run flutter_launcher_icons`.
+# Source: a 1024x1024 PNG at the path below (the same asset the WelcomeScreen
+# hero uses). Adaptive (Android 8+) uses a pitch-black background to match the
+# forced-dark theme; iOS strips alpha (the App Store rejects transparent icons).
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/rostrik_logo.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  background_color_ios: "#000000"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/rostrik_logo.png"
+
+# ── Native splash screen (flutter_native_splash) ─────────────────────────────
+# Pitch-black splash that flows seamlessly into the forced-dark app. Run after
+# dropping the source in: `dart run flutter_native_splash:create`.
+# `image` is the centred logo; the Android 12+ block is required separately
+# because S+ uses the platform splash API (its icon is masked to a circle).
+flutter_native_splash:
+  color: "#000000"
+  image: assets/images/rostrik_logo.png
+  android_12:
+    color: "#000000"
+    image: assets/images/rostrik_logo.png
+  android: true
+  ios: true
+  web: false

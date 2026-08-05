@@ -21,7 +21,16 @@ class HiveAlarmSettingsRepository implements AlarmSettingsRepository {
   Future<AlarmSettings> read() async => _box.get(_key) ?? AlarmSettings.defaults;
 
   @override
-  Future<void> write(AlarmSettings settings) => _box.put(_key, settings);
+  Future<void> write(AlarmSettings settings) async {
+    await _box.put(_key, settings);
+    // Force the frame to disk before resolving — same durability guarantee the
+    // AppAlarm repo makes, and for the same reason: on an aggressive-reap OEM
+    // device (the Pixel 9 this project chases), a bare `put` can be dropped if
+    // the process is killed before Hive's lazy flush lands, silently reverting
+    // the user's lead-time / vibration change to the default. Settings writes
+    // are rare + user-initiated, so the fsync cost is irrelevant.
+    await _box.flush();
+  }
 
   @override
   Stream<AlarmSettings> watch() {

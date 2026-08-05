@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/models/calendar_activity.dart';
 import '../../data/models/shift.dart';
-import '../../data/models/shift_cycle.dart';
-import '../../data/repositories/shift_repository.dart';
-import '../../logic/cycle_resolver.dart';
 import '../../state/app_preferences.dart';
 import '../app_theme.dart';
-import '../calendar/infinite_calendar.dart';
+import '../calendar/shift_calendar.dart';
+import '../day_actions_sheet.dart';
 import '../roster/shift_filter.dart';
 import '../roster/timeline_view.dart';
 import '../settings_screen.dart';
@@ -33,8 +32,18 @@ enum _TimelineView { list, month }
 class _TimelineScreenState extends State<TimelineScreen> {
   // Local, screen-scoped state — the whole point of the toggle is an instant
   // in-place swap, so this never leaves the widget.
-  _TimelineView _view = _TimelineView.list;
+  late _TimelineView _view;
   ShiftFilter _filter = ShiftFilter.all;
+
+  @override
+  void initState() {
+    super.initState();
+    // Honour the user's "which view opens first" preference (Settings →
+    // Preferences). Read once here; after mount the in-screen toggle owns it.
+    _view = AppPreferences.timelineDefaultsToMonthOf(context)
+        ? _TimelineView.month
+        : _TimelineView.list;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,123 +164,76 @@ class _TimelineListBody extends StatelessWidget {
   }
 }
 
-/// Month View — the migrated Calendar body: the resolver-driven month grid for
-/// the active anchored cycle, or a calm empty state when none exists.
+/// Month View — bound to the SAME `List<Shift>` stream the List view watches,
+/// so calendar and list are a single source of truth. Cells render strictly
+/// from instantiated Hive shifts (blank where there are none — no pattern
+/// projection), so a custom 1-week roster shows for exactly its materialised
+/// days and manual edits/deletions reflect the instant the stream re-emits.
+///
+/// Tapping any day opens the shared day chooser ([showDayActionsSheet]): edit
+/// an existing shift, add a shift, or add/edit a calendar activity (event, task,
+/// birthday). The calendar now doubles as a normal calendar without touching the
+/// alarm logic — activities live in their own box and their optional reminders
+/// ride a separate, lightweight channel.
 class _TimelineMonthBody extends StatelessWidget {
   const _TimelineMonthBody();
 
   @override
   Widget build(BuildContext context) {
-    final cycles = context.watch<List<ShiftCycle>>();
-    final active = _pickActiveCycle(cycles);
-    if (active == null) return const _EmptyCycleState();
-    return InfiniteCalendarView(
-      cycle: active,
-      startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
-      onDayTapped: (date, resolution) => _onDayTapped(context, date, resolution),
+    final shifts = context.watch<List<Shift>>();
+    final activities = context.watch<List<CalendarActivity>>();
+    // Which days carry an activity → marker dots. Midnight-normalised keys match
+    // the calendar's cell lookup.
+    final activityDays = <DateTime>{
+      for (final a in activities) DateTime(a.date.year, a.date.month, a.date.day),
+    };
+    // The calendar takes the available space (scrolling the few px a 6-row
+    // month needs on a short screen rather than overflowing the column — the
+    // old fixed Column overflowed by 8px on 6-row months); the colour legend
+    // stays pinned at the bottom below it.
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: ShiftCalendarView(
+              shifts: shifts,
+              activityDays: activityDays,
+              startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
+              onDayTapped: (date, shiftsOnDate) =>
+                  _onDayTapped(context, date, shiftsOnDate, activities),
+            ),
+          ),
+        ),
+        const ShiftCalendarLegend(),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
-  /// Most-recently-created anchored cycle — matches the user's "the rotation I
-  /// just set up" mental model. Null when no anchored cycle exists.
-  static ShiftCycle? _pickActiveCycle(List<ShiftCycle> cycles) {
-    final anchored = cycles.where((c) => c.isAnchored).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return anchored.isEmpty ? null : anchored.first;
-  }
-
-  Future<void> _onDayTapped(
+  /// Opens the day chooser for the tapped date, passing the shifts AND the
+  /// activities already on that day so each can be edited in place (or a new one
+  /// added). One entry point; the sheet routes to the right editor.
+  void _onDayTapped(
     BuildContext context,
     DateTime date,
-    CycleResolution resolution,
-  ) async {
-    final repo = context.read<ShiftRepository>();
-    final cellMidnight = DateTime(date.year, date.month, date.day);
-    final nextMidnight = DateTime(date.year, date.month, date.day + 1);
-    final existingShifts = await repo.getInRange(cellMidnight, nextMidnight);
-    final materialised = existingShifts.isEmpty ? null : existingShifts.first;
-
-    if (!context.mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) => CycleResolutionSheet(
-        date: date,
-        resolution: resolution,
-        materialisedActions: materialised == null
-            ? null
-            : _buildMaterialisedActions(context, materialised),
-      ),
-    );
-  }
-
-  List<Widget> _buildMaterialisedActions(BuildContext context, Shift shift) {
-    final theme = Theme.of(context);
-    return [
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.check_circle_outline,
-              color: theme.colorScheme.primary,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Scheduled — edit from the List view.',
-                style: theme.textTheme.bodyMedium,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ];
-  }
-}
-
-class _EmptyCycleState extends StatelessWidget {
-  const _EmptyCycleState();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.calendar_today_outlined,
-              size: 64,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No active rotation',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Generate a rotation from the Manage tab to see your infinite '
-              'calendar projection here.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
+    List<Shift> shiftsOnDate,
+    List<CalendarActivity> allActivities,
+  ) {
+    final key = DateTime(date.year, date.month, date.day);
+    final activitiesOnDate = [
+      for (final a in allActivities)
+        if (a.date == key) a,
+    ]..sort((a, b) {
+        // All-day first, then by time; stable enough for the chooser list.
+        final at = a.timeMinutes ?? -1;
+        final bt = b.timeMinutes ?? -1;
+        return at.compareTo(bt);
+      });
+    showDayActionsSheet(
+      context,
+      date: date,
+      shiftsOnDate: shiftsOnDate,
+      activitiesOnDate: activitiesOnDate,
     );
   }
 }

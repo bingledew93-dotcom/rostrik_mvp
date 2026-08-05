@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../alarms/alarm_sound.dart';
+import '../alarms/default_tone_prefs.dart';
 import '../alarms/ringtone_channel.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
@@ -18,6 +20,7 @@ import '../state/app_preferences.dart';
 import '../util/weekday_mask.dart';
 import 'alarm_time_projection.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// Monday-first short weekday labels for the weekly-repeat chips. Index `d - 1`
 /// for an ISO weekday (`DateTime.monday == 1`).
@@ -86,13 +89,21 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       TextEditingController(text: 'Wake Up');
   AppAlarmRepeatType _repeatType = AppAlarmRepeatType.followsRotation;
   ShiftType _linkedShiftType = ShiftType.day;
-  // Lead-time mode for follows-rotation alarms. `true` (default) means "use the
-  // global AlarmSettings.leadTime" → a null per-alarm offset. `false` means
-  // this alarm carries its own override (`_customOffsetMinutes`).
-  bool _useGlobalLeadTime = true;
-  // Custom override value, kept live across mode flips so a user who briefly
-  // switches to the default and back doesn't lose their tuned offset.
-  int _customOffsetMinutes = 90;
+  // THE lead time for a follows-rotation alarm in lead-time mode — what the
+  // engine fires on, as-is (persisted to `relativeOffsetMinutes` on Save).
+  // The old "Use default vs Custom" sub-toggle is gone: there is one duration
+  // selector, seeded in `initState` from the global AlarmSettings.leadTime for
+  // a new alarm (or the alarm's own offset in Edit Mode) so the starting value
+  // still matches what Settings would have given.
+  int _leadTimeMinutes = 60;
+  // Timing mode for follows-rotation alarms. `false` (default) = Lead Time (fire
+  // before the shift). `true` = Exact Time (fire at `_exactTimeMinutes` on the
+  // shift's date, ignoring the lead). Only meaningful for follows-rotation.
+  bool _isExactTime = false;
+  // Exact fire clock (minute-of-day) when `_isExactTime` is on. Kept live across
+  // mode flips like `_customOffsetMinutes`. Default 04:15 — a representative
+  // pre-dawn shift-worker wake time the user can tweak.
+  int _exactTimeMinutes = 4 * 60 + 15;
   // Critical-Shift wake mechanics (shake-to-dismiss + hold fail-safe).
   bool _isCriticalShift = false;
   // Bundled tone this alarm will ring (when no custom ringtone is set). The OS
@@ -107,8 +118,6 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   // Selected ISO weekdays (1..7) for a weekly alarm. Empty until the user picks
   // days; a weekly alarm can't be saved while empty.
   final Set<int> _weekdays = <int>{};
-  // One-time only: delete the record permanently the instant it's dismissed.
-  bool _autoDeleteAfterFiring = false;
   bool _saving = false;
   // True while the native preview MediaPlayer is looping the current ringtone
   // (the Phase-2a "Play Now" test harness). Toggled by the row's Play/Stop
@@ -126,6 +135,13 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     super.initState();
     _ringtoneChannel = widget.ringtoneChannel ?? RingtoneChannel();
 
+    // Seed the duration selector from the global lead time (`read`, not
+    // `watch` — a snapshot is right for a draft default). Edit Mode overrides
+    // it below with the alarm's own offset; legacy records with a null offset
+    // (the retired "track the global default" state) also land on the global
+    // value, which is exactly what they fire on today.
+    _leadTimeMinutes = context.read<AlarmSettings>().leadTime.inMinutes;
+
     // Edit Mode: pre-populate every field from the alarm being edited so the
     // user lands on its exact current state (label, sound, sliders, chips,
     // weekly days, toggles).
@@ -135,17 +151,23 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _labelController.text = initial.label;
       _repeatType = initial.repeatType;
       _linkedShiftType = initial.linkedShiftType ?? ShiftType.day;
-      // A null override means "track the global default"; a value means this
-      // alarm carries its own lead time (Custom mode, slider pre-set to it).
-      _useGlobalLeadTime = initial.relativeOffsetMinutes == null;
-      _customOffsetMinutes = initial.relativeOffsetMinutes ?? _customOffsetMinutes;
+      _leadTimeMinutes = initial.relativeOffsetMinutes ?? _leadTimeMinutes;
+      _isExactTime = initial.isExactTime;
+      _exactTimeMinutes = initial.exactTimeMinutes ?? _exactTimeMinutes;
       _isCriticalShift = initial.isCriticalShift;
       _soundKey = initial.soundKey;
       _weekdays.addAll(weekdaysFromMask(initial.weekdaysBitmask));
-      _autoDeleteAfterFiring = initial.autoDeleteAfterFiring;
       _customRingtoneUri = initial.customRingtoneUri;
       _customRingtoneName = initial.customRingtoneName;
       _ringtoneSource = initial.ringtoneSource;
+    } else if (Hive.isBoxOpen('settings')) {
+      // NEW alarm: start on the user's remembered default tone (the sound they
+      // last chose), so their preference sticks without re-picking every time.
+      final d = DefaultTonePrefs.read(Hive.box('settings'));
+      _soundKey = d.soundKey;
+      _ringtoneSource = d.source;
+      _customRingtoneUri = d.uri;
+      _customRingtoneName = d.name;
     }
   }
 
@@ -176,6 +198,16 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Text(
+                    'Your pick becomes the default for new alarms.',
+                    style: Theme.of(sheetCtx).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(sheetCtx).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
                 // Bundled tones — selecting one sets this alarm's soundKey.
                 for (final s in kAlarmSounds)
                   ListTile(
@@ -263,6 +295,13 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _customRingtoneName = pick.title;
       _ringtoneSource = RingtoneSource.system;
     });
+    // Remember this as the default so new alarms start on it. System tones have
+    // a stable content:// URI, so they're safe to store as a shared default.
+    await _rememberDefaultTone(
+      source: RingtoneSource.system,
+      uri: pick.uri,
+      name: pick.title,
+    );
   }
 
   /// Selects a BUNDLED tone for THIS alarm: sets [_soundKey] and resets the
@@ -278,6 +317,32 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _customRingtoneName = null;
       _ringtoneSource = RingtoneSource.classic;
     });
+    // Remember this bundled tone as the default for new alarms.
+    await _rememberDefaultTone(
+      source: RingtoneSource.classic,
+      soundKey: soundKey,
+    );
+  }
+
+  /// Persists the picked tone as the user's default (the tone new alarms start
+  /// on). Only bundled + system tones are stored — a vault (file) tone is
+  /// per-alarm, so it never becomes the shared default (see [DefaultTonePrefs]).
+  Future<void> _rememberDefaultTone({
+    required RingtoneSource source,
+    String? soundKey,
+    String? uri,
+    String? name,
+  }) async {
+    if (!Hive.isBoxOpen('settings')) return;
+    await DefaultTonePrefs.write(
+      Hive.box('settings'),
+      DefaultTone(
+        soundKey: soundKey ?? _soundKey,
+        source: source,
+        uri: uri,
+        name: name,
+      ),
+    );
   }
 
   /// Deletes the current draft's vault file if it is one — called before
@@ -338,8 +403,8 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: TimeOfDay(
         hour: _minutesOfDay ~/ 60,
         minute: _minutesOfDay % 60,
@@ -347,6 +412,21 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     );
     if (!mounted || picked == null) return;
     setState(() => _minutesOfDay = picked.hour * 60 + picked.minute);
+  }
+
+  /// Exact-time picker for a follows-rotation alarm in [_isExactTime] mode. Like
+  /// [_pickTime] it forces the tap-to-type number pad; the picked time becomes
+  /// the alarm's absolute fire clock on each linked shift's date.
+  Future<void> _pickExactTime() async {
+    final picked = await pickPreferredTime(
+      context,
+      initialTime: TimeOfDay(
+        hour: _exactTimeMinutes ~/ 60,
+        minute: _exactTimeMinutes % 60,
+      ),
+    );
+    if (!mounted || picked == null) return;
+    setState(() => _exactTimeMinutes = picked.hour * 60 + picked.minute);
   }
 
   Future<void> _save() async {
@@ -359,7 +439,6 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     final isFollowsRotation =
         _repeatType == AppAlarmRepeatType.followsRotation;
     final isWeekly = _repeatType == AppAlarmRepeatType.weekly;
-    final isOneTime = _repeatType == AppAlarmRepeatType.oneTime;
     final alarm = AppAlarm(
       // Edit Mode reuses the existing id so the repository updates the record
       // in place (one card, one reconcile) instead of minting a duplicate.
@@ -372,18 +451,28 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       // Only stamp the link if the repeat mode wants it; weekly / oneTime
       // alarms get a null link so the sync service knows to ignore it.
       linkedShiftType: isFollowsRotation ? _linkedShiftType : null,
-      // null → use the global lead time (the primary default). A value → this
-      // alarm overrides the global lead time. weekly / oneTime alarms never
-      // carry an offset (they fire at minutesOfDay), so force null there.
+      // Lead-time mode persists the selected duration AS the alarm's absolute
+      // lead — the engine fires `shiftStart − this`, no sub-modes. weekly /
+      // oneTime alarms never carry an offset (they fire at minutesOfDay), and
+      // exact-time alarms ignore the lead entirely, so force null in both
+      // those cases.
       relativeOffsetMinutes:
-          isFollowsRotation && !_useGlobalLeadTime ? _customOffsetMinutes : null,
+          isFollowsRotation && !_isExactTime ? _leadTimeMinutes : null,
+      // Exact-time mode + its absolute fire clock — follows-rotation only. weekly
+      // / oneTime already fire at an absolute minutesOfDay, so they stay lead-
+      // time-false with a null exact time.
+      isExactTime: isFollowsRotation && _isExactTime,
+      exactTimeMinutes:
+          isFollowsRotation && _isExactTime ? _exactTimeMinutes : null,
       isCriticalShift: _isCriticalShift,
       soundKey: _soundKey,
       // Weekday mask only carries meaning for weekly alarms; force 0 otherwise
       // so flipping repeat type can't leave a stale day set behind.
       weekdaysBitmask: isWeekly ? weekdayMaskFromSet(_weekdays) : 0,
-      // Auto-delete is a one-time-only affordance.
-      autoDeleteAfterFiring: isOneTime && _autoDeleteAfterFiring,
+      // `autoDeleteAfterFiring` is intentionally left at its default (false):
+      // one-time alarms now self-delete after firing BY DESIGN (see
+      // `shouldDeleteAfterFiring`), so the field is no longer a user choice and
+      // there's no UI for it.
       // Per-alarm custom ringtone draft → persisted on the alarm itself.
       customRingtoneUri: _customRingtoneUri,
       customRingtoneName: _customRingtoneName,
@@ -405,13 +494,13 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     final picked = await showDialog<int>(
       context: context,
       builder: (_) => _OffsetPickerDialog(
-        initialMinutes: _customOffsetMinutes,
+        initialMinutes: _leadTimeMinutes,
         shiftStartMinutes: shiftStart,
         shiftLabel: shiftTypeLabel(_linkedShiftType),
       ),
     );
     if (!mounted || picked == null) return;
-    setState(() => _customOffsetMinutes = picked);
+    setState(() => _leadTimeMinutes = picked);
   }
 
   /// A weekly alarm with no day selected would never fire, so Save is blocked
@@ -421,10 +510,11 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _repeatType != AppAlarmRepeatType.weekly || _weekdays.isNotEmpty;
 
   /// The reveal beneath the Repeat selector, specific to the chosen repeat type:
-  ///   * followsRotation → lead-time mode + linked-shift pickers;
+  ///   * followsRotation → timing-mode toggle (Lead Time vs Exact Time) + the
+  ///     mode's control + linked-shift picker;
   ///   * weekly → the Mon–Sun multi-select day chips;
-  ///   * oneTime → the "auto-delete after firing" toggle.
-  Widget _buildRepeatReveal(ThemeData theme, int globalLeadMinutes) {
+  ///   * oneTime → nothing (no per-alarm options; it self-deletes after firing).
+  Widget _buildRepeatReveal(ThemeData theme, bool use24Hour) {
     switch (_repeatType) {
       case AppAlarmRepeatType.followsRotation:
         return Padding(
@@ -435,28 +525,48 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Lead time', style: theme.textTheme.labelLarge),
+                child: Text('Alarm timing', style: theme.textTheme.labelLarge),
               ),
               const SizedBox(height: 8),
-              // Global default vs per-alarm override. A follows-rotation alarm
-              // always fires BEFORE the shift — there is no absolute-clock-time
-              // mode, because a fixed time can't track a shift that moves. "Use
-              // default" pulls the global lead time (single source of truth);
-              // "Custom" overrides it for this alarm only.
+              // Lead Time (fire BEFORE the shift, tracking it) vs Exact Time
+              // (fire at a fixed clock on the shift's date). Exact mode is for
+              // workers who want a fixed wake regardless of the global lead.
               SegmentedButton<bool>(
-                key: const ValueKey('create-alarm-lead-mode'),
-                segments: [
-                  ButtonSegment(
-                    value: true,
-                    label: Text('Use default ($globalLeadMinutes min)'),
-                  ),
-                  const ButtonSegment(value: false, label: Text('Custom')),
+                key: const ValueKey('create-alarm-timing-mode'),
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Lead time')),
+                  ButtonSegment(value: true, label: Text('Exact time')),
                 ],
-                selected: {_useGlobalLeadTime},
+                selected: {_isExactTime},
                 onSelectionChanged: (s) =>
-                    setState(() => _useGlobalLeadTime = s.single),
+                    setState(() => _isExactTime = s.single),
                 showSelectedIcon: false,
               ),
+              const SizedBox(height: 12),
+              // Mode-specific control, one per mode. Exact → forced-numpad
+              // time picker; Lead → a single duration selector (the old "Use
+              // default vs Custom" sub-toggle was field-tested as redundant —
+              // whatever duration sits here IS the alarm's lead time, full
+              // stop). Both open via the slider dialog / numpad respectively.
+              if (_isExactTime)
+                OutlinedButton.icon(
+                  key: const ValueKey('create-alarm-exact-time'),
+                  onPressed: _pickExactTime,
+                  icon: const Icon(Icons.schedule),
+                  label: Text(
+                    'Fires at '
+                    '${formatClock(_exactTimeMinutes, use24Hour: use24Hour)}',
+                  ),
+                )
+              else
+                OutlinedButton.icon(
+                  key: const ValueKey('create-alarm-lead-duration'),
+                  onPressed: _pickRelativeOffset,
+                  icon: const Icon(Icons.timer_outlined),
+                  label: Text(
+                    '${formatLeadOffset(_leadTimeMinutes)} before shift start',
+                  ),
+                ),
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,
@@ -517,18 +627,11 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
           ),
         );
       case AppAlarmRepeatType.oneTime:
-        return Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: SwitchListTile(
-            key: const ValueKey('create-alarm-autodelete'),
-            contentPadding: EdgeInsets.zero,
-            value: _autoDeleteAfterFiring,
-            onChanged: (v) => setState(() => _autoDeleteAfterFiring = v),
-            title: const Text('Auto-delete after firing'),
-            subtitle:
-                const Text('Remove this alarm once it rings and is dismissed'),
-          ),
-        );
+        // No reveal: a one-time alarm has no per-alarm options. It self-deletes
+        // after firing by design (see `shouldDeleteAfterFiring`), so there's no
+        // "auto-delete" switch to show — a placebo toggle for behaviour the user
+        // can't change.
+        return const SizedBox.shrink();
     }
   }
 
@@ -536,7 +639,6 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final alarmSettings = context.watch<AlarmSettings>();
-    final globalLeadMinutes = alarmSettings.leadTime.inMinutes;
     // Audio summary for the Ringtone row — read from THIS alarm's local draft.
     // A custom ringtone (file / system tone) takes precedence and shows its
     // name; otherwise the row shows the selected BUNDLED tone label (Classic /
@@ -552,20 +654,22 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     final isFollowsRotation =
         _repeatType == AppAlarmRepeatType.followsRotation;
     final showLeadTime = isFollowsRotation;
-    // Active lead: the global default, or this alarm's custom override.
-    final heroOffset =
-        _useGlobalLeadTime ? globalLeadMinutes : _customOffsetMinutes;
-    // The linked shift's start (from the roster) and the resulting fire clock.
+    // The linked shift's start (from the roster) and the resulting fire clock
+    // for lead-time mode — `shiftStart − _leadTimeMinutes`, exactly what Save
+    // persists and the engine schedules.
     final shiftStart =
         resolveShiftStartMinutes(shifts, _linkedShiftType, now: DateTime.now());
-    final fireClock = fireClockMinutes(shiftStart, heroOffset);
-    // Hero headline: the calculated firing CLOCK time (AM/PM). One-time alarms
-    // ring at their picked time; follows-rotation alarms ring `shiftStart −
-    // lead`. The offset itself is demoted to the caption below.
+    final fireClock = fireClockMinutes(shiftStart, _leadTimeMinutes);
+    // Hero headline: the firing CLOCK time (AM/PM). One-time / weekly alarms
+    // ring at their picked `minutesOfDay`; follows-rotation alarms ring either
+    // the exact picked time (exact-time mode) or `shiftStart − lead` (lead-time
+    // mode). The offset/mode detail is demoted to the caption below.
     final use24Hour = AppPreferences.use24HourOf(context);
-    final heroClock = showLeadTime
-        ? formatClock(fireClock, use24Hour: use24Hour)
-        : formatClock(_minutesOfDay, use24Hour: use24Hour);
+    final heroClock = !showLeadTime
+        ? formatClock(_minutesOfDay, use24Hour: use24Hour)
+        : (_isExactTime
+            ? formatClock(_exactTimeMinutes, use24Hour: use24Hour)
+            : formatClock(fireClock, use24Hour: use24Hour));
 
     return SafeArea(
       top: false,
@@ -583,16 +687,16 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            // Massive, easily-tappable hero — the calculated FIRING CLOCK TIME
-            // (e.g. "05:30 AM"). One-time → opens the time picker. Follows-
-            // rotation → read-only in default mode (the offset lives in
-            // Settings), tappable to edit the offset when custom. The offset
-            // moves to the caption below so the clock leads the hierarchy.
+            // Massive, easily-tappable hero — the FIRING CLOCK TIME (e.g.
+            // "05:30 AM"). One-time / weekly → opens the time picker. Follows-
+            // rotation: exact-time mode → opens the exact-time picker; lead-
+            // time mode → opens the duration selector. The detail moves to the
+            // caption below so the clock leads the hierarchy.
             InkWell(
               key: const ValueKey('create-alarm-time-tap'),
               onTap: !showLeadTime
                   ? _pickTime
-                  : (_useGlobalLeadTime ? null : _pickRelativeOffset),
+                  : (_isExactTime ? _pickExactTime : _pickRelativeOffset),
               borderRadius: BorderRadius.circular(16),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -609,16 +713,15 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                 ),
               ),
             ),
-            // Demoted offset caption: "1h 30m before Day shifts" (+ a Settings
-            // hint in default mode). Follows-rotation only — one-time alarms
-            // have no lead.
+            // Demoted timing caption. Lead-time mode: "1h 30m before Day
+            // shifts". Exact-time mode: "Exact time · Day shifts". Follows-
+            // rotation only — one-time/weekly alarms have no lead.
             if (showLeadTime)
               Text(
-                _useGlobalLeadTime
-                    ? '${formatLeadOffset(heroOffset)} before '
-                        '${shiftTypeLabel(_linkedShiftType)} shifts · '
-                        'default (Settings)'
-                    : '${formatLeadOffset(heroOffset)} before '
+                _isExactTime
+                    ? 'Exact time · '
+                        '${shiftTypeLabel(_linkedShiftType)} shifts'
+                    : '${formatLeadOffset(_leadTimeMinutes)} before '
                         '${shiftTypeLabel(_linkedShiftType)} shifts',
                 key: const ValueKey('create-alarm-offset-caption'),
                 textAlign: TextAlign.center,
@@ -769,7 +872,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
               alignment: Alignment.topCenter,
-              child: _buildRepeatReveal(theme, globalLeadMinutes),
+              child: _buildRepeatReveal(theme, use24Hour),
             ),
             const SizedBox(height: 24),
             FilledButton(

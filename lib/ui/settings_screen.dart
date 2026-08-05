@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../alarms/alarm_scheduler.dart';
 import '../data/models/alarm_settings.dart';
@@ -8,11 +10,16 @@ import '../data/models/shift_cycle.dart';
 import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
+import '../legal/legal.dart';
 import '../logic/cycle_service.dart';
+import '../purchase/entitlement_service.dart';
 import '../state/app_preferences.dart';
 import 'onboarding/onboarding_flow.dart';
+import 'onboarding/walkthrough_flow.dart';
 import 'pattern_picker_screen.dart';
 import 'shift_format.dart';
+import 'tips/screen_tip.dart';
+import 'work_history_screen.dart';
 
 /// Global alarm-settings screen. Reads via `context.watch<AlarmSettings>()`,
 /// writes via `context.read<AlarmSettingsRepository>().write(...)`.
@@ -40,11 +47,277 @@ class SettingsScreen extends StatelessWidget {
             Divider(height: 32),
             _ShiftCyclesSection(),
             Divider(height: 32),
+            _WorkHistorySection(),
+            Divider(height: 32),
             _PreferencesSection(),
             Divider(height: 32),
+            _HelpSection(),
+            Divider(height: 32),
+            // Debug-only trial/purchase shortcuts — renders nothing in release.
+            _DebugTrialSection(),
             _FactoryResetSection(),
+            Divider(height: 32),
+            _LegalAboutSection(),
+            _BrandingFooter(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "LEGAL & ABOUT" — Privacy Policy + Terms of Use tiles that open the external
+/// docs via url_launcher. Sits just above the footer so the legal links are the
+/// last thing in Settings, mirroring the consent the user gave at first launch.
+class _LegalAboutSection extends StatelessWidget {
+  const _LegalAboutSection();
+
+  Future<void> _open(BuildContext context, String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not open the link.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'LEGAL & ABOUT',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        ListTile(
+          key: const ValueKey('settings-privacy-policy'),
+          leading: const Icon(Icons.privacy_tip_outlined),
+          title: const Text('Privacy Policy'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _open(context, kPrivacyPolicyUrl),
+        ),
+        ListTile(
+          key: const ValueKey('settings-terms-of-use'),
+          leading: const Icon(Icons.description_outlined),
+          title: const Text('Terms of Use'),
+          trailing: const Icon(Icons.open_in_new, size: 18),
+          onTap: () => _open(context, kTermsOfUseUrl),
+        ),
+      ],
+    );
+  }
+}
+
+/// "HELP" — a single tile that replays the first-launch walkthrough (paint-a-
+/// roster practice + shake-to-dismiss test-run). Pushes the SAME [WalkthroughFlow]
+/// the onboarding flow shows; here [WalkthroughFlow.onFinish] just pops back to
+/// Settings, so it's a pure, side-effect-free replay the user can revisit
+/// anytime.
+class _HelpSection extends StatelessWidget {
+  const _HelpSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'HELP',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        ListTile(
+          key: const ValueKey('settings-replay-tutorial'),
+          leading: const Icon(Icons.school_outlined),
+          title: const Text('How it works'),
+          subtitle: const Text('Replay the quick tour — paint a roster + '
+              'shake-to-dismiss'),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (routeContext) => WalkthroughFlow(
+                onFinish: () => Navigator.of(routeContext).pop(),
+              ),
+            ),
+          ),
+        ),
+        const _ScreenTipsToggle(),
+      ],
+    );
+  }
+}
+
+/// "Show screen tips" — the master switch for the one-time per-screen coach
+/// cards. Turning it ON REPLAYS every tip (clears the per-screen seen flags via
+/// [ScreenTipsPrefs.setEnabled]), so it doubles as "show them to me again".
+/// Reactive: bound to the `settings` box so the switch reflects a tip's
+/// "Don't show tips" dismissal the moment it happens.
+class _ScreenTipsToggle extends StatelessWidget {
+  const _ScreenTipsToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Hive.isBoxOpen('settings')) return const SizedBox.shrink();
+    final box = Hive.box('settings');
+    return ValueListenableBuilder<Box>(
+      valueListenable: box.listenable(keys: [ScreenTipsPrefs.enabledKey]),
+      builder: (context, box, _) => SwitchListTile(
+        key: const ValueKey('settings-screen-tips-toggle'),
+        secondary: const Icon(Icons.lightbulb_outline),
+        title: const Text('Show screen tips'),
+        subtitle: const Text('One-time hints on each screen. Turn on to see '
+            'them again.'),
+        value: ScreenTipsPrefs.isEnabled(box),
+        onChanged: (v) => ScreenTipsPrefs.setEnabled(box, v),
+      ),
+    );
+  }
+}
+
+/// DEBUG-ONLY trial/purchase shortcuts so the 14-day paywall can be exercised
+/// on-device without waiting. Renders nothing in a release build (`kDebugMode`)
+/// AND when no [EntitlementService] is in the tree (a bare widget test), so it
+/// can never ship or break tests.
+class _DebugTrialSection extends StatelessWidget {
+  const _DebugTrialSection();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kDebugMode) return const SizedBox.shrink();
+    final service = context.watch<EntitlementService?>();
+    if (service == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final e = service.entitlement;
+    final state = e.locked
+        ? 'LOCKED (trial ended, not purchased)'
+        : e.purchased
+            ? 'Purchased — unlocked'
+            : 'Trial — ${e.trialDaysLeft} day${e.trialDaysLeft == 1 ? '' : 's'} left';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'DEBUG · TRIAL',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          child: Text(
+            'State: $state',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonal(
+                key: const ValueKey('debug-expire-trial'),
+                onPressed: () async {
+                  await service.debugExpireTrial();
+                  // Pop back to the (now-locked) root so the wall appears.
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((r) => r.isFirst);
+                  }
+                },
+                child: const Text('Expire trial now'),
+              ),
+              OutlinedButton(
+                key: const ValueKey('debug-reset-trial'),
+                onPressed: () => service.debugResetTrial(),
+                child: const Text('Reset trial (14 days)'),
+              ),
+              OutlinedButton(
+                key: const ValueKey('debug-grant-purchase'),
+                onPressed: () => service.debugGrantPurchase(),
+                child: const Text('Grant purchase'),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 32),
+      ],
+    );
+  }
+}
+
+/// Subtle brand sign-off at the very bottom of Settings: a dimmed logo + muted
+/// wordmark. Deliberately low-contrast — it's a quiet mark, not a CTA, so it
+/// reads as "you've reached the end" without competing with the live controls
+/// above. Uses the same asset + errorBuilder fallback as the WelcomeScreen
+/// hero, so it degrades to the alarm glyph if the logo is ever missing.
+class _BrandingFooter extends StatelessWidget {
+  const _BrandingFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      key: const ValueKey('settings-branding-footer'),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+      child: Column(
+        children: [
+          Opacity(
+            opacity: 0.30,
+            child: Image.asset(
+              'assets/images/rostrik_logo.png',
+              height: 44,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) =>
+                  Icon(Icons.alarm, size: 32, color: muted),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'ROSTRIK',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: muted.withValues(alpha: 0.55),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Alarms built outside the 9–5',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: muted.withValues(alpha: 0.45),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -195,7 +468,14 @@ class _SnoozeDurationSection extends StatelessWidget {
                     .toList(),
                 onChanged: (v) {
                   if (v == null) return;
-                  Hive.box('settings').put('snooze_duration', v);
+                  // put + flush: on an aggressive-reap device a bare put can be
+                  // dropped before Hive's lazy flush, reverting the snooze
+                  // interval to the 1-min default. The bg isolate reads this
+                  // same key, so a lost write also mis-times a killed-app
+                  // snooze. Fire-and-forget — the listenable updates the
+                  // dropdown synchronously.
+                  final box = Hive.box('settings');
+                  box.put('snooze_duration', v).then((_) => box.flush());
                 },
               );
             },
@@ -454,13 +734,56 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-String _formatLeadTime(int totalMinutes) {
-  if (totalMinutes == 0) return '0 min';
-  final h = totalMinutes ~/ 60;
-  final m = totalMinutes % 60;
-  if (h == 0) return '$m min';
-  if (m == 0) return '$h h';
-  return '$h h $m min';
+// Delegates to the shared formatter in shift_format.dart so the slider and the
+// onboarding lead-time dropdown stay phrased identically.
+String _formatLeadTime(int totalMinutes) => formatLeadTime(totalMinutes);
+
+/// "WORK HISTORY" entry point — opens the [WorkHistoryScreen] where completed
+/// ad-hoc shifts are listed and exported as CSV for payslip verification.
+/// A plain navigation tile (no inline state) — all the data work lives on the
+/// destination screen.
+class _WorkHistorySection extends StatelessWidget {
+  const _WorkHistorySection();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'WORK HISTORY',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Review and export your completed custom shifts to verify payslips.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              key: const ValueKey('settings-open-work-history'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const WorkHistoryScreen()),
+              ),
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('View & Export Work History'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// User display preferences — clock format and calendar week-start. Both are
@@ -528,6 +851,31 @@ class _PreferencesSection extends StatelessWidget {
             value: prefs.startWeekOnMonday,
             onChanged: (v) =>
                 context.read<AppPreferences>().setStartWeekOnMonday(v),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Timeline opens on',
+            style: theme.textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<bool>(
+            key: const ValueKey('settings-timeline-default-view'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('List'),
+                icon: Icon(Icons.view_agenda_outlined),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text('Month'),
+                icon: Icon(Icons.calendar_month),
+              ),
+            ],
+            selected: {prefs.timelineDefaultsToMonth},
+            onSelectionChanged: (s) =>
+                context.read<AppPreferences>().setTimelineDefaultsToMonth(s.first),
           ),
         ],
       ),

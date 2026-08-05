@@ -8,6 +8,7 @@ import 'onboarding_state.dart';
 import 'pattern_picker_onboarding_screen.dart';
 import 'permissions_screen.dart';
 import 'roster_type_screen.dart';
+import 'walkthrough_flow.dart';
 import 'welcome_screen.dart';
 
 /// Hive box key the first-launch gate reads to decide whether to show
@@ -39,9 +40,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   int _step = 0;
 
   void _next() => setState(() => _step += 1);
-  void _back() => setState(() => _step = (_step - 1).clamp(0, 3));
+  void _back() => setState(() => _step = (_step - 1).clamp(0, 4));
 
-  /// Custom-card path on step 3. Skips the preset picker entirely —
+  /// Custom-card path from the roster-type step. Skips the preset picker —
   /// pushes [CustomBuilderScreen] directly. If the user generates a
   /// roster there (the screen pops `true`), we route to the final "Arm
   /// your alarms" step (same as the preset path) so a custom roster also
@@ -56,8 +57,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     await navigator.push(
       MaterialPageRoute(
         builder: (_) => ArmEngineScreen(
+          // ArmEngineScreen pops itself (with roster rollback) on back.
           onArmComplete: _complete,
-          onBack: navigator.pop,
         ),
       ),
     );
@@ -78,13 +79,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Widget _buildStep() {
     switch (_step) {
       case 0:
-        return WelcomeScreen(onContinue: _next);
+        // Skip jumps straight to the dashboard via the shared completion
+        // path: it flips `onboarding_complete` so we don't re-prompt, and
+        // lands on MainLayout. No roster/alarms are generated — the user
+        // can build them later from Manage + Settings.
+        return WelcomeScreen(onContinue: _next, onSkip: _complete);
       case 1:
+        // Brief, skippable interactive tour (paint a roster + shake-to-dismiss
+        // practice). Both the ✕/Skip and the final Done advance to permissions
+        // via `_next` — no roster/alarm side effects, purely educational. The
+        // same widget is reachable later from Settings → Help.
+        return WalkthroughFlow(onFinish: _next);
+      case 2:
         return PermissionsScreen(
           onBack: _back,
           onContinue: _next,
         );
-      case 2:
+      case 3:
         return RosterTypeScreen(
           selected: _state.rosterType,
           onSelect: (t) => setState(() => _state.rosterType = t),
@@ -92,9 +103,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           onBack: _back,
           onContinue: _next,
         );
-      case 3:
+      case 4:
         return PatternPickerOnboardingScreen(
-          // `rosterType` is guaranteed non-null by the step-3 Continue
+          // `rosterType` is guaranteed non-null by the roster-type Continue
           // gate (which only enables for day / night / rotating).
           rosterType: _state.rosterType!,
           onBack: _back,
@@ -102,7 +113,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
       default:
         // Unreachable — _step is clamped 0..3. Defensive fallback so
         // the build doesn't return null on a programming error.
-        return WelcomeScreen(onContinue: _next);
+        return WelcomeScreen(onContinue: _next, onSkip: _complete);
     }
   }
 
