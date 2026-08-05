@@ -768,6 +768,31 @@ class _PreferencesSection extends StatelessWidget {
             onChanged: (v) =>
                 context.read<AppPreferences>().setStartWeekOnMonday(v),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Timeline opens on',
+            style: theme.textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<bool>(
+            key: const ValueKey('settings-timeline-default-view'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('List'),
+                icon: Icon(Icons.view_agenda_outlined),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text('Month'),
+                icon: Icon(Icons.calendar_month),
+              ),
+            ],
+            selected: {prefs.timelineDefaultsToMonth},
+            onSelectionChanged: (s) =>
+                context.read<AppPreferences>().setTimelineDefaultsToMonth(s.first),
+          ),
         ],
       ),
     );

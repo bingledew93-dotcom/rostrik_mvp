@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../alarms/alarm_sound.dart';
+import '../alarms/default_tone_prefs.dart';
 import '../alarms/ringtone_channel.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
@@ -157,6 +159,14 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _customRingtoneUri = initial.customRingtoneUri;
       _customRingtoneName = initial.customRingtoneName;
       _ringtoneSource = initial.ringtoneSource;
+    } else if (Hive.isBoxOpen('settings')) {
+      // NEW alarm: start on the user's remembered default tone (the sound they
+      // last chose), so their preference sticks without re-picking every time.
+      final d = DefaultTonePrefs.read(Hive.box('settings'));
+      _soundKey = d.soundKey;
+      _ringtoneSource = d.source;
+      _customRingtoneUri = d.uri;
+      _customRingtoneName = d.name;
     }
   }
 
@@ -187,6 +197,16 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Text(
+                    'Your pick becomes the default for new alarms.',
+                    style: Theme.of(sheetCtx).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(sheetCtx).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
                 // Bundled tones — selecting one sets this alarm's soundKey.
                 for (final s in kAlarmSounds)
                   ListTile(
@@ -274,6 +294,13 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _customRingtoneName = pick.title;
       _ringtoneSource = RingtoneSource.system;
     });
+    // Remember this as the default so new alarms start on it. System tones have
+    // a stable content:// URI, so they're safe to store as a shared default.
+    await _rememberDefaultTone(
+      source: RingtoneSource.system,
+      uri: pick.uri,
+      name: pick.title,
+    );
   }
 
   /// Selects a BUNDLED tone for THIS alarm: sets [_soundKey] and resets the
@@ -289,6 +316,32 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       _customRingtoneName = null;
       _ringtoneSource = RingtoneSource.classic;
     });
+    // Remember this bundled tone as the default for new alarms.
+    await _rememberDefaultTone(
+      source: RingtoneSource.classic,
+      soundKey: soundKey,
+    );
+  }
+
+  /// Persists the picked tone as the user's default (the tone new alarms start
+  /// on). Only bundled + system tones are stored — a vault (file) tone is
+  /// per-alarm, so it never becomes the shared default (see [DefaultTonePrefs]).
+  Future<void> _rememberDefaultTone({
+    required RingtoneSource source,
+    String? soundKey,
+    String? uri,
+    String? name,
+  }) async {
+    if (!Hive.isBoxOpen('settings')) return;
+    await DefaultTonePrefs.write(
+      Hive.box('settings'),
+      DefaultTone(
+        soundKey: soundKey ?? _soundKey,
+        source: source,
+        uri: uri,
+        name: name,
+      ),
+    );
   }
 
   /// Deletes the current draft's vault file if it is one — called before

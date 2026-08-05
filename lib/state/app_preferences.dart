@@ -9,6 +9,9 @@ const String use24HourTimeKey = 'use24HourTime';
 /// Hive key for the calendar week-start preference. Default true = Monday.
 const String startWeekOnMondayKey = 'startWeekOnMonday';
 
+/// Hive key for which Timeline view opens first. Default false = List view.
+const String timelineDefaultMonthKey = 'timelineDefaultMonth';
+
 /// Hive key for the nightly sleep target, in whole hours. Default 8.
 const String sleepGoalHoursKey = 'sleepGoalHours';
 
@@ -51,6 +54,7 @@ class AppPreferences extends ChangeNotifier {
       keys: const <String>[
         use24HourTimeKey,
         startWeekOnMondayKey,
+        timelineDefaultMonthKey,
         sleepGoalHoursKey,
         windDownMinutesKey,
         bedtimeReminderEnabledKey,
@@ -68,6 +72,11 @@ class AppPreferences extends ChangeNotifier {
 
   bool get startWeekOnMonday =>
       _box.get(startWeekOnMondayKey, defaultValue: true) as bool;
+
+  /// Whether the Timeline opens on the Month calendar (true) or the List (false,
+  /// default). Read once when the Timeline mounts to pick its initial view.
+  bool get timelineDefaultsToMonth =>
+      _box.get(timelineDefaultMonthKey, defaultValue: false) as bool;
 
   // ── Sleep MVP preferences ────────────────────────────────────────────────
   // Pure UI/planning settings (no engine or notification wiring yet). Stored
@@ -93,6 +102,9 @@ class AppPreferences extends ChangeNotifier {
 
   void setStartWeekOnMonday(bool value) =>
       _putAndFlush(startWeekOnMondayKey, value);
+
+  void setTimelineDefaultsToMonth(bool value) =>
+      _putAndFlush(timelineDefaultMonthKey, value);
 
   void setSleepGoalHours(int value) => _putAndFlush(sleepGoalHoursKey, value);
 
@@ -138,6 +150,13 @@ class AppPreferences extends ChangeNotifier {
   /// provider-absent fallback contract as [use24HourOf].
   static bool startWeekOnMondayOf(BuildContext context) =>
       context.watch<AppPreferences?>()?.startWeekOnMonday ?? true;
+
+  /// Tolerant reader for the Timeline default-view preference (default List).
+  /// Read once via `context.read` when the Timeline mounts, so no listen.
+  static bool timelineDefaultsToMonthOf(BuildContext context) =>
+      Provider.of<AppPreferences?>(context, listen: false)
+          ?.timelineDefaultsToMonth ??
+      false;
 
   /// Tolerant reader for Holiday Mode (default false = armed). Same
   /// provider-absent fallback contract as [use24HourOf].

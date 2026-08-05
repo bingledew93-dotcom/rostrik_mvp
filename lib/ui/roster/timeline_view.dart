@@ -41,6 +41,53 @@ class _TimelineViewState extends State<TimelineView>
   @override
   bool get wantKeepAlive => true;
 
+  // Approximate rendered heights (px) used to estimate the scroll offset of
+  // today's shift so the list opens ON today instead of a year in the past.
+  // Only an estimate — a post-jump `ensureVisible` refines it to the pixel.
+  static const double _topSpacer = 4;
+  static const double _headerHeight = _MonthHeaderDelegate._height;
+  static const double _workingCardHeight = 84;
+  static const double _offRowHeight = 38;
+
+  final ScrollController _controller = ScrollController();
+
+  /// The card the initial scroll should land on (today's shift, or the next
+  /// upcoming one). Re-created each build; only the current one is attached.
+  final GlobalKey _anchorKey = GlobalKey();
+
+  /// One-shot: auto-scroll to today only on the FIRST build with data. The
+  /// keep-alive mixin preserves the user's manual scroll position across tab
+  /// switches, and a later stream re-emit (e.g. after an edit) must not yank
+  /// them back to today.
+  bool _didInitialScroll = false;
+
+  /// Estimated offset of the anchor card, computed during build.
+  double _anchorEstimate = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Jumps to the estimated offset (so the anchor region builds), then refines
+  /// with [Scrollable.ensureVisible] once the anchor card exists — placing it
+  /// just below the pinned month header.
+  void _scrollToAnchor() {
+    if (_didInitialScroll || !_controller.hasClients) return;
+    _didInitialScroll = true;
+    final max = _controller.position.maxScrollExtent;
+    _controller.jumpTo(_anchorEstimate.clamp(0.0, max));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _anchorKey.currentContext;
+      if (ctx == null || !_controller.hasClients) return;
+      final vp = _controller.position.viewportDimension;
+      // Leave room for the pinned header so the anchor isn't tucked under it.
+      final headerFraction = vp > 0 ? (_headerHeight / vp).clamp(0.0, 0.4) : 0.0;
+      Scrollable.ensureVisible(ctx, alignment: headerFraction);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Required first call when using AutomaticKeepAliveClientMixin —
@@ -54,6 +101,15 @@ class _TimelineViewState extends State<TimelineView>
     // the view from any future repo-level reordering.
     final sorted = [...widget.shifts]
       ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+
+    // The anchor: the first shift on or after today (else the last shift, if
+    // the whole roster is in the past).
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var anchorIndex = sorted.indexWhere((s) => !s.date.isBefore(today));
+    if (anchorIndex < 0) anchorIndex = sorted.length - 1;
+    final anchorId = sorted[anchorIndex].id;
+
     // Group consecutive shifts by calendar month (already sorted → contiguous
     // runs) so each month gets one sticky header — breaking the wall of cards.
     final groups = <({DateTime month, List<Shift> shifts})>[];
@@ -65,9 +121,16 @@ class _TimelineViewState extends State<TimelineView>
         groups.last.shifts.add(s);
       }
     }
+
+    _anchorEstimate = _estimateAnchorOffset(groups, anchorId);
+    if (!_didInitialScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToAnchor());
+    }
+
     return CustomScrollView(
+      controller: _controller,
       slivers: [
-        const SliverToBoxAdapter(child: SizedBox(height: 4)),
+        const SliverToBoxAdapter(child: SizedBox(height: _topSpacer)),
         for (final g in groups) ...[
           SliverPersistentHeader(
             pinned: true,
@@ -75,10 +138,17 @@ class _TimelineViewState extends State<TimelineView>
           ),
           SliverList(
             delegate: SliverChildBuilderDelegate(
-              (_, i) => ShiftCard(
-                key: ValueKey('shift-card-${g.shifts[i].id}'),
-                shift: g.shifts[i],
-              ),
+              (_, i) {
+                final card = ShiftCard(
+                  key: ValueKey('shift-card-${g.shifts[i].id}'),
+                  shift: g.shifts[i],
+                );
+                // Wrap only the anchor in a KeyedSubtree so `ensureVisible` has
+                // a context to land on, WITHOUT stealing the card's ValueKey.
+                return g.shifts[i].id == anchorId
+                    ? KeyedSubtree(key: _anchorKey, child: card)
+                    : card;
+              },
               childCount: g.shifts.length,
             ),
           ),
@@ -86,6 +156,24 @@ class _TimelineViewState extends State<TimelineView>
         const SliverToBoxAdapter(child: SizedBox(height: 8)),
       ],
     );
+  }
+
+  /// Estimates the scroll offset of the anchor card by summing the approximate
+  /// heights of everything above it (top spacer + one header per month + each
+  /// card/off-row). Rough by design — [_scrollToAnchor] refines it.
+  double _estimateAnchorOffset(
+    List<({DateTime month, List<Shift> shifts})> groups,
+    String anchorId,
+  ) {
+    var offset = _topSpacer;
+    for (final g in groups) {
+      offset += _headerHeight;
+      for (final s in g.shifts) {
+        if (s.id == anchorId) return offset;
+        offset += s.type == ShiftType.off ? _offRowHeight : _workingCardHeight;
+      }
+    }
+    return offset;
   }
 }
 

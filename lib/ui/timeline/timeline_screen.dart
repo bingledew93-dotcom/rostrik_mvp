@@ -32,8 +32,18 @@ enum _TimelineView { list, month }
 class _TimelineScreenState extends State<TimelineScreen> {
   // Local, screen-scoped state — the whole point of the toggle is an instant
   // in-place swap, so this never leaves the widget.
-  _TimelineView _view = _TimelineView.list;
+  late _TimelineView _view;
   ShiftFilter _filter = ShiftFilter.all;
+
+  @override
+  void initState() {
+    super.initState();
+    // Honour the user's "which view opens first" preference (Settings →
+    // Preferences). Read once here; after mount the in-screen toggle owns it.
+    _view = AppPreferences.timelineDefaultsToMonthOf(context)
+        ? _TimelineView.month
+        : _TimelineView.list;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,18 +187,23 @@ class _TimelineMonthBody extends StatelessWidget {
     final activityDays = <DateTime>{
       for (final a in activities) DateTime(a.date.year, a.date.month, a.date.day),
     };
-    // Calendar at its natural height up top; the color legend fills the dead
-    // space below the grid (pushed to the bottom by the Spacer).
+    // The calendar takes the available space (scrolling the few px a 6-row
+    // month needs on a short screen rather than overflowing the column — the
+    // old fixed Column overflowed by 8px on 6-row months); the colour legend
+    // stays pinned at the bottom below it.
     return Column(
       children: [
-        ShiftCalendarView(
-          shifts: shifts,
-          activityDays: activityDays,
-          startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
-          onDayTapped: (date, shiftsOnDate) =>
-              _onDayTapped(context, date, shiftsOnDate, activities),
+        Expanded(
+          child: SingleChildScrollView(
+            child: ShiftCalendarView(
+              shifts: shifts,
+              activityDays: activityDays,
+              startWeekOnMonday: AppPreferences.startWeekOnMondayOf(context),
+              onDayTapped: (date, shiftsOnDate) =>
+                  _onDayTapped(context, date, shiftsOnDate, activities),
+            ),
+          ),
         ),
-        const Spacer(),
         const ShiftCalendarLegend(),
         const SizedBox(height: 8),
       ],
