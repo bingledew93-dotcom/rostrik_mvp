@@ -7,6 +7,7 @@ import '../data/models/shift_type.dart';
 import '../data/repositories/shift_repository.dart';
 import '../state/app_preferences.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// Convenience launcher — keeps callers free of `showModalBottomSheet` plumbing.
 ///
@@ -171,22 +172,18 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
   }
 
   Future<void> _pickStart() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: _start ?? const TimeOfDay(hour: 7, minute: 0),
-      // Default to the tap-to-type number pad (no dial dragging).
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() => _start = picked);
   }
 
   Future<void> _pickEnd() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: _end ?? const TimeOfDay(hour: 15, minute: 0),
-      // Default to the tap-to-type number pad (no dial dragging).
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() => _end = picked);

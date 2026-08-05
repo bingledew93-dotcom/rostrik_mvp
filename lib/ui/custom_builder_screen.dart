@@ -11,6 +11,7 @@ import '../state/app_preferences.dart';
 import 'draft_roster_review_screen.dart';
 import 'roster/shift_visuals.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// "New Shift Roster" — the redesigned custom-roster builder.
 ///
@@ -696,10 +697,9 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
 
   Future<void> _pickTime({required bool start}) async {
     final base = start ? _startMinutes : _endMinutes;
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: TimeOfDay(hour: base ~/ 60, minute: base % 60),
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() {

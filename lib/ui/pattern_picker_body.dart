@@ -10,6 +10,7 @@ import 'onboarding/onboarding_state.dart';
 import 'roster/shift_visuals.dart';
 import '../state/app_preferences.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// Shared body widget for the Pattern Picker. Powers both the
 /// post-onboarding picker ([PatternPickerScreen]) and the onboarding
@@ -152,14 +153,12 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
 
   Future<void> _pickShiftStart(ShiftType type) async {
     final current = _editedTimes[type]!;
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: TimeOfDay(
         hour: current.startMinutes ~/ 60,
         minute: current.startMinutes % 60,
       ),
-      // Default to the tap-to-type number pad (no dial dragging).
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() {
@@ -172,14 +171,12 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
 
   Future<void> _pickShiftEnd(ShiftType type) async {
     final current = _editedTimes[type]!;
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: TimeOfDay(
         hour: current.endMinutes ~/ 60,
         minute: current.endMinutes % 60,
       ),
-      // Default to the tap-to-type number pad (no dial dragging).
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() {

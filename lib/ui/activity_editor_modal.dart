@@ -6,6 +6,7 @@ import '../data/models/calendar_activity.dart';
 import '../data/repositories/calendar_activity_repository.dart';
 import '../state/app_preferences.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// Convenience launcher for the activity editor bottom sheet.
 ///
@@ -155,12 +156,11 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: _timeMinutes == null
           ? const TimeOfDay(hour: 9, minute: 0)
           : TimeOfDay(hour: _timeMinutes! ~/ 60, minute: _timeMinutes! % 60),
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() {
@@ -170,10 +170,9 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
   }
 
   Future<void> _pickAllDayReminderTime() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: _allDayReminderTime,
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() => _allDayReminderTime = picked);

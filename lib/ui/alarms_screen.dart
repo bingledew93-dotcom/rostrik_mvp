@@ -7,6 +7,7 @@ import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../alarms/alarm_projection.dart';
+import '../logic/alarm_sort.dart';
 import '../state/app_preferences.dart';
 import 'alarm_time_projection.dart';
 import 'create_alarm_sheet.dart';
@@ -45,7 +46,17 @@ class AlarmsScreen extends StatelessWidget {
       isSchedulePaused: isSchedulePaused,
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('Alarms')),
+      appBar: AppBar(
+        title: const Text('Alarms'),
+        actions: [
+          // Sort control — offered only when there's a list to order. Purely a
+          // display preference (persisted); it never touches alarm scheduling.
+          if (alarms.isNotEmpty)
+            _AlarmSortMenu(
+              byShiftType: AppPreferences.alarmSortByShiftTypeOf(context),
+            ),
+        ],
+      ),
       // SafeArea(top: false) — AppBar already consumes the status-bar
       // inset; bottom matters so the list and FAB don't tuck under the
       // gesture pill / 3-button bar on edge-to-edge displays.
@@ -80,6 +91,41 @@ class AlarmsScreen extends StatelessWidget {
         tooltip: 'Add alarm',
         child: const Icon(Icons.add),
       ),
+    );
+  }
+}
+
+/// AppBar sort control for the Alarms list. Two mutually-exclusive orders — by
+/// ring time (default) or grouped by shift type — persisted via
+/// [AppPreferences] so the choice sticks. Display-only; the alarm engine never
+/// reads it.
+class _AlarmSortMenu extends StatelessWidget {
+  const _AlarmSortMenu({required this.byShiftType});
+
+  final bool byShiftType;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<bool>(
+      key: const ValueKey('alarms-sort-menu'),
+      icon: const Icon(Icons.sort),
+      tooltip: 'Sort alarms',
+      onSelected: (value) =>
+          context.read<AppPreferences?>()?.setAlarmSortByShiftType(value),
+      itemBuilder: (context) => [
+        CheckedPopupMenuItem<bool>(
+          key: const ValueKey('alarms-sort-by-time'),
+          value: false,
+          checked: !byShiftType,
+          child: const Text('By time'),
+        ),
+        CheckedPopupMenuItem<bool>(
+          key: const ValueKey('alarms-sort-by-shift-type'),
+          value: true,
+          checked: byShiftType,
+          child: const Text('By shift type'),
+        ),
+      ],
     );
   }
 }
@@ -278,11 +324,19 @@ class _AlarmList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sort by time-of-day so the visible order is stable and useful —
-    // earliest alarm at the top. Repo gives us no ordering guarantee,
-    // so the UI sorts on display.
-    final sorted = [...alarms]
-      ..sort((a, b) => a.minutesOfDay.compareTo(b.minutesOfDay));
+    // Deterministic display order (pure UI — never touches scheduling). The
+    // repo gives no ordering guarantee, so the list sorts on display: by the
+    // real ring clock time, or grouped by shift type when the user picks that
+    // in the sort menu. Sorting on the true fire time (not the raw
+    // `minutesOfDay`, a placeholder for rotation alarms) is what stops a new
+    // alarm from landing at the bottom.
+    final sorted = sortAlarmsForDisplay(
+      alarms,
+      shifts: shifts,
+      globalLeadMinutes: globalLeadMinutes,
+      byShiftType: AppPreferences.alarmSortByShiftTypeOf(context),
+      now: DateTime.now(),
+    );
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: sorted.length,

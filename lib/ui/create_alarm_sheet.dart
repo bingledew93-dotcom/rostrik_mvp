@@ -20,6 +20,7 @@ import '../state/app_preferences.dart';
 import '../util/weekday_mask.dart';
 import 'alarm_time_projection.dart';
 import 'shift_format.dart';
+import 'time_picker_pref.dart';
 
 /// Monday-first short weekday labels for the weekly-repeat chips. Index `d - 1`
 /// for an ISO weekday (`DateTime.monday == 1`).
@@ -402,15 +403,12 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: TimeOfDay(
         hour: _minutesOfDay ~/ 60,
         minute: _minutesOfDay % 60,
       ),
-      // Tap-to-type number pad by default — field testing showed users hate
-      // dragging the dial hands to set a time.
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() => _minutesOfDay = picked.hour * 60 + picked.minute);
@@ -420,13 +418,12 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   /// [_pickTime] it forces the tap-to-type number pad; the picked time becomes
   /// the alarm's absolute fire clock on each linked shift's date.
   Future<void> _pickExactTime() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await pickPreferredTime(
+      context,
       initialTime: TimeOfDay(
         hour: _exactTimeMinutes ~/ 60,
         minute: _exactTimeMinutes % 60,
       ),
-      initialEntryMode: TimePickerEntryMode.input,
     );
     if (!mounted || picked == null) return;
     setState(() => _exactTimeMinutes = picked.hour * 60 + picked.minute);
