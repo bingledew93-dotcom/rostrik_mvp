@@ -16,6 +16,7 @@ import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
 import '../logic/cycle_service.dart';
 import '../logic/shift_generator.dart';
+import '../purchase/entitlement_service.dart';
 import 'app_preferences.dart';
 
 /// Root-level provider tree. Sits between LocalStorage (constructed in
@@ -35,12 +36,14 @@ class AppProviders extends StatelessWidget {
     required this.storage,
     required this.scheduler,
     required this.preferences,
+    required this.entitlementService,
     required this.child,
   });
 
   final LocalStorage storage;
   final AlarmScheduler scheduler;
   final AppPreferences preferences;
+  final EntitlementService entitlementService;
   final Widget child;
 
   // Generous symmetric window around app-start `now`. Wide enough that
@@ -119,6 +122,12 @@ class AppProviders extends StatelessWidget {
         // (which owns the box) and provided by value so this tree never
         // disposes it. Reactive: a Settings toggle write notifies watchers.
         ChangeNotifierProvider<AppPreferences>.value(value: preferences),
+        // 14-day trial + one-time full-access gate (feature #4). The root gate
+        // watches this to show the purchase wall the moment the app locks, and
+        // it re-checks entitlement on resume. Constructed + init'd in main().
+        ChangeNotifierProvider<EntitlementService>.value(
+          value: entitlementService,
+        ),
       ],
       child: child,
     );

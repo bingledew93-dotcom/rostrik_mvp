@@ -11,6 +11,7 @@ import '../data/repositories/alarm_settings_repository.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_cycle_repository.dart';
 import '../data/repositories/shift_repository.dart';
+import '../purchase/entitlement_store.dart';
 import '../util/clock.dart';
 import 'alarm_payload.dart';
 import 'alarm_projection.dart';
@@ -37,16 +38,34 @@ const String _scheduledFireAtSettingsKey = 'alarm_sync.scheduled_fire_at';
 /// pause toggled in the UI is honoured by the headless background re-sync too.
 const String _isSchedulePausedSettingsKey = 'isSchedulePaused';
 
-/// Default pause source: reads the Holiday-Mode flag straight off the `settings`
-/// box. Best-effort + guarded exactly like [_hydrateScheduledFireAt] so the
-/// test harness (which never opens the box) simply reads "not paused".
+/// Default pause source: alarms are suppressed when Holiday Mode is on OR the
+/// app is LOCKED (14-day trial lapsed without purchase — feature #4). Both mean
+/// "schedule nothing", so they're OR-ed into the one gate the projection reads.
+/// Best-effort + guarded exactly like [_hydrateScheduledFireAt] so the test
+/// harness (which never opens the box) simply reads "not paused / not locked".
 bool _readSchedulePausedFromSettings() {
   try {
     if (!Hive.isBoxOpen('settings')) return false;
-    return Hive.box('settings')
-        .get(_isSchedulePausedSettingsKey, defaultValue: false) as bool;
+    final box = Hive.box('settings');
+    final paused =
+        box.get(_isSchedulePausedSettingsKey, defaultValue: false) as bool;
+    final locked =
+        box.get(EntitlementStore.lockedKey, defaultValue: false) as bool;
+    return paused || locked;
   } catch (_) {
     return false;
+  }
+}
+
+/// The unpurchased scheduling-horizon cap (trial end), or null when uncapped.
+/// Guarded like the pause read; caps how far ahead alarms may arm so none fires
+/// past the trial even before a re-sync catches the lapse.
+DateTime? _readHorizonCapFromSettings() {
+  try {
+    if (!Hive.isBoxOpen('settings')) return null;
+    return EntitlementStore.horizonCap(Hive.box('settings'));
+  } catch (_) {
+    return null;
   }
 }
 
@@ -222,7 +241,16 @@ class AlarmSyncService {
 
   Future<void> _doSync() async {
     final now = _clock.now();
-    final until = now.add(_horizon);
+    // Trial horizon cap (feature #4): while unpurchased, never arm an alarm past
+    // the trial end, so nothing can fire after the trial lapses even before the
+    // next reconcile. Uncapped (null) once purchased. Clamped to [0, _horizon].
+    var horizon = _horizon;
+    final cap = _readHorizonCapFromSettings();
+    if (cap != null) {
+      final capDur = cap.difference(now);
+      if (capDur < horizon) horizon = capDur.isNegative ? Duration.zero : capDur;
+    }
+    final until = now.add(horizon);
 
     final allAlarms = await _alarms.getAll();
 
@@ -249,7 +277,7 @@ class AlarmSyncService {
       shifts: shiftsInWindow,
       globalLeadMinutes: globalLeadMinutes,
       now: now,
-      horizon: _horizon,
+      horizon: horizon,
       isSchedulePaused: _isPaused(),
       // Shift-less ('NONE') alarms snoozed natively are pinned to their snooze
       // instant here, so the orphan-cancel pass keeps (not cancels) the re-armed

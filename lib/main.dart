@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'alarms/alarm_sync_service.dart';
@@ -15,6 +16,8 @@ import 'data/repositories/shift_repository.dart';
 import 'data/storage/local_storage.dart';
 import 'legal/legal.dart';
 import 'logic/adhoc_archive.dart';
+import 'purchase/entitlement_service.dart';
+import 'purchase/purchase_gate.dart';
 import 'reminders/activity_reminder_scheduler.dart';
 import 'reminders/activity_reminder_service.dart';
 import 'state/app_preferences.dart';
@@ -151,11 +154,27 @@ void main() async {
   // covered on the next app open. Never stopped, for the same reason the alarm
   // sync service isn't — but even if the process dies the armed reminders live
   // in the OS.
+  final reminderScheduler = NativeActivityReminderScheduler();
   final reminderService = ActivityReminderService(
     activities: storage.activities,
-    scheduler: NativeActivityReminderScheduler(),
+    scheduler: reminderScheduler,
   );
   await reminderService.start();
+
+  // FEATURE #4 — 14-day free trial + one-time full-access purchase. Records the
+  // trial clock on first launch, writes the lock + horizon-cap gates the alarm
+  // sync reads (a locked app fires NO alarms; an in-trial app arms nothing past
+  // the trial), schedules the "trial ends tomorrow" nudge on the isolated
+  // reminder channel, and drives Google Play Billing for the unlock.
+  // `onEntitlementChanged` re-runs the reconcile so alarms disarm on lock and
+  // restore on purchase. init() runs AFTER syncService.start() so its refresh
+  // re-syncs with the gates applied.
+  final entitlementService = EntitlementService(
+    settingsBox: Hive.box('settings'),
+    reminderScheduler: reminderScheduler,
+    onEntitlementChanged: syncService.syncAlarms,
+  );
+  await entitlementService.init();
 
   // Register the main-isolate liveness beacon — the background sync checks for
   // it (`mainIsolateIsAlive`) and bails rather than reconcile Hive concurrently
@@ -191,6 +210,7 @@ void main() async {
     scheduler: scheduler,
     // UI display preferences ride the already-opened generic 'settings' box.
     preferences: AppPreferences(Hive.box('settings')),
+    entitlementService: entitlementService,
     child: RostrikApp(legalAccepted: legalAccepted),
   ));
 
@@ -391,6 +411,15 @@ class _RootGateState extends State<_RootGate> {
       return LegalConsentScreen(
         onAccepted: () => setState(() => _legalAccepted = true),
       );
+    }
+    // FEATURE #4 — full lock once the 14-day trial lapses without a purchase.
+    // Sits AFTER legal (consent still comes first) and in front of everything
+    // else; `context.watch` rebuilds the instant a purchase clears the lock.
+    // A fresh install is inside its trial, so new users flow straight to
+    // onboarding — the wall only ever appears after the trial ends.
+    final entitlement = context.watch<EntitlementService>();
+    if (entitlement.locked) {
+      return PurchaseGate(service: entitlement);
     }
     // First-launch onboarding gate: read the synchronously-available
     // `onboarding_complete` flag off the already-open `settings` box.

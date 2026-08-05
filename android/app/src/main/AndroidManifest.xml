@@ -5,7 +5,7 @@
              REVOCABLE via Settings → "Alarms & reminders"; a revocation makes
              setAlarmClock throw (guarded → EXACT_ALARM_DENIED, surfaced by the
              Dashboard reliability banner). maxSdkVersion=32 keeps it off 13+.
-           * 13+ (33+): USE_EXACT_ALARM — install-time and NON-revocable for
+           * 13+ (33+): USE_EXACT_ALARM — install-toime and NON-revocable for
              apps whose core function is an alarm clock. Play policy restricts
              it to exactly this category; Rostrik qualifies. -->
     <uses-permission
