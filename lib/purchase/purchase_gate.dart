@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'entitlement_service.dart';
@@ -145,6 +146,19 @@ class _PurchaseGateState extends State<PurchaseGate> {
                       .withValues(alpha: 0.7),
                 ),
               ),
+              // DEBUG-ONLY escape hatch so a tester isn't stranded on the wall
+              // when there's no purchasable product yet. Gone in release builds.
+              if (kDebugMode)
+                TextButton(
+                  key: const ValueKey('debug-gate-reset-trial'),
+                  onPressed: () => widget.service.debugResetTrial(),
+                  child: Text(
+                    'Reset trial (debug)',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.error.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
@@ -191,6 +192,45 @@ class EntitlementService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('[Entitlement] restore failed: $e');
     }
+  }
+
+  // ---- DEBUG-ONLY test shortcuts (compiled to no-ops in release) -----------
+  // Let a tester exercise the purchase wall without waiting 14 days. Every one
+  // is gated on kDebugMode so it can never fire in a release build.
+
+  /// Forces the trial to read as lapsed (and clears any purchase) so the lock
+  /// wall appears on the next gate rebuild.
+  Future<void> debugExpireTrial() async {
+    if (!kDebugMode) return;
+    await EntitlementStore.setPurchased(_box, false);
+    final start = _clock
+        .now()
+        .subtract(kTrialDuration + const Duration(days: 1))
+        .millisecondsSinceEpoch;
+    await _box.put(EntitlementStore.trialStartedAtKey, start);
+    await _box.flush();
+    await _refresh();
+  }
+
+  /// Restarts the trial clock at "now" and clears any purchase — a fresh 14-day
+  /// trial, unlocked.
+  Future<void> debugResetTrial() async {
+    if (!kDebugMode) return;
+    await EntitlementStore.setPurchased(_box, false);
+    await _box.put(
+      EntitlementStore.trialStartedAtKey,
+      _clock.now().millisecondsSinceEpoch,
+    );
+    await _box.flush();
+    await _refresh();
+  }
+
+  /// Simulates a completed purchase (unlocks permanently, no billing round-trip)
+  /// so the post-purchase state can be verified.
+  Future<void> debugGrantPurchase() async {
+    if (!kDebugMode) return;
+    await EntitlementStore.setPurchased(_box, true);
+    await _refresh();
   }
 
   Future<void> _onPurchases(List<PurchaseDetails> purchases) async {

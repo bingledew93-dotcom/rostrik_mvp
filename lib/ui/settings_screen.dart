@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,7 @@ import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
 import '../legal/legal.dart';
 import '../logic/cycle_service.dart';
+import '../purchase/entitlement_service.dart';
 import '../state/app_preferences.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'onboarding/walkthrough_flow.dart';
@@ -51,6 +53,8 @@ class SettingsScreen extends StatelessWidget {
             Divider(height: 32),
             _HelpSection(),
             Divider(height: 32),
+            // Debug-only trial/purchase shortcuts — renders nothing in release.
+            _DebugTrialSection(),
             _FactoryResetSection(),
             Divider(height: 32),
             _LegalAboutSection(),
@@ -186,6 +190,86 @@ class _ScreenTipsToggle extends StatelessWidget {
         value: ScreenTipsPrefs.isEnabled(box),
         onChanged: (v) => ScreenTipsPrefs.setEnabled(box, v),
       ),
+    );
+  }
+}
+
+/// DEBUG-ONLY trial/purchase shortcuts so the 14-day paywall can be exercised
+/// on-device without waiting. Renders nothing in a release build (`kDebugMode`)
+/// AND when no [EntitlementService] is in the tree (a bare widget test), so it
+/// can never ship or break tests.
+class _DebugTrialSection extends StatelessWidget {
+  const _DebugTrialSection();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kDebugMode) return const SizedBox.shrink();
+    final service = context.watch<EntitlementService?>();
+    if (service == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final e = service.entitlement;
+    final state = e.locked
+        ? 'LOCKED (trial ended, not purchased)'
+        : e.purchased
+            ? 'Purchased — unlocked'
+            : 'Trial — ${e.trialDaysLeft} day${e.trialDaysLeft == 1 ? '' : 's'} left';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'DEBUG · TRIAL',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          child: Text(
+            'State: $state',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonal(
+                key: const ValueKey('debug-expire-trial'),
+                onPressed: () async {
+                  await service.debugExpireTrial();
+                  // Pop back to the (now-locked) root so the wall appears.
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((r) => r.isFirst);
+                  }
+                },
+                child: const Text('Expire trial now'),
+              ),
+              OutlinedButton(
+                key: const ValueKey('debug-reset-trial'),
+                onPressed: () => service.debugResetTrial(),
+                child: const Text('Reset trial (14 days)'),
+              ),
+              OutlinedButton(
+                key: const ValueKey('debug-grant-purchase'),
+                onPressed: () => service.debugGrantPurchase(),
+                child: const Text('Grant purchase'),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 32),
+      ],
     );
   }
 }
