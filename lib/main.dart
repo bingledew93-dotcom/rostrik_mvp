@@ -20,6 +20,7 @@ import 'purchase/entitlement_service.dart';
 import 'purchase/purchase_gate.dart';
 import 'reminders/activity_reminder_scheduler.dart';
 import 'reminders/activity_reminder_service.dart';
+import 'services/widget_service.dart';
 import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
 import 'ui/app_theme.dart';
@@ -176,6 +177,19 @@ void main() async {
   );
   await entitlementService.init();
 
+  // PHASE 2 — HOME-SCREEN WIDGET bridge. Pushes an initial snapshot of the
+  // Dashboard hero to the Android widget and refreshes it on every roster
+  // change (shift/cycle streams) and app resume. Self-guards on unsupported
+  // platforms and swallows its own errors, so it can never disturb startup or
+  // the alarm engine. Started AFTER syncService so the roster it reads is
+  // whatever the initial reconcile has settled on.
+  final widgetService = WidgetService(
+    shifts: storage.shifts,
+    cycles: storage.cycles,
+    settingsBox: Hive.box('settings'),
+  );
+  await widgetService.start();
+
   // Register the main-isolate liveness beacon — the background sync checks for
   // it (`mainIsolateIsAlive`) and bails rather than reconcile Hive concurrently
   // with this live isolate (which would race the id-map counter + scheduled-
@@ -211,6 +225,7 @@ void main() async {
     // UI display preferences ride the already-opened generic 'settings' box.
     preferences: AppPreferences(Hive.box('settings')),
     entitlementService: entitlementService,
+    widgetService: widgetService,
     child: RostrikApp(legalAccepted: legalAccepted),
   ));
 

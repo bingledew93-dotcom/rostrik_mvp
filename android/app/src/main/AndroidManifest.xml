@@ -211,6 +211,23 @@
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+        <!-- Phase-2 HOME-SCREEN WIDGET provider (home_widget). Extends the
+             plugin's HomeWidgetProvider; the Flutter WidgetService writes the
+             hero data it reads. exported="true" is required — the launcher /
+             AppWidgetHost (a different process) binds it to host the widget.
+             The APPWIDGET_UPDATE filter + provider meta-data is the standard
+             AppWidget registration; taps deep-link into MainActivity. -->
+        <receiver
+            android:name=".RostrikWidgetProvider"
+            android:exported="true"
+            android:label="Rostrik">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/rostrik_widget_info"/>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rounded dark card behind the widget. On Android 12+ the launcher also clips
+     widgets to the system corner radius; this keeps the look consistent below
+     that and gives the card its solid dark surface. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_background" />
+    <corners android:radius="20dp" />
+</shape>

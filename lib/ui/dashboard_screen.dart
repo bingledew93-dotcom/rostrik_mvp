@@ -13,8 +13,10 @@ import '../data/models/shift_type.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../logic/cycle_resolver.dart';
+import '../services/widget_service.dart';
 import '../state/app_preferences.dart';
 import 'calendar/shift_calendar.dart';
+import 'dashboard_hero.dart';
 import 'roster/shift_visuals.dart';
 import 'settings_screen.dart';
 import 'shift_format.dart';
@@ -64,7 +66,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     // the minute digit only flips every 60s, and going finer would burn
     // battery and re-render the whole screen for no visual change.
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
+      // Keep the home-screen widget's countdown minute-fresh while the app is
+      // foreground, so it's current the moment the user swipes to their home
+      // screen.
+      _pushWidgetUpdate();
     });
     _probe = widget.healthProbe ?? probeAlarmHealth;
     _refreshHealth();
@@ -72,11 +79,27 @@ class _DashboardScreenState extends State<DashboardScreen>
     // the user just revoked in Settings — and clearing the moment they come
     // back from fixing it.
     WidgetsBinding.instance.addObserver(this);
+    // Push a fresh widget snapshot once the hero has first laid out (post-frame:
+    // context isn't ready for a provider read during initState).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _pushWidgetUpdate();
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshHealth();
+    if (state == AppLifecycleState.resumed) {
+      _refreshHealth();
+      _pushWidgetUpdate();
+    }
+  }
+
+  /// Nudges the home-screen widget to recompute from current state. Nullable
+  /// read (absent in widget tests / a standalone pump); the service is itself a
+  /// no-op off Android/iOS, so this is doubly safe.
+  void _pushWidgetUpdate() {
+    if (!mounted) return;
+    context.read<WidgetService?>()?.updateHomeScreenWidget();
   }
 
   Future<void> _refreshHealth() async {
@@ -98,8 +121,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     final cycles = context.watch<List<ShiftCycle>>();
     final alarms = context.watch<List<AppAlarm>>();
     final globalLeadMinutes = context.watch<AlarmSettings>().leadTime.inMinutes;
-    final next = _findNext(shifts, now);
-    final activeCycle = _pickActiveCycle(cycles);
+    final next = findNextShift(shifts, now);
+    final activeCycle = pickActiveCycle(cycles);
     // Early-bird skip: the single next alarm of ANY type due within 12h —
     // rotation rings AND shift-less one-time/weekly rings (which
     // `nextRotationRing` used to filter out, hiding the control for them).
@@ -230,71 +253,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  /// Selects the active anchored cycle. Mirrors the picker in the
-  /// Timeline's Month view so the Dashboard's rotation copy and the
-  /// calendar grid always read off the same cycle.
-  static ShiftCycle? _pickActiveCycle(List<ShiftCycle> cycles) {
-    final anchored = cycles.where((c) => c.isAnchored).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return anchored.isEmpty ? null : anchored.first;
-  }
-
-  /// The shift to feature on the hero card. Selected in two tiers so the
-  /// card always answers "where am I right now?" before "what's next?":
-  ///
-  ///   1. **In-progress** — a non-OFF shift whose window straddles [now]
-  ///      (`start <= now < end`). The user is physically on this shift, so it
-  ///      is shown even when its alarm was muted / acknowledged / snoozed:
-  ///      those are alarm-*scheduling* concerns, not *display* concerns.
-  ///      (Field bug, roster Day 7: dismissing the morning alarm sets
-  ///      `isAcknowledged`, which used to drop today's active shift here and
-  ///      jump the countdown to the next rotation block days away.)
-  ///   2. **Upcoming** — otherwise the soonest non-OFF shift whose start is
-  ///      still in the future. Here the mute/ack filter DOES apply (engine
-  ///      parity: a suppressed future shift isn't advertised as "next up").
-  ///      Once today's shift ends it stops being in-progress, so the card
-  ///      rolls forward to tomorrow — or the next working day when tomorrow
-  ///      is OFF, which naturally yields the multi-day countdown.
-  ///
-  /// A **paused** shift (`isPaused` — sick / leave / holiday) is skipped in
-  /// BOTH tiers: unlike mute/ack it means the user isn't working that day at
-  /// all, so it's never featured as in-progress nor advertised as next-up.
-  static Shift? _findNext(List<Shift> shifts, DateTime now) {
-    // Tier 1: a shift currently under way wins outright, suppression flags
-    // notwithstanding. Earliest-starting one if (rarely) several overlap.
-    Shift? inProgress;
-    for (final s in shifts) {
-      if (s.type == ShiftType.off) continue;
-      // Paused (sick/leave/holiday) = NOT working — never featured, not even
-      // when `now` falls inside its window. This is the one flag that overrides
-      // Tier 1 (mute/ack don't, because the user is still physically present).
-      if (s.isPaused) continue;
-      final start = s.startDateTime;
-      if (start.isAfter(now)) continue; // hasn't started — Tier 2's job
-      if (!s.endDateTime.isAfter(now)) continue; // already ended
-      if (inProgress == null || start.isBefore(inProgress.startDateTime)) {
-        inProgress = s;
-      }
-    }
-    if (inProgress != null) return inProgress;
-
-    // Tier 2: soonest upcoming shift, respecting alarm suppression.
-    Shift? best;
-    DateTime? bestStart;
-    for (final s in shifts) {
-      if (s.type == ShiftType.off) continue;
-      if (s.isPaused) continue; // paused = not working → never "next up"
-      if (s.isMuted) continue;
-      if (s.isAcknowledged) continue;
-      final start = s.startDateTime;
-      if (!start.isAfter(now)) continue; // started/ended — handled in Tier 1
-      if (bestStart == null || start.isBefore(bestStart)) {
-        best = s;
-        bestStart = start;
-      }
-    }
-    return best;
-  }
 }
 
 class _EmptyDashboard extends StatelessWidget {
@@ -351,7 +309,7 @@ class _UpcomingShiftCard extends StatelessWidget {
     final start = shift.startDateTime;
     final inProgress = !start.isAfter(now);
     final countdownTarget = inProgress ? shift.endDateTime : start;
-    final countdown = _formatCountdown(countdownTarget.difference(now));
+    final countdown = formatHeroCountdown(countdownTarget.difference(now));
     final use24Hour = AppPreferences.use24HourOf(context);
 
     return Column(
@@ -365,7 +323,7 @@ class _UpcomingShiftCard extends StatelessWidget {
             const SizedBox(width: 12),
             Flexible(
               child: Text(
-                '${_typeLabel(shift.type)} shift',
+                '${heroTypeLabel(shift.type)} shift',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: visual.color,
                   fontWeight: FontWeight.w700,
@@ -390,7 +348,7 @@ class _UpcomingShiftCard extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          _formatAbsoluteWhen(start, now, inProgress, use24Hour),
+          formatHeroAbsoluteWhen(start, now, inProgress, use24Hour),
           style: theme.textTheme.titleMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w500,
@@ -418,76 +376,6 @@ class _UpcomingShiftCard extends StatelessWidget {
     );
   }
 
-  /// "14h 22m" / "23m" / "3d 14h". Always rounds DOWN — better to be a
-  /// minute too pessimistic than late.
-  static String _formatCountdown(Duration d) {
-    if (d.isNegative) return '0m';
-    final totalMinutes = d.inMinutes;
-    if (totalMinutes < 60) {
-      return '${totalMinutes}m';
-    }
-    if (totalMinutes < 60 * 24) {
-      final h = totalMinutes ~/ 60;
-      final m = totalMinutes % 60;
-      return m == 0 ? '${h}h' : '${h}h ${m}m';
-    }
-    final days = totalMinutes ~/ (60 * 24);
-    final hoursRem = (totalMinutes - days * 60 * 24) ~/ 60;
-    return hoursRem == 0 ? '${days}d' : '${days}d ${hoursRem}h';
-  }
-
-  /// "Today at 06:00" / "Tomorrow at 06:00" / "Fri, May 22 at 06:00".
-  /// `inProgress` swaps the verb so the subtitle still makes sense
-  /// while a shift is running ("Started today at 06:00").
-  ///
-  /// Uses calendar-field comparison rather than `.difference(...).inDays`.
-  /// `Duration.inDays` truncates on a 23h or 25h gap across DST: on a
-  /// spring-forward day, `tomorrow.difference(today).inDays` is 0, which
-  /// would mislabel "Tomorrow at 06:00" as "Today at 06:00".
-  static String _formatAbsoluteWhen(
-    DateTime start,
-    DateTime now,
-    bool inProgress,
-    bool use24Hour,
-  ) {
-    final today = DateTime(now.year, now.month, now.day);
-    final startDay = DateTime(start.year, start.month, start.day);
-    final tomorrow = DateTime(today.year, today.month, today.day + 1);
-    final yesterday = DateTime(today.year, today.month, today.day - 1);
-    final time = formatClock(
-      start.hour * 60 + start.minute,
-      use24Hour: use24Hour,
-    );
-    final verb = inProgress ? 'Started' : 'Starts';
-    if (_isSameDay(startDay, today)) return '$verb today at $time';
-    if (_isSameDay(startDay, tomorrow)) return 'Starts tomorrow at $time';
-    if (_isSameDay(startDay, yesterday)) return '$verb yesterday at $time';
-    // Beyond ±1 day fall back to a compact absolute date. `formatShiftDate`
-    // already gives us "Mon, May 4"-style copy, which reads naturally.
-    return '$verb ${formatShiftDate(start)} at $time';
-  }
-
-  static bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
-  /// Local label helper. `shiftTypeLabel` lives in `shift_format.dart`
-  /// but we want a slightly different capitalization on the hero line.
-  /// Reusing it would force "Day shift" → "Day shift" but other types
-  /// would inherit "Off" awkwardly; this gives us explicit control.
-  static String _typeLabel(ShiftType type) {
-    switch (type) {
-      case ShiftType.day:
-        return 'Day';
-      case ShiftType.afternoon:
-        return 'Afternoon';
-      case ShiftType.night:
-        return 'Night';
-      case ShiftType.off:
-        // Unreachable: `_findNext` filters OFF shifts before they reach
-        // this card. Benign fallback.
-        return 'Off';
-    }
-  }
 }
 
 /// Secondary card pinned to the bottom of the Dashboard. Resolver-
@@ -517,10 +405,12 @@ class _RotationPositionCard extends StatelessWidget {
     if (today_ == null) return const SizedBox.shrink();
 
     final visual = visualFor(today_.block.type);
-    final dayLabel = _typeLabelShort(today_.block.type);
-    final positionCopy = 'Day ${today_.dayWithinBlock + 1} of '
-        '${today_.block.consecutiveDays} — $dayLabel';
-    final nextOff = _daysUntilNextOff(cycle, today);
+    final positionCopy = rotationPositionCopy(
+      today_.dayWithinBlock,
+      today_.block.consecutiveDays,
+      today_.block.type,
+    );
+    final nextOff = daysUntilNextOffCopy(cycle, today);
 
     return Card(
       margin: const EdgeInsets.only(top: 16),
@@ -574,74 +464,6 @@ class _RotationPositionCard extends StatelessWidget {
     );
   }
 
-  /// Walks the cycle forward from [today] (exclusive) until the first
-  /// OFF day, capped at one full cycle length. Returns null if the
-  /// user is currently on OFF (in which case "Days until OFF" would be
-  /// confusing) or if no OFF block exists in the cycle (all-work
-  /// rotation — surfaceable later, but degenerate for now).
-  static String? _daysUntilNextOff(ShiftCycle cycle, DateTime today) {
-    final todayResolution = resolveShiftBlockForDate(
-      target: today,
-      anchor: cycle.anchorDate!,
-      blocks: cycle.blocks!,
-    );
-    if (todayResolution == null) return null;
-    if (todayResolution.block.type == ShiftType.off) {
-      // Currently OFF — surface the opposite ("ends in N days").
-      return _daysUntilNextWork(cycle, today);
-    }
-    final cycleLen = cycle.cycleLengthDays ?? 0;
-    if (cycleLen <= 0) return null;
-    for (var offset = 1; offset <= cycleLen; offset++) {
-      final target = DateTime(today.year, today.month, today.day + offset);
-      final r = resolveShiftBlockForDate(
-        target: target,
-        anchor: cycle.anchorDate!,
-        blocks: cycle.blocks!,
-      );
-      if (r != null && r.block.type == ShiftType.off) {
-        return offset == 1
-            ? 'Off tomorrow'
-            : 'Off in $offset days';
-      }
-    }
-    return null;
-  }
-
-  /// Symmetric helper for the "currently OFF" case — counts forward to
-  /// the next work day so the card never says "Off in N days" while
-  /// the user is already on a rest block.
-  static String? _daysUntilNextWork(ShiftCycle cycle, DateTime today) {
-    final cycleLen = cycle.cycleLengthDays ?? 0;
-    if (cycleLen <= 0) return null;
-    for (var offset = 1; offset <= cycleLen; offset++) {
-      final target = DateTime(today.year, today.month, today.day + offset);
-      final r = resolveShiftBlockForDate(
-        target: target,
-        anchor: cycle.anchorDate!,
-        blocks: cycle.blocks!,
-      );
-      if (r != null && r.block.type != ShiftType.off) {
-        return offset == 1
-            ? 'Back on tomorrow'
-            : 'Back on in $offset days';
-      }
-    }
-    return null;
-  }
-
-  static String _typeLabelShort(ShiftType type) {
-    switch (type) {
-      case ShiftType.day:
-        return 'Day shift';
-      case ShiftType.afternoon:
-        return 'Afternoon shift';
-      case ShiftType.night:
-        return 'Night shift';
-      case ShiftType.off:
-        return 'Off';
-    }
-  }
 }
 
 /// Alarm-reliability warning (audit F3) — shown while a grant the alarms

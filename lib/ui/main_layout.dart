@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:home_widget/home_widget.dart';
 
 import 'alarms_screen.dart';
 import 'dashboard_screen.dart';
@@ -51,6 +55,60 @@ class _MainLayoutState extends State<MainLayout> {
   /// lands here — the Dashboard's "next shift" countdown is the most
   /// useful surface to see at 04:00 after acknowledging an alarm.
   int _currentIndex = 0;
+
+  static const int _dashboardTab = 0;
+
+  /// Home-screen-widget click subscription (Phase 2); null off Android/iOS.
+  StreamSubscription<Uri?>? _widgetClickSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _wireWidgetDeepLink();
+  }
+
+  @override
+  void dispose() {
+    _widgetClickSub?.cancel();
+    super.dispose();
+  }
+
+  /// Tapping the home-screen widget deep-links here. We land on the Dashboard
+  /// tab — the widget mirrors the Dashboard hero, so that's the "same" surface.
+  /// Guarded so the plugin channels are never touched off Android/iOS (desktop /
+  /// the test VM would throw `MissingPluginException`).
+  void _wireWidgetDeepLink() {
+    bool mobile;
+    try {
+      mobile = Platform.isAndroid || Platform.isIOS;
+    } catch (_) {
+      mobile = false;
+    }
+    if (!mobile) return;
+
+    // Cold launch straight from the widget.
+    HomeWidget.initiallyLaunchedFromHomeWidget().then((uri) {
+      if (uri != null && mounted) _goToDashboard();
+    }).catchError((Object _) {});
+
+    // Warm launch — app already running, brought forward by the widget tap.
+    _widgetClickSub = HomeWidget.widgetClicked.listen(
+      (uri) {
+        if (uri != null && mounted) _goToDashboard();
+      },
+      onError: (Object _) {},
+    );
+  }
+
+  /// Dismisses any pushed routes (Settings, an open editor) so the Dashboard is
+  /// actually visible, then selects its tab. `singleTop` MainActivity already
+  /// prevents a duplicate task / back-stack entry from the launch itself.
+  void _goToDashboard() {
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    if (_currentIndex != _dashboardTab) {
+      setState(() => _currentIndex = _dashboardTab);
+    }
+  }
 
   /// Switches the foreground tab. Passed down to [DashboardScreen] so its
   /// "My Rotation" tile can jump to the Calendar / Roster tabs without each

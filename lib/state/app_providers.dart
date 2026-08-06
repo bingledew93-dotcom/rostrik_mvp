@@ -17,6 +17,7 @@ import '../data/storage/local_storage.dart';
 import '../logic/cycle_service.dart';
 import '../logic/shift_generator.dart';
 import '../purchase/entitlement_service.dart';
+import '../services/widget_service.dart';
 import 'app_preferences.dart';
 
 /// Root-level provider tree. Sits between LocalStorage (constructed in
@@ -37,6 +38,7 @@ class AppProviders extends StatelessWidget {
     required this.scheduler,
     required this.preferences,
     required this.entitlementService,
+    required this.widgetService,
     required this.child,
   });
 
@@ -44,6 +46,7 @@ class AppProviders extends StatelessWidget {
   final AlarmScheduler scheduler;
   final AppPreferences preferences;
   final EntitlementService entitlementService;
+  final WidgetService widgetService;
   final Widget child;
 
   // Generous symmetric window around app-start `now`. Wide enough that
@@ -128,6 +131,10 @@ class AppProviders extends StatelessWidget {
         ChangeNotifierProvider<EntitlementService>.value(
           value: entitlementService,
         ),
+        // Home-screen widget bridge (Phase 2). Exposed so the Dashboard can push
+        // a refresh as its hero initializes / ticks; the service also refreshes
+        // itself on roster-stream changes and app resume, wired in main().
+        Provider<WidgetService>.value(value: widgetService),
       ],
       child: child,
     );
