@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
+import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
 import '../logic/painted_roster.dart';
 import '../logic/rotation_pattern_validator.dart' show RosterGenerationException;
 import '../logic/shift_generator.dart';
 import '../ocr/ocr_scanner_service.dart';
 import '../ocr/roster_injection.dart';
+import '../roster_ai/roster_ai_parser.dart';
 import '../state/app_preferences.dart';
 import 'draft_roster_review_screen.dart';
+import 'import_ai_modal.dart';
 import 'roster/shift_visuals.dart';
 import 'shift_format.dart';
 import 'time_picker_pref.dart';
@@ -45,6 +49,7 @@ class CustomBuilderScreen extends StatefulWidget {
 }
 
 class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
+  static const _uuid = Uuid();
   static const int _minCycleDays = 1;
   static const int _maxCycleDays = 60;
 
@@ -225,6 +230,50 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
         _generating = false;
         _validationError = 'Could not create the roster: $e';
       });
+    }
+  }
+
+  // ---- Import Roster via AI Bridge (Phase 2) ----------------------------
+
+  /// Opens the AI-bridge sheet. The parsed shifts carry absolute dates, so they
+  /// persist as concrete standalone [Shift] records (`cycleId` null) via
+  /// [ShiftGenerator.importDatedShifts] — never a repeating cycle. On success
+  /// the sheet closes and, like a manual Create / a scan commit, this screen
+  /// pops `true` so the caller fires its post-create path.
+  Future<void> _openAiImport() async {
+    final generator = context.read<ShiftGenerator>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final imported = await showImportAiModal(
+      context,
+      onImport: (List<ParsedShift> parsed) async {
+        final shifts = <Shift>[
+          for (final p in parsed)
+            Shift(
+              id: _uuid.v4(),
+              date: p.date,
+              type: p.type,
+              startMinutes: p.startMinutes,
+              endMinutes: p.endMinutes,
+            ),
+        ];
+        try {
+          await generator.importDatedShifts(shifts);
+          return null; // success — the sheet closes itself.
+        } on RosterGenerationException catch (e) {
+          return e.message; // shown inline in the sheet; nothing was written.
+        } catch (e) {
+          return 'Could not import the roster: $e';
+        }
+      },
+    );
+
+    if (imported == true && mounted) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Roster imported to your calendar')),
+      );
+      navigator.pop(true);
     }
   }
 
@@ -428,6 +477,21 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                     ),
                   ),
                   const Divider(height: 32),
+                  _sectionLabel(theme, 'OR IMPORT AN EXISTING ROSTER'),
+                  const SizedBox(height: 10),
+                  // AI-bridge import (Phase 2): paste any roster into an AI app,
+                  // paste its reply back, and land dated shifts on the calendar.
+                  OutlinedButton.icon(
+                    key: const ValueKey('roster-ai-import-entry'),
+                    onPressed:
+                        (_generating || _scanning) ? null : _openAiImport,
+                    icon: const Icon(Icons.auto_awesome, size: 18),
+                    label: const Text('Import via AI'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   // OCR scan preserved as a secondary path (not in the primary
                   // flow, but a shipped feature we don't want to lose).
                   Center(
