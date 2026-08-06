@@ -33,6 +33,30 @@ void main() {
       expect(s.endMinutes, 6 * 60);
     });
 
+    test('parses Afternoon shifts', () {
+      final s = RosterAiParser
+          .parseAiOutput('11/08/2026 | Afternoon | 14:00 - 22:00')
+          .single;
+      expect(s.type, ShiftType.afternoon);
+      expect(s.shiftType, 'Afternoon');
+      expect(s.startMinutes, 14 * 60);
+      expect(s.endMinutes, 22 * 60);
+    });
+
+    test('parses a mixed Day/Afternoon/Night/Off block', () {
+      const raw = '10/08/2026 | Day | 06:00 - 14:00\n'
+          '11/08/2026 | Afternoon | 14:00 - 22:00\n'
+          '12/08/2026 | Night | 22:00 - 06:00\n'
+          '13/08/2026 | Off | 00:00 - 00:00';
+      final types = RosterAiParser.parseAiOutput(raw).map((s) => s.type);
+      expect(types, [
+        ShiftType.day,
+        ShiftType.afternoon,
+        ShiftType.night,
+        ShiftType.off,
+      ]);
+    });
+
     test('Off day canonicalises to type off with 0/0 minutes', () {
       final s = RosterAiParser
           .parseAiOutput('13/08/2026 | Off | 00:00 - 00:00')
@@ -68,8 +92,8 @@ void main() {
       expect(RosterAiParser.parseAiOutput(raw), isEmpty);
     });
 
-    test('drops an unknown day type (Afternoon is not allowed by the prompt)', () {
-      const raw = '10/08/2026 | Afternoon | 14:00 - 22:00';
+    test('drops an unknown day type (only Day/Afternoon/Night/Off allowed)', () {
+      const raw = '10/08/2026 | Evening | 14:00 - 22:00';
       expect(RosterAiParser.parseAiOutput(raw), isEmpty);
     });
   });
@@ -108,6 +132,33 @@ void main() {
         RosterAiParser.parseAiOutput('I could not find any shifts in that.'),
         isEmpty,
       );
+    });
+  });
+
+  group('ParsedShift.withType — tap-to-reclassify', () {
+    ParsedShift dayShift() => RosterAiParser
+        .parseAiOutput('10/08/2026 | Day | 06:00 - 14:00')
+        .single;
+
+    test('reclassifies and preserves the clock + date', () {
+      final aft = dayShift().withType(ShiftType.afternoon);
+      expect(aft.type, ShiftType.afternoon);
+      expect(aft.shiftType, 'Afternoon');
+      expect(aft.startTime, '06:00');
+      expect(aft.endTime, '14:00');
+      expect(aft.startMinutes, 6 * 60);
+      expect(aft.date, DateTime(2026, 8, 10));
+    });
+
+    test('to Night maps the canonical string the parser round-trips', () {
+      expect(dayShift().withType(ShiftType.night).shiftType, 'Night');
+    });
+
+    test('canonicalTypeLabel covers every type', () {
+      expect(ParsedShift.canonicalTypeLabel(ShiftType.day), 'Day');
+      expect(ParsedShift.canonicalTypeLabel(ShiftType.afternoon), 'Afternoon');
+      expect(ParsedShift.canonicalTypeLabel(ShiftType.night), 'Night');
+      expect(ParsedShift.canonicalTypeLabel(ShiftType.off), 'Off');
     });
   });
 

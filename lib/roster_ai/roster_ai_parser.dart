@@ -19,7 +19,7 @@ class ParsedShift {
   /// Local-midnight calendar day this shift falls on.
   final DateTime date;
 
-  /// Raw day type as matched: exactly "Day", "Night", or "Off".
+  /// Raw day type as matched: exactly "Day", "Afternoon", "Night", or "Off".
   final String shiftType;
 
   /// Raw start clock, "HH:MM" (24-hour). "00:00" for an Off day.
@@ -28,10 +28,12 @@ class ParsedShift {
   /// Raw end clock, "HH:MM" (24-hour). "00:00" for an Off day.
   final String endTime;
 
-  /// The domain [ShiftType]. The parser only ever stores one of the three
+  /// The domain [ShiftType]. The parser only ever stores one of the four
   /// allowed strings, so the fallback is unreachable (kept to stay total).
   ShiftType get type {
     switch (shiftType) {
+      case 'Afternoon':
+        return ShiftType.afternoon;
       case 'Night':
         return ShiftType.night;
       case 'Off':
@@ -39,6 +41,35 @@ class ParsedShift {
       case 'Day':
       default:
         return ShiftType.day;
+    }
+  }
+
+  /// Returns a copy reclassified to [newType], preserving the clock strings —
+  /// backs the preview's tap-to-change-type affordance. Callers restrict this
+  /// to the three WORKING types (Day/Afternoon/Night): reclassifying to Off
+  /// would strand a working shift's clock (an Off day is 00:00–00:00), and a
+  /// working shift with a non-zero clock is exactly what the user wants kept
+  /// when they only meant to fix the label.
+  ParsedShift withType(ShiftType newType) => ParsedShift(
+        date: date,
+        shiftType: canonicalTypeLabel(newType),
+        startTime: startTime,
+        endTime: endTime,
+      );
+
+  /// The exact string the parser/prompt use for each [ShiftType] — the single
+  /// source of truth for the type↔string mapping, so [withType] can round-trip
+  /// through [type] without drift.
+  static String canonicalTypeLabel(ShiftType t) {
+    switch (t) {
+      case ShiftType.day:
+        return 'Day';
+      case ShiftType.afternoon:
+        return 'Afternoon';
+      case ShiftType.night:
+        return 'Night';
+      case ShiftType.off:
+        return 'Off';
     }
   }
 
@@ -86,11 +117,11 @@ class RosterAiParser {
   RosterAiParser._();
 
   /// The line contract. Matches, per the prompt:
-  ///   `DD/MM/YYYY | Day|Night|Off | HH:MM - HH:MM`
+  ///   `DD/MM/YYYY | Day|Afternoon|Night|Off | HH:MM - HH:MM`
   /// with flexible whitespace around the pipes and the dash. Anchored so a line
   /// with leading markdown/bullet text won't match (the prompt forbids it).
   static final RegExp _linePattern = RegExp(
-    r'^(\d{2}\/\d{2}\/\d{4})\s*\|\s*(Day|Night|Off)\s*\|\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$',
+    r'^(\d{2}\/\d{2}\/\d{4})\s*\|\s*(Day|Afternoon|Night|Off)\s*\|\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$',
   );
 
   /// Extracts every valid shift line from [rawText], in the order they appear.

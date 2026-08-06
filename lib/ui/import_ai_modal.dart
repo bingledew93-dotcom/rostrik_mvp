@@ -145,6 +145,27 @@ class _ImportAiModalState extends State<ImportAiModal> {
     Navigator.of(context).pop(true);
   }
 
+  /// Tap-to-change cycles a row through the working types (Day → Afternoon →
+  /// Night → Day), preserving its clock. Off rows are left alone — a rest day
+  /// has no working time to keep, so it isn't part of the cycle.
+  static const List<ShiftType> _workingTypeCycle = [
+    ShiftType.day,
+    ShiftType.afternoon,
+    ShiftType.night,
+  ];
+
+  void _cycleType(int index) {
+    final list = _parsed;
+    if (list == null || index < 0 || index >= list.length) return;
+    final current = list[index];
+    if (current.type == ShiftType.off) return;
+    final pos = _workingTypeCycle.indexOf(current.type);
+    final next = _workingTypeCycle[(pos + 1) % _workingTypeCycle.length];
+    final updated = [...list];
+    updated[index] = current.withType(next);
+    setState(() => _parsed = updated);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -254,8 +275,15 @@ class _ImportAiModalState extends State<ImportAiModal> {
                       if (parsed != null && parsed.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         _stepLabel(theme, '3', 'Review the detected shifts'),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tap a badge to switch it between Day, Afternoon and '
+                          'Night if the AI got one wrong.',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
                         const SizedBox(height: 8),
-                        _PreviewList(shifts: parsed),
+                        _PreviewList(shifts: parsed, onCycleType: _cycleType),
                       ],
                     ],
                   ),
@@ -386,9 +414,13 @@ class _ImportAiModalState extends State<ImportAiModal> {
 /// amber, Night = indigo, Off = grey, reusing the app-wide [visualFor] palette
 /// so the badges match the calendar and timeline.
 class _PreviewList extends StatelessWidget {
-  const _PreviewList({required this.shifts});
+  const _PreviewList({required this.shifts, required this.onCycleType});
 
   final List<ParsedShift> shifts;
+
+  /// Cycles the working type of the row at the given index (Off rows never
+  /// call it — they're passed a null tap handler).
+  final void Function(int index) onCycleType;
 
   @override
   Widget build(BuildContext context) {
@@ -433,7 +465,13 @@ class _PreviewList extends StatelessWidget {
               itemCount: shifts.length,
               separatorBuilder: (_, _) =>
                   Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.4)),
-              itemBuilder: (_, i) => _PreviewRow(shift: shifts[i]),
+              itemBuilder: (_, i) => _PreviewRow(
+                shift: shifts[i],
+                // Off is a rest day — not part of the tap-to-change cycle.
+                onChangeType: shifts[i].type == ShiftType.off
+                    ? null
+                    : () => onCycleType(i),
+              ),
             ),
           ),
         ],
@@ -443,9 +481,13 @@ class _PreviewList extends StatelessWidget {
 }
 
 class _PreviewRow extends StatelessWidget {
-  const _PreviewRow({required this.shift});
+  const _PreviewRow({required this.shift, this.onChangeType});
 
   final ParsedShift shift;
+
+  /// Non-null for working rows — tapping the type badge cycles Day/Afternoon/
+  /// Night. Null for Off rows, whose badge is inert.
+  final VoidCallback? onChangeType;
 
   @override
   Widget build(BuildContext context) {
@@ -462,7 +504,7 @@ class _PreviewRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          _TypeBadge(type: type),
+          _TypeBadge(type: type, onTap: onChangeType),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -489,18 +531,21 @@ class _PreviewRow extends StatelessWidget {
 }
 
 /// A pill badge tinted with the shift type's palette colour — Yellow (Day),
-/// Blue/indigo (Night), Grey (Off).
+/// Orange (Afternoon), Blue/indigo (Night), Grey (Off). When [onTap] is set the
+/// badge is tappable (working rows) and shows a small ⇕ affordance so it reads
+/// as "tap to change"; tapping cycles Day → Afternoon → Night.
 class _TypeBadge extends StatelessWidget {
-  const _TypeBadge({required this.type});
+  const _TypeBadge({required this.type, this.onTap});
 
   final ShiftType type;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final visual = visualFor(type);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    final badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: visual.color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
@@ -518,8 +563,18 @@ class _TypeBadge extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 3),
+            Icon(Icons.unfold_more, size: 13, color: visual.color),
+          ],
         ],
       ),
+    );
+    if (onTap == null) return badge;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: badge,
     );
   }
 }
