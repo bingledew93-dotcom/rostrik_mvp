@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../purchase/entitlement.dart' show kTrialDuration;
 import '../../state/app_preferences.dart';
 
 /// Step 1 of onboarding. Brand hero + value-prop, two instant-save Quick
@@ -36,90 +37,165 @@ class WelcomeScreen extends StatelessWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(flex: 2),
-              // Brand hero. Uses the bundled logo when present; until
-              // `assets/images/rostrik_logo.png` is dropped in, errorBuilder
-              // falls back to the original alarm glyph so the screen never
-              // shows a broken-image box.
-              Center(
-                child: Image.asset(
-                  'assets/images/rostrik_logo.png',
-                  height: 132,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => Icon(
-                    Icons.alarm,
-                    size: 96,
-                    color: theme.colorScheme.primary,
+        // Center on tall screens (via the Spacers) but SCROLL rather than
+        // overflow on short ones — the trial callout added height that could
+        // push the fixed content past a small viewport. minHeight +
+        // IntrinsicHeight is the canonical "center-when-it-fits, scroll-when-it-
+        // doesn't" pattern.
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Spacer(flex: 2),
+                      // Brand hero. Uses the bundled logo when present; until
+                      // `assets/images/rostrik_logo.png` is dropped in, errorBuilder
+                      // falls back to the original alarm glyph so the screen never
+                      // shows a broken-image box.
+                      Center(
+                        child: Image.asset(
+                          'assets/images/rostrik_logo.png',
+                          height: 132,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.alarm,
+                            size: 96,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'The smart alarm clock built for shift workers.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Alarms that follow your rotating roster — not just weekdays.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Up-front, honest trial disclosure — the first screen a new user
+                      // sees. Without this the 14-day trial was invisible until the
+                      // paywall appeared on day 14.
+                      const _TrialCallout(),
+                      const Spacer(flex: 2),
+                      // Quick Preferences — captured up front, saved the instant they're
+                      // tapped (no commit step), so the rest of onboarding already
+                      // renders in the user's chosen clock + week-start.
+                      _QuickPreferences(
+                        use24Hour: use24Hour,
+                        startWeekOnMonday: startWeekOnMonday,
+                        onTimeFormatChanged: (v) => context
+                            .read<AppPreferences?>()
+                            ?.setUse24HourTime(v),
+                        onWeekStartChanged: (mon) => context
+                            .read<AppPreferences?>()
+                            ?.setStartWeekOnMonday(mon),
+                      ),
+                      const Spacer(flex: 2),
+                      SizedBox(
+                        height: 56,
+                        child: FilledButton(
+                          key: const ValueKey('welcome-get-started'),
+                          onPressed: onContinue,
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          child: const Text('Get Started'),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      TextButton(
+                        key: const ValueKey('welcome-skip-button'),
+                        onPressed: onSkip,
+                        child: Text(
+                          'Skip / Set up later',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 28),
-              Text(
-                'The smart alarm clock built for shift workers.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Alarms that follow your rotating roster — not just weekdays.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const Spacer(flex: 2),
-              // Quick Preferences — captured up front, saved the instant they're
-              // tapped (no commit step), so the rest of onboarding already
-              // renders in the user's chosen clock + week-start.
-              _QuickPreferences(
-                use24Hour: use24Hour,
-                startWeekOnMonday: startWeekOnMonday,
-                onTimeFormatChanged: (v) =>
-                    context.read<AppPreferences?>()?.setUse24HourTime(v),
-                onWeekStartChanged: (mon) =>
-                    context.read<AppPreferences?>()?.setStartWeekOnMonday(mon),
-              ),
-              const Spacer(flex: 2),
-              SizedBox(
-                height: 56,
-                child: FilledButton(
-                  key: const ValueKey('welcome-get-started'),
-                  onPressed: onContinue,
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  child: const Text('Get Started'),
-                ),
-              ),
-              const SizedBox(height: 4),
-              TextButton(
-                key: const ValueKey('welcome-skip-button'),
-                onPressed: onSkip,
-                child: Text(
-                  'Skip / Set up later',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Friendly, static free-trial disclosure shown on the first onboarding screen.
+/// Deliberately provider-free (reads the constant [kTrialDuration], not the live
+/// [EntitlementService]) — every fresh install is on day 0, and keeping it
+/// static means it renders in any context, including a bare widget test.
+class _TrialCallout extends StatelessWidget {
+  const _TrialCallout();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      key: const ValueKey('welcome-trial-callout'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.card_giftcard_outlined, color: scheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${kTrialDuration.inDays}-day free trial',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Full access to every feature — no card needed. Just a '
+                  'one-time purchase after, never a subscription.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

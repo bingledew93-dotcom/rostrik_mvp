@@ -72,6 +72,17 @@ void main() {
     );
   });
 
+  testWidgets('discloses the 14-day free trial up front', (tester) async {
+    await pumpWelcome(tester);
+    expect(
+      find.byKey(const ValueKey('welcome-trial-callout')),
+      findsOneWidget,
+    );
+    expect(find.text('14-day free trial'), findsOneWidget);
+    // Honest framing: one-time purchase, not a subscription.
+    expect(find.textContaining('never a subscription'), findsOneWidget);
+  });
+
   testWidgets('shows Get Started and a Skip / Set up later exit',
       (tester) async {
     var started = false;

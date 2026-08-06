@@ -41,6 +41,10 @@ class SettingsScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: const [
+            // Trial / full-access status first, so a user always knows where
+            // they stand (renders its own divider; nothing when no entitlement
+            // service is in the tree, e.g. a bare widget test).
+            _FullAccessSection(),
             _LeadTimeSection(),
             Divider(height: 32),
             _SnoozeDurationSection(),
@@ -190,6 +194,159 @@ class _ScreenTipsToggle extends StatelessWidget {
         value: ScreenTipsPrefs.isEnabled(box),
         onChanged: (v) => ScreenTipsPrefs.setEnabled(box, v),
       ),
+    );
+  }
+}
+
+/// Release-visible "FULL ACCESS" status — the user's live trial / purchase
+/// standing, plus a way to unlock or restore any time. This is what makes the
+/// free trial discoverable in-app (previously it was invisible until the day-14
+/// paywall). Renders nothing when no [EntitlementService] is in the tree (a bare
+/// widget test), and carries its own trailing divider so it leaves no stray rule
+/// when hidden.
+class _FullAccessSection extends StatelessWidget {
+  const _FullAccessSection();
+
+  Future<void> _buy(BuildContext context, EntitlementService service) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final launched = await service.buy();
+    if (!launched) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Purchases aren’t available right now. Check your connection and '
+            'try again.',
+          ),
+        ),
+      );
+    }
+    // On success the purchase completes asynchronously; the entitlement stream
+    // notifies and this section rebuilds to the unlocked state.
+  }
+
+  Future<void> _restore(BuildContext context, EntitlementService service) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await service.restore();
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Checking for a previous purchase…')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.watch<EntitlementService?>();
+    if (service == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final e = service.entitlement;
+    final price = service.price;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+          child: Text(
+            'FULL ACCESS',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        if (e.purchased)
+          // Bought — a calm "thank you" confirmation, no CTA.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Icon(Icons.verified_outlined, color: scheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Full access unlocked',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Thanks for supporting Rostrik.',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          // In trial (or, defensively, lapsed): show the standing + an early
+          // unlock path so nobody is surprised by the paywall.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Icon(Icons.card_giftcard_outlined, color: scheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        e.withinTrial
+                            ? 'Free trial — ${e.trialDaysLeft} '
+                                'day${e.trialDaysLeft == 1 ? '' : 's'} left'
+                            : 'Free trial ended',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Unlock once to keep your shift alarms firing when the '
+                        'trial ends — a one-time purchase, never a subscription.',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    key: const ValueKey('settings-unlock-full-access'),
+                    onPressed: () => _buy(context, service),
+                    child: Text(
+                      price == null
+                          ? 'Unlock full access'
+                          : 'Unlock full access · $price',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  key: const ValueKey('settings-restore-purchase'),
+                  onPressed: () => _restore(context, service),
+                  child: const Text('Restore'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const Divider(height: 32),
+      ],
     );
   }
 }
