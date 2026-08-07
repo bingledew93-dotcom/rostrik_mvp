@@ -11,6 +11,7 @@ import 'alarms/native_alarm_scheduler.dart';
 import 'alarms/pending_alarm_delete_guard.dart';
 import 'alarms/pending_dismissal_guard.dart';
 import 'alarms/pending_snooze_guard.dart';
+import 'calendar_sync/device_calendar_service.dart';
 import 'data/repositories/app_alarm_repository.dart';
 import 'data/repositories/shift_repository.dart';
 import 'data/storage/local_storage.dart';
@@ -190,6 +191,19 @@ void main() async {
   );
   await widgetService.start();
 
+  // OPTIONAL DEVICE CALENDAR SYNC (feature-calendar-sync). Mirrors the roster to
+  // a dedicated "Rostrik Roster" calendar when the user turns it on in Settings.
+  // Off by default and self-guarding: start() only subscribes to the roster
+  // streams and never prompts for permission — the initial stream emission
+  // triggers a re-sync only if sync is already enabled (and permission held), so
+  // the 180-day window rolls forward on each launch with zero cost when off.
+  final deviceCalendarService = DeviceCalendarService(
+    shifts: storage.shifts,
+    cycles: storage.cycles,
+    settingsBox: Hive.box('settings'),
+  );
+  await deviceCalendarService.start();
+
   // Register the main-isolate liveness beacon — the background sync checks for
   // it (`mainIsolateIsAlive`) and bails rather than reconcile Hive concurrently
   // with this live isolate (which would race the id-map counter + scheduled-
@@ -226,6 +240,7 @@ void main() async {
     preferences: AppPreferences(Hive.box('settings')),
     entitlementService: entitlementService,
     widgetService: widgetService,
+    deviceCalendarService: deviceCalendarService,
     child: RostrikApp(legalAccepted: legalAccepted),
   ));
 

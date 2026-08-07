@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../alarms/alarm_scheduler.dart';
 import '../alarms/notification_id_map.dart';
+import '../calendar_sync/device_calendar_service.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
 import '../data/models/calendar_activity.dart';
@@ -39,6 +40,7 @@ class AppProviders extends StatelessWidget {
     required this.preferences,
     required this.entitlementService,
     required this.widgetService,
+    required this.deviceCalendarService,
     required this.child,
   });
 
@@ -47,6 +49,7 @@ class AppProviders extends StatelessWidget {
   final AppPreferences preferences;
   final EntitlementService entitlementService;
   final WidgetService widgetService;
+  final DeviceCalendarService deviceCalendarService;
   final Widget child;
 
   // Generous symmetric window around app-start `now`. Wide enough that
@@ -135,6 +138,12 @@ class AppProviders extends StatelessWidget {
         // a refresh as its hero initializes / ticks; the service also refreshes
         // itself on roster-stream changes and app resume, wired in main().
         Provider<WidgetService>.value(value: widgetService),
+        // Optional Device Calendar Sync (feature-calendar-sync). A ChangeNotifier
+        // so the Settings toggle reflects enabled/busy live; it owns the
+        // permission prompt (only on enable) and the reactive roster mirror.
+        ChangeNotifierProvider<DeviceCalendarService>.value(
+          value: deviceCalendarService,
+        ),
       ],
       child: child,
     );

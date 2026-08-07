@@ -76,6 +76,7 @@ dependencies:
   url_launcher: ^6.3.2
   in_app_purchase: ^3.3.0
   home_widget: ^0.9.3
+  device_calendar_plus: ^0.8.0
 
 dev_dependencies:
   flutter_test:

@@ -43,6 +43,13 @@ const int kDefaultSleepGoalHours = 8;
 /// Default wind-down lead (minutes) when the user hasn't changed it.
 const int kDefaultWindDownMinutes = 30;
 
+/// Hive key for the optional Device Calendar Sync toggle. When true, the roster
+/// is mirrored to a dedicated "Rostrik Roster" calendar on the device (feature
+/// `feature-calendar-sync`). Owned/persisted by `DeviceCalendarService` (which
+/// exposes the reactive state), so it is deliberately NOT watched here — nothing
+/// in the display-prefs façade renders it. Default false = sync off.
+const String calendarSyncEnabledKey = 'calendarSyncEnabled';
+
 /// Hive key for Holiday Mode. When true the alarm engine schedules nothing and
 /// the Sleep plan goes dormant — roster/alarm data is left fully intact, only
 /// the triggers are silenced. Default false. The alarm engine reads this same

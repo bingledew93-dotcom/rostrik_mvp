@@ -60,6 +60,13 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
+    <!-- Optional Device Calendar Sync (feature-calendar-sync): mirrors the
+         roster to a dedicated "Rostrik Roster" calendar via device_calendar_plus.
+         READ is needed to find-or-create that calendar and clear its future
+         events; WRITE creates the shift events. Runtime-requested ONLY when the
+         user toggles Calendar Sync on in Settings — never at launch. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR"/>
+    <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
     <application
         android:label="Rostrik"
         android:name="${applicationName}"

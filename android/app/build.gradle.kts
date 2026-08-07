@@ -42,9 +42,12 @@ android {
         applicationId = "com.rostrik.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // google_mlkit_text_recognition (and uCrop via image_cropper) require
-        // API 21+. Floor at 21 without downgrading a higher Flutter default.
-        minSdk = maxOf(flutter.minSdkVersion, 21)
+        // Floor at API 24: device_calendar_plus requires minSdk 24, which is
+        // the highest floor among our plugins (google_mlkit_text_recognition /
+        // uCrop only need 21). API 24 (Android 7.0) covers ~99%+ of active
+        // devices; the bump only drops Android 5.0–6.0. maxOf keeps any higher
+        // Flutter default.
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
