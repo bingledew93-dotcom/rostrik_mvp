@@ -21,7 +21,9 @@ import 'purchase/entitlement_service.dart';
 import 'purchase/purchase_gate.dart';
 import 'reminders/activity_reminder_scheduler.dart';
 import 'reminders/activity_reminder_service.dart';
+import 'reminders/sleep_reminder_service.dart';
 import 'services/widget_service.dart';
+import 'sleep/sleep_sound_controller.dart';
 import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
 import 'ui/app_theme.dart';
@@ -163,6 +165,21 @@ void main() async {
   );
   await reminderService.start();
 
+  // SLEEP NUDGES (Sleep tab) — the wind-down + bedtime reminders. Reuses the
+  // SAME isolated reminder scheduler as the activity reminders above (a plain,
+  // DND-respecting notification, never the shift-alarm chain). It recomputes the
+  // roster-derived sleep plan and reconciles the two fixed-id nudges whenever the
+  // roster or a sleep preference changes; a fresh reconcile on each launch also
+  // re-arms them after a reboot.
+  final sleepReminderService = SleepReminderService(
+    shifts: storage.shifts,
+    alarms: storage.alarms,
+    alarmSettings: storage.alarmSettings,
+    settingsBox: Hive.box('settings'),
+    scheduler: reminderScheduler,
+  );
+  await sleepReminderService.start();
+
   // FEATURE #4 — 14-day free trial + one-time full-access purchase. Records the
   // trial clock on first launch, writes the lock + horizon-cap gates the alarm
   // sync reads (a locked app fires NO alarms; an in-trial app arms nothing past
@@ -204,6 +221,13 @@ void main() async {
   );
   await deviceCalendarService.start();
 
+  // SLEEP SOUNDS controller (Sleep tab) — the Flutter-side mirror of the native
+  // SleepSoundService foreground player. Provided app-wide so the Sleep tab can
+  // play/stop the looping white/brown-noise sounds and show the wind-down
+  // countdown. Constructed here so it can observe app lifecycle (re-syncs its
+  // "is playing" state on resume after a background auto-stop).
+  final sleepSoundController = SleepSoundController();
+
   // Register the main-isolate liveness beacon — the background sync checks for
   // it (`mainIsolateIsAlive`) and bails rather than reconcile Hive concurrently
   // with this live isolate (which would race the id-map counter + scheduled-
@@ -241,6 +265,7 @@ void main() async {
     entitlementService: entitlementService,
     widgetService: widgetService,
     deviceCalendarService: deviceCalendarService,
+    sleepSoundController: sleepSoundController,
     child: RostrikApp(legalAccepted: legalAccepted),
   ));
 

@@ -34,14 +34,22 @@ const String windDownMinutesKey = 'windDownMinutes';
 /// Hive key for the (UI-only, not-yet-wired) bedtime reminder toggle.
 const String bedtimeReminderEnabledKey = 'bedtimeReminderEnabled';
 
-/// Hive key for the (UI-only, not-yet-wired) wind-down reminder toggle.
+/// Hive key for the wind-down reminder toggle (wired via `SleepReminderService`).
 const String windDownReminderEnabledKey = 'windDownReminderEnabled';
+
+/// Hive key for the sleep-sound auto-stop timer, in minutes (0 = play until
+/// stopped). Persisted so the user's chosen wind-down timer sticks between
+/// sessions. Watched so the Sleep tab's chips reflect it live.
+const String sleepSoundTimerMinutesKey = 'sleepSoundTimerMinutes';
 
 /// Default nightly sleep target (hours) when the user hasn't changed it.
 const int kDefaultSleepGoalHours = 8;
 
 /// Default wind-down lead (minutes) when the user hasn't changed it.
 const int kDefaultWindDownMinutes = 30;
+
+/// Default sleep-sound auto-stop timer (minutes) when the user hasn't changed it.
+const int kDefaultSleepSoundTimerMinutes = 30;
 
 /// Hive key for the optional Device Calendar Sync toggle. When true, the roster
 /// is mirrored to a dedicated "Rostrik Roster" calendar on the device (feature
@@ -84,6 +92,7 @@ class AppPreferences extends ChangeNotifier {
         windDownMinutesKey,
         bedtimeReminderEnabledKey,
         windDownReminderEnabledKey,
+        sleepSoundTimerMinutesKey,
         isSchedulePausedKey,
       ],
     )..addListener(notifyListeners);
@@ -131,6 +140,11 @@ class AppPreferences extends ChangeNotifier {
   bool get windDownReminderEnabled =>
       _box.get(windDownReminderEnabledKey, defaultValue: false) as bool;
 
+  /// Sleep-sound auto-stop timer in minutes (0 = until stopped). Default 30.
+  int get sleepSoundTimerMinutes =>
+      _box.get(sleepSoundTimerMinutesKey,
+          defaultValue: kDefaultSleepSoundTimerMinutes) as int;
+
   bool get isSchedulePaused =>
       _box.get(isSchedulePausedKey, defaultValue: false) as bool;
 
@@ -157,6 +171,9 @@ class AppPreferences extends ChangeNotifier {
 
   void setWindDownReminderEnabled(bool value) =>
       _putAndFlush(windDownReminderEnabledKey, value);
+
+  void setSleepSoundTimerMinutes(int value) =>
+      _putAndFlush(sleepSoundTimerMinutesKey, value);
 
   void setIsSchedulePaused(bool value) => _putAndFlush(isSchedulePausedKey, value);
 

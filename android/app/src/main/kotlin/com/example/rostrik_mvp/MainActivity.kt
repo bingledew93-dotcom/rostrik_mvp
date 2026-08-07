@@ -1,11 +1,15 @@
 package com.example.rostrik_mvp
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -34,6 +38,10 @@ class MainActivity : FlutterActivity() {
         // `lib/alarms/ringtone_channel.dart`'s `RingtoneChannel.channelName`.
         private const val RINGTONE_CHANNEL = "rostrik/ringtone_picker"
 
+        // Sleep-sounds channel. Wire name must match
+        // `lib/sleep/sleep_sound_channel.dart`'s `SleepSoundChannel.channelName`.
+        private const val SLEEP_CHANNEL = "rostrik/sleep_sounds"
+
         // Native dismiss fail-safe ledger methods (Dart's boot gate reads, then
         // clears). Strings are part of the wire contract with `main.dart`.
         private const val METHOD_GET_PENDING_DISMISSALS = "getPendingDismissals"
@@ -61,6 +69,11 @@ class MainActivity : FlutterActivity() {
     private var ringtoneChannel: MethodChannel? = null
     private var nativeAlarmsChannel: MethodChannel? = null
     private var activityRemindersChannel: MethodChannel? = null
+    private var sleepChannel: MethodChannel? = null
+
+    /// Relays [SleepSoundService.ACTION_SLEEP_STOPPED] (timer elapsed / focus
+    /// loss / stop) to the Flutter side so the Sleep tile un-highlights live.
+    private var sleepStoppedReceiver: BroadcastReceiver? = null
 
     /// EDITOR PREVIEW ("Play Now") engine — in-activity tone preview for the
     /// create/edit sheet. Dies with the activity (it never reaches a lock
@@ -151,6 +164,73 @@ class MainActivity : FlutterActivity() {
             applicationContext,
         )
 
+        // Sleep-sounds channel: play/stop a looping white/brown-noise sound in
+        // the SleepSoundService (foreground mediaPlayback), plus an isPlaying
+        // query so the UI can re-sync after a background auto-stop.
+        sleepChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SLEEP_CHANNEL,
+        )
+        sleepChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "playSleepSound" -> {
+                    val resource = call.argument<String>("resource")
+                    if (resource.isNullOrEmpty()) {
+                        result.error("NO_RESOURCE", "Missing sleep sound resource", null)
+                    } else {
+                        val intent = Intent(this, SleepSoundService::class.java).apply {
+                            action = SleepSoundService.ACTION_PLAY
+                            putExtra(SleepSoundService.EXTRA_RESOURCE, resource)
+                            putExtra(
+                                SleepSoundService.EXTRA_LABEL,
+                                call.argument<String>("label") ?: "Sleep sound",
+                            )
+                            putExtra(
+                                SleepSoundService.EXTRA_TIMER_MINUTES,
+                                call.argument<Int>("timerMinutes") ?: 0,
+                            )
+                        }
+                        // Started from the foreground UI, so going foreground is
+                        // permitted; the service calls startForeground immediately.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                        result.success(null)
+                    }
+                }
+                "stopSleepSound" -> {
+                    // Plain startService (not startForegroundService): delivers
+                    // ACTION_STOP to the already-running FGS so it tears down
+                    // cleanly (and broadcasts the stop). A no-op if not running.
+                    startService(
+                        Intent(this, SleepSoundService::class.java)
+                            .setAction(SleepSoundService.ACTION_STOP),
+                    )
+                    result.success(null)
+                }
+                "isSleepPlaying" -> result.success(SleepSoundService.isRunning)
+                else -> result.notImplemented()
+            }
+        }
+
+        // Relay the service's stop broadcast to Flutter (`onSleepStopped`) so the
+        // playing tile un-highlights the moment the wind-down timer elapses while
+        // the app is foreground. NOT_EXPORTED: only our own service can send it.
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                sleepChannel?.invokeMethod("onSleepStopped", null)
+            }
+        }
+        sleepStoppedReceiver = receiver
+        ContextCompat.registerReceiver(
+            this,
+            receiver,
+            IntentFilter(SleepSoundService.ACTION_SLEEP_STOPPED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+
         // WINDOW-ROLL GUARANTEE (audit F1): register the periodic background
         // refresh that keeps the 14-day OS alarm window advancing even when
         // the user neither opens the app nor reboots for weeks. KEEP policy →
@@ -163,6 +243,16 @@ class MainActivity : FlutterActivity() {
         // Stop the EDITOR PREVIEW — it must die with the activity. A FIRING ALARM
         // is owned by [AlarmAudioService] (a foreground service), never touched here.
         previewEngine.stop()
+        // Unregister the sleep-stop relay. The SleepSoundService itself is a
+        // foreground service and keeps playing independently of this activity.
+        sleepStoppedReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: IllegalArgumentException) {
+                // Already unregistered — ignore.
+            }
+        }
+        sleepStoppedReceiver = null
         super.onDestroy()
     }
 

@@ -10,6 +10,9 @@ import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/state/app_preferences.dart';
 import 'package:rostrik_mvp/ui/sleep/sleep_screen.dart';
 
+/// Widget tests for the (now unlocked) Sleep tab. The sound grid degrades
+/// gracefully without a `SleepSoundController` provider — tiles render, taps
+/// no-op — so these pump only the roster + preference providers.
 void main() {
   late Directory tempDir;
   late Box box;
@@ -21,6 +24,8 @@ void main() {
     Hive.init(tempDir.path);
   });
 
+  // Open the Hive box + build AppPreferences in setUp (OUTSIDE the tester zone):
+  // awaiting a box open inside testWidgets would deadlock under the fake clock.
   setUp(() async {
     box = await Hive.openBox('sleep_settings_${boxCounter++}');
     prefs = AppPreferences(box);
@@ -37,6 +42,12 @@ void main() {
   });
 
   Future<void> pumpSleep(WidgetTester tester) async {
+    // Tall viewport so the whole (scrolling) Sleep tab lays out — the sound grid
+    // sits below a normal 600px test fold and the lazy ListView wouldn't build it.
+    tester.view.physicalSize = const Size(1200, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -51,17 +62,8 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('shows the beta-limitation banner at the top', (tester) async {
-    await pumpSleep(tester);
-    expect(find.byKey(const ValueKey('sleep-beta-banner')), findsOneWidget);
-    expect(find.text('Beta Limitation'), findsOneWidget);
-    expect(
-      find.textContaining('under construction for Phase 2'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('the reminder toggles are disabled', (tester) async {
+  testWidgets('the reminder toggles are enabled (no longer beta-locked)',
+      (tester) async {
     await pumpSleep(tester);
     final bedtime = tester.widget<SwitchListTile>(
       find.byKey(const ValueKey('sleep-bedtime-reminder-toggle')),
@@ -69,27 +71,53 @@ void main() {
     final windDown = tester.widget<SwitchListTile>(
       find.byKey(const ValueKey('sleep-winddown-reminder-toggle')),
     );
-    // onChanged:null == disabled — the gated controls can't be flipped.
-    expect(bedtime.onChanged, isNull);
-    expect(windDown.onChanged, isNull);
+    expect(bedtime.onChanged, isNotNull);
+    expect(windDown.onChanged, isNotNull);
+    // The beta banner is gone.
+    expect(find.byKey(const ValueKey('sleep-beta-banner')), findsNothing);
   });
 
-  testWidgets('tapping a locked control surfaces the coming-soon snackbar',
+  testWidgets('renders the six sleep sounds and the target/timer chips',
       (tester) async {
     await pumpSleep(tester);
+    for (final resource in const [
+      'sleep_white_noise',
+      'sleep_pink_noise',
+      'sleep_brown_noise',
+      'sleep_fan',
+      'sleep_ocean',
+      'sleep_rain',
+    ]) {
+      expect(find.byKey(ValueKey('sleep-sound-$resource')), findsOneWidget);
+    }
+    // Target-hours + auto-stop-timer chips present.
+    expect(find.byKey(const ValueKey('sleep-goal-8')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sleep-timer-30')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sleep-timer-0')), findsOneWidget); // Off
+  });
 
-    // The _LockedControl overlay sits over the disabled toggle; a tap on it
-    // routes to the snackbar rather than doing nothing.
-    await tester.tap(
-      find.byKey(const ValueKey('sleep-bedtime-reminder-toggle')),
-      warnIfMissed: false,
-    );
-    await tester.pump(); // start the snackbar animation
-    await tester.pump(const Duration(milliseconds: 750));
+  testWidgets('tapping a sleep-target chip persists the goal', (tester) async {
+    await pumpSleep(tester);
+    expect(prefs.sleepGoalHours, 8); // default
 
-    expect(
-      find.text('Coming soon! We are perfecting the alarm engine first.'),
-      findsOneWidget,
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('sleep-goal-7'))),
     );
+    await tester.pump();
+
+    expect(prefs.sleepGoalHours, 7);
+  });
+
+  testWidgets('toggling the bedtime reminder persists the preference',
+      (tester) async {
+    await pumpSleep(tester);
+    expect(prefs.bedtimeReminderEnabled, isFalse);
+
+    await tester.runAsync(
+      () => tester.tap(find.byKey(const ValueKey('sleep-bedtime-reminder-toggle'))),
+    );
+    await tester.pump();
+
+    expect(prefs.bedtimeReminderEnabled, isTrue);
   });
 }

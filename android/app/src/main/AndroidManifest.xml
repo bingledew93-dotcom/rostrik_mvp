@@ -182,6 +182,15 @@
             android:exported="false"
             android:directBootAware="true"
             android:foregroundServiceType="mediaPlayback"/>
+        <!-- Sleep-sounds player (Sleep tab). A SEPARATE mediaPlayback foreground
+             service from the alarm audio above — calm looping white/brown noise
+             with a wind-down auto-stop timer, kept alive with the screen off so
+             the user can fall asleep to it. Not exported — started only by our
+             own `rostrik/sleep_sounds` channel while the app is foreground. -->
+        <service
+            android:name=".SleepSoundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"/>
         <!-- Native (NON-Flutter) full-screen alarm screen, launched by
              AlarmReceiver's full-screen-intent notification. Its OWN task
              (taskAffinity="") + excludeFromRecents so a dismiss can

@@ -19,6 +19,7 @@ import '../logic/cycle_service.dart';
 import '../logic/shift_generator.dart';
 import '../purchase/entitlement_service.dart';
 import '../services/widget_service.dart';
+import '../sleep/sleep_sound_controller.dart';
 import 'app_preferences.dart';
 
 /// Root-level provider tree. Sits between LocalStorage (constructed in
@@ -41,6 +42,7 @@ class AppProviders extends StatelessWidget {
     required this.entitlementService,
     required this.widgetService,
     required this.deviceCalendarService,
+    required this.sleepSoundController,
     required this.child,
   });
 
@@ -50,6 +52,7 @@ class AppProviders extends StatelessWidget {
   final EntitlementService entitlementService;
   final WidgetService widgetService;
   final DeviceCalendarService deviceCalendarService;
+  final SleepSoundController sleepSoundController;
   final Widget child;
 
   // Generous symmetric window around app-start `now`. Wide enough that
@@ -143,6 +146,12 @@ class AppProviders extends StatelessWidget {
         // permission prompt (only on enable) and the reactive roster mirror.
         ChangeNotifierProvider<DeviceCalendarService>.value(
           value: deviceCalendarService,
+        ),
+        // Sleep-sounds player state (Sleep tab). ChangeNotifier so a playing
+        // tile highlights + counts down live; the native SleepSoundService is
+        // the real audio authority, this mirrors it. Constructed in main().
+        ChangeNotifierProvider<SleepSoundController>.value(
+          value: sleepSoundController,
         ),
       ],
       child: child,
