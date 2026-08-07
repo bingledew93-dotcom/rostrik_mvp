@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Rostrik home-screen widget (Phase 2). A glanceable dark card mirroring the
-     Dashboard Hero Card: a colour accent bar (tinted per shift type by
-     RostrikWidgetProvider), a coloured badge line, the big countdown/status,
-     and a secondary timestamp. Only RemoteViews-supported views are used
-     (LinearLayout / TextView / ImageView) so it renders inside a widget host.
-     The whole card is one tap target that deep-links into the app. -->
+<!-- Rostrik home-screen widget (Phase 2) — COMPACT 1-row card (4x1, resizes to
+     2x1). A dark glance card mirroring the Dashboard Hero: a colour accent bar
+     (tinted per shift type by RostrikWidgetProvider), the coloured shift badge,
+     and the big countdown/status underneath. Trimmed from the original 2-row
+     layout (the absolute-time subtitle was dropped) so it reads cleanly at a
+     single row height. Only RemoteViews-supported views are used (LinearLayout /
+     TextView / ImageView) so it renders inside a widget host. The whole card is
+     one tap target that opens the app to the Dashboard. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -12,13 +14,13 @@
     android:orientation="horizontal"
     android:background="@drawable/rostrik_widget_background"
     android:gravity="center_vertical"
-    android:padding="16dp">
+    android:padding="12dp">
 
     <ImageView
         android:id="@+id/widget_accent"
-        android:layout_width="5dp"
+        android:layout_width="4dp"
         android:layout_height="match_parent"
-        android:layout_marginEnd="14dp"
+        android:layout_marginEnd="12dp"
         android:background="@color/widget_accent"
         android:contentDescription="@null" />
 
@@ -43,24 +45,13 @@
             android:id="@+id/widget_main"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:includeFontPadding="false"
-            android:maxLines="2"
+            android:maxLines="1"
             android:text="Starts in 6d 1h"
             android:textColor="@color/widget_text_primary"
-            android:textSize="24sp"
+            android:textSize="20sp"
             android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/widget_subtitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:text="Starts Wed, Jul 1 at 06:00"
-            android:textColor="@color/widget_text_secondary"
-            android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>
