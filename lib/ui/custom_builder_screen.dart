@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/models/shift.dart';
+import '../data/models/shift_cycle.dart';
 import '../data/models/shift_type.dart';
+import '../logic/cycle_service.dart';
+import '../logic/cycle_to_painted.dart';
 import '../logic/painted_roster.dart';
 import '../logic/rotation_pattern_validator.dart' show RosterGenerationException;
 import '../logic/shift_generator.dart';
@@ -36,13 +39,20 @@ import 'time_picker_pref.dart';
 /// onboarding Custom card. The OCR scan path (Phase 6) is preserved as a
 /// secondary action.
 class CustomBuilderScreen extends StatefulWidget {
-  const CustomBuilderScreen({super.key, this.scanner});
+  const CustomBuilderScreen({super.key, this.scanner, this.editCycle});
 
   /// Injectable for tests. Null in production, where the screen lazily owns a
   /// real [OcrScannerService] and disposes it. The real one is never
   /// constructed unless the user actually triggers a scan, so widget tests
   /// that only render the builder never touch ML Kit / the camera.
   final OcrScannerService? scanner;
+
+  /// When non-null the screen opens in EDIT mode, pre-filled from this saved
+  /// roster (name, cycle length, painted blocks, anchored start). Saving
+  /// REPLACES it: the new roster is generated, then this cycle is
+  /// cascade-deleted. Only reconstructable (anchored, ≤60-day) cycles are ever
+  /// passed here — see [isCycleEditable].
+  final ShiftCycle? editCycle;
 
   @override
   State<CustomBuilderScreen> createState() => _CustomBuilderScreenState();
@@ -78,7 +88,27 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     super.initState();
     final now = DateTime.now();
     _startDate = DateTime(now.year, now.month, now.day);
+
+    // EDIT mode: pre-fill the builder from the saved roster.
+    final editing = widget.editCycle;
+    if (editing != null) {
+      final reconstructed = reconstructRosterFromCycle(editing);
+      if (reconstructed != null) {
+        _nameController.text = editing.label;
+        _cycleLengthDays = reconstructed.cycleLengthDays;
+        _customLength = !_presetLengths.contains(_cycleLengthDays);
+        _blocks.addAll(reconstructed.blocks);
+        // Preserve the rotation's phase: keep its original anchor (even if in
+        // the past) so changing a shift time doesn't shift which cycle-day
+        // "today" lands on. The user can still re-pick the start date.
+        _startDate = editing.anchorDate ?? _startDate;
+      }
+    }
   }
+
+  bool get _isEditing => widget.editCycle != null;
+
+  static DateTime _laterOf(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
 
   @override
   void dispose() {
@@ -192,14 +222,28 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
 
     // Capture before the awaits — BuildContext is unsafe across suspensions.
     final generator = context.read<ShiftGenerator>();
+    final editCycle = widget.editCycle;
+    // Only needed for the replace step; read it now so no context is used post-await.
+    final cycleService = editCycle != null ? context.read<CycleService>() : null;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final start = _startDate!;
     final name = _nameController.text.trim();
 
+    // Always materialise at least a full year from today, and (when editing an
+    // old anchor) at least one window from the anchor, so future coverage is
+    // never thin regardless of how far back the anchor sits.
+    final now = DateTime.now();
+    final materialiseTo = _laterOf(
+      DateTime(start.year, start.month, start.day + 365),
+      DateTime(now.year, now.month, now.day + 365),
+    );
+
     try {
       final shifts = await generator.generateAndPersistCustom(
-        label: name.isEmpty ? 'Custom roster' : name,
+        label: name.isEmpty
+            ? (editCycle?.label ?? 'Custom roster')
+            : name,
         startDate: start,
         cycleLengthDays: _cycleLengthDays,
         // Per-day positional blocks — two blocks on the same day materialise as
@@ -207,15 +251,29 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
         blocks: paintedBlocksToShiftBlocks(_blocks),
         // Forever: the cycle is anchored (projects indefinitely); we materialise
         // a 365-day window now, rolled forward by the invisible extender.
-        // Calendar-day math (not Duration) for DST safety.
-        materialiseTo: DateTime(start.year, start.month, start.day + 365),
+        materialiseTo: materialiseTo,
         // Un-painted days render as explicit Off/rest days on the calendar.
         fillOffDays: true,
         summary: 'Custom · $_cycleLengthDays-day cycle · repeats',
+        // EDIT: exclude the roster we're replacing from the overlap check so it
+        // doesn't clash with its own current shifts.
+        excludeCycleIdFromOverlap: editCycle?.id,
       );
+      // REPLACE: the new roster is now persisted; cascade-delete the old one
+      // (its shifts + any pending alarms). Ordered new-then-old so a generate
+      // failure above leaves the original roster fully intact.
+      if (cycleService != null && editCycle != null) {
+        await cycleService.deleteCycle(editCycle.id);
+      }
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Created — ${shifts.length} shifts scheduled')),
+        SnackBar(
+          content: Text(
+            _isEditing
+                ? 'Roster updated — ${shifts.length} shifts scheduled'
+                : 'Created — ${shifts.length} shifts scheduled',
+          ),
+        ),
       );
       navigator.pop(true);
     } on RosterGenerationException catch (e) {
@@ -384,13 +442,15 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'New Shift Roster',
+                          _isEditing ? 'Edit Roster' : 'New Shift Roster',
                           style: theme.textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Set up your shift rotation pattern',
+                          _isEditing
+                              ? 'Change and replace this saved roster'
+                              : 'Set up your shift rotation pattern',
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
@@ -466,45 +526,64 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Create Roster'),
+                        : Text(_isEditing ? 'Save Changes' : 'Create Roster'),
                   ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: TextButton(
-                      key: const ValueKey('roster-back-to-options'),
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      child: const Text('Back to options'),
-                    ),
-                  ),
-                  const Divider(height: 32),
-                  _sectionLabel(theme, 'OR IMPORT AN EXISTING ROSTER'),
-                  const SizedBox(height: 10),
-                  // AI-bridge import (Phase 2): paste any roster into an AI app,
-                  // paste its reply back, and land dated shifts on the calendar.
-                  OutlinedButton.icon(
-                    key: const ValueKey('roster-ai-import-entry'),
-                    onPressed:
-                        (_generating || _scanning) ? null : _openAiImport,
-                    icon: const Icon(Icons.auto_awesome, size: 18),
-                    label: const Text('Import via AI'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // OCR scan preserved as a secondary path (not in the primary
-                  // flow, but a shipped feature we don't want to lose).
-                  Center(
-                    child: TextButton.icon(
-                      key: const ValueKey('roster-scan-entry'),
-                      onPressed:
-                          (_generating || _scanning) ? null : _showScanOptions,
-                      icon: const Icon(Icons.document_scanner_outlined, size: 18),
-                      label: Text(
-                        _scanning ? 'Scanning…' : 'Scan a roster photo instead',
+                  // EDIT mode is a REPLACE: no import/scan escape hatches (those
+                  // add separate shifts), just a heads-up that per-shift marks
+                  // reset. Otherwise show the "back / import an existing roster"
+                  // options as before.
+                  if (_isEditing) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Saving replaces this roster. Any leave / time-off marks '
+                      'painted on it will reset.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
+                  ] else ...[
+                    const SizedBox(height: 8),
+                    Center(
+                      child: TextButton(
+                        key: const ValueKey('roster-back-to-options'),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        child: const Text('Back to options'),
+                      ),
+                    ),
+                    const Divider(height: 32),
+                    _sectionLabel(theme, 'OR IMPORT AN EXISTING ROSTER'),
+                    const SizedBox(height: 10),
+                    // AI-bridge import (Phase 2): paste any roster into an AI app,
+                    // paste its reply back, and land dated shifts on the calendar.
+                    OutlinedButton.icon(
+                      key: const ValueKey('roster-ai-import-entry'),
+                      onPressed:
+                          (_generating || _scanning) ? null : _openAiImport,
+                      icon: const Icon(Icons.auto_awesome, size: 18),
+                      label: const Text('Import via AI'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // OCR scan preserved as a secondary path (not in the primary
+                    // flow, but a shipped feature we don't want to lose).
+                    Center(
+                      child: TextButton.icon(
+                        key: const ValueKey('roster-scan-entry'),
+                        onPressed: (_generating || _scanning)
+                            ? null
+                            : _showScanOptions,
+                        icon: const Icon(Icons.document_scanner_outlined,
+                            size: 18),
+                        label: Text(
+                          _scanning
+                              ? 'Scanning…'
+                              : 'Scan a roster photo instead',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

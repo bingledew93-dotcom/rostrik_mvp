@@ -235,6 +235,7 @@ class ShiftGenerator {
     DateTime? materialiseTo,
     String? summary,
     bool fillOffDays = false,
+    String? excludeCycleIdFromOverlap,
   }) async {
     final structuralErrors = validateCustomRoster(cycleLengthDays, blocks);
     if (structuralErrors.isNotEmpty) {
@@ -324,7 +325,11 @@ class ShiftGenerator {
       );
     }
 
-    await _rejectIfTimeOverlap(draft);
+    // `excludeCycleIdFromOverlap` lets the EDIT flow regenerate a roster over
+    // its own current dates without self-clashing: the caller replaces a cycle
+    // by generating the new one (excluding the old cycle's shifts from the
+    // overlap check) and only then cascade-deleting the old one.
+    await _rejectIfTimeOverlap(draft, excludeCycleId: excludeCycleIdFromOverlap);
 
     final endDateInclusive = _addCalendarDays(start, totalDays - 1);
     final cycle = ShiftCycle(
@@ -595,7 +600,10 @@ class ShiftGenerator {
   /// same date span and throws if any same-date pair has a time overlap.
   /// Throws BEFORE any persistence call so a rejected Generate writes
   /// nothing — the user sees a SnackBar, the box is unchanged.
-  Future<void> _rejectIfTimeOverlap(List<Shift> draft) async {
+  Future<void> _rejectIfTimeOverlap(
+    List<Shift> draft, {
+    String? excludeCycleId,
+  }) async {
     if (draft.isEmpty) return;
     // Read the existing roster in the draft's exact date span. `[from, to)`
     // semantics match `getInRange`: pass `lastDate + 1 day` as the upper
@@ -610,7 +618,13 @@ class ShiftGenerator {
       minDate,
       _addCalendarDays(maxDate, 1),
     );
-    final union = [...existing, ...draft];
+    // The EDIT flow regenerates a roster before deleting the old one; exclude
+    // the old cycle's shifts so the roster doesn't clash with its own prior
+    // materialisation.
+    final priorShifts = excludeCycleId == null
+        ? existing
+        : existing.where((s) => s.cycleId != excludeCycleId).toList();
+    final union = [...priorShifts, ...draft];
     final conflicts = findTimeOverlaps(union);
     if (conflicts.isEmpty) return;
     // Every conflict here is the new roster against shifts ALREADY in the box:

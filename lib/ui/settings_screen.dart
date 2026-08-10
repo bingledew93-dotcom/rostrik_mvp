@@ -13,8 +13,10 @@ import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
 import '../legal/legal.dart';
 import '../logic/cycle_service.dart';
+import '../logic/cycle_to_painted.dart' show isCycleEditable;
 import '../purchase/entitlement_service.dart';
 import '../state/app_preferences.dart';
+import 'custom_builder_screen.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'onboarding/walkthrough_flow.dart';
 import 'pattern_picker_screen.dart';
@@ -628,14 +630,38 @@ class _CycleCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete',
-              onPressed: () => _confirmAndDelete(context),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Edit is offered only for cycles the builder can reconstruct
+                // (anchored + within its cycle-length range). Template / legacy
+                // rosters keep the delete-and-rebuild path.
+                if (isCycleEditable(cycle))
+                  IconButton(
+                    key: ValueKey('cycle-edit-${cycle.id}'),
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Edit',
+                    onPressed: () => _openEdit(context),
+                  ),
+                IconButton(
+                  key: ValueKey('cycle-delete-${cycle.id}'),
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete',
+                  onPressed: () => _confirmAndDelete(context),
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Opens the builder in EDIT mode, pre-filled from this roster. Saving there
+  /// replaces the cycle; the list updates reactively via the cycles stream.
+  Future<void> _openEdit(BuildContext context) {
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => CustomBuilderScreen(editCycle: cycle)),
     );
   }
 
