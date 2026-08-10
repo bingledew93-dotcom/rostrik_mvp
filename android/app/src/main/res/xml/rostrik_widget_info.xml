@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget metadata — COMPACT 1-row card. Defaults to a 4x1 placement
+     (targetCell 4x1 / minWidth 250dp) and resizes horizontally down to 2x1
+     (minResizeWidth 110dp ≈ 2 cells). Height is locked to a single row
+     (resizeMode="horizontal", no vertical drag) so it can't be stretched back
+     into the old oversized 2-row block. previewLayout renders the real card in
+     the picker on Android 12+, with the launcher icon as the fallback preview.
+     updatePeriodMillis is the OS re-draw cadence (min 30m); the authoritative
+     refresh is the app pushing fresh data via WidgetService. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/rostrik_widget"
+    android:minWidth="250dp"
+    android:minHeight="48dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="48dp"
+    android:previewImage="@mipmap/ic_launcher"
+    android:previewLayout="@layout/rostrik_widget"
+    android:resizeMode="horizontal"
+    android:targetCellHeight="1"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

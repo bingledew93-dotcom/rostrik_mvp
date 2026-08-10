@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../alarms/alarm_scheduler.dart';
+import '../calendar_sync/device_calendar_service.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/repositories/alarm_settings_repository.dart';
@@ -12,8 +13,10 @@ import '../data/repositories/shift_repository.dart';
 import '../data/storage/local_storage.dart';
 import '../legal/legal.dart';
 import '../logic/cycle_service.dart';
+import '../logic/cycle_to_painted.dart' show isCycleEditable;
 import '../purchase/entitlement_service.dart';
 import '../state/app_preferences.dart';
+import 'custom_builder_screen.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'onboarding/walkthrough_flow.dart';
 import 'pattern_picker_screen.dart';
@@ -54,6 +57,8 @@ class SettingsScreen extends StatelessWidget {
             _WorkHistorySection(),
             Divider(height: 32),
             _PreferencesSection(),
+            Divider(height: 32),
+            _CalendarSyncSection(),
             Divider(height: 32),
             _HelpSection(),
             Divider(height: 32),
@@ -782,14 +787,38 @@ class _CycleCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete',
-              onPressed: () => _confirmAndDelete(context),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Edit is offered only for cycles the builder can reconstruct
+                // (anchored + within its cycle-length range). Template / legacy
+                // rosters keep the delete-and-rebuild path.
+                if (isCycleEditable(cycle))
+                  IconButton(
+                    key: ValueKey('cycle-edit-${cycle.id}'),
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Edit',
+                    onPressed: () => _openEdit(context),
+                  ),
+                IconButton(
+                  key: ValueKey('cycle-delete-${cycle.id}'),
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete',
+                  onPressed: () => _confirmAndDelete(context),
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Opens the builder in EDIT mode, pre-filled from this roster. Saving there
+  /// replaces the cycle; the list updates reactively via the cycles stream.
+  Future<void> _openEdit(BuildContext context) {
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => CustomBuilderScreen(editCycle: cycle)),
     );
   }
 
@@ -976,7 +1005,44 @@ class _PreferencesSection extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Appearance',
+            style: theme.textTheme.labelLarge,
+          ),
           const SizedBox(height: 8),
+          SegmentedButton<ThemeMode>(
+            key: const ValueKey('settings-theme-mode'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: ThemeMode.system,
+                label: Text('System'),
+                icon: Icon(Icons.brightness_auto),
+              ),
+              ButtonSegment(
+                value: ThemeMode.light,
+                label: Text('Light'),
+                icon: Icon(Icons.light_mode_outlined),
+              ),
+              ButtonSegment(
+                value: ThemeMode.dark,
+                label: Text('Dark'),
+                icon: Icon(Icons.dark_mode_outlined),
+              ),
+            ],
+            selected: {prefs.themeMode},
+            onSelectionChanged: (s) =>
+                context.read<AppPreferences>().setThemeMode(s.first),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Dark is Rostrik’s default. Light uses a warm cream palette.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
           SwitchListTile(
             key: const ValueKey('settings-use-24h-toggle'),
             contentPadding: EdgeInsets.zero,
@@ -1034,6 +1100,125 @@ class _PreferencesSection extends StatelessWidget {
             onSelectionChanged: (s) =>
                 context.read<AppPreferences>().setTimelineDefaultsToMonth(s.first),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "CALENDAR" — the optional Device Calendar Sync toggle (feature
+/// `feature-calendar-sync`). Turning it ON is the ONLY thing that requests
+/// calendar permission; on grant it mirrors the roster to a dedicated "Rostrik
+/// Roster" calendar and keeps it in sync as the roster changes. Turning it OFF
+/// stops syncing and clears that calendar's future events.
+///
+/// Watches [DeviceCalendarService] (a ChangeNotifier) so the switch reflects the
+/// live enabled/busy state. Null-guarded: pumped without the provider (a bare
+/// widget test) it renders nothing rather than throwing.
+class _CalendarSyncSection extends StatelessWidget {
+  const _CalendarSyncSection();
+
+  Future<void> _toggle(
+    BuildContext context,
+    DeviceCalendarService service,
+    bool value,
+  ) async {
+    // Capture the messenger before the await — BuildContext must not be used
+    // across the async gap.
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (!value) {
+      await service.disableSync();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Calendar sync off. Upcoming "Rostrik Roster" events were cleared.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final result = await service.enableSync();
+    switch (result) {
+      case CalendarSyncEnableResult.enabled:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Mirroring your roster to the "Rostrik Roster" '
+                'calendar…'),
+          ),
+        );
+      case CalendarSyncEnableResult.denied:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Calendar permission is needed to sync your roster.'),
+          ),
+        );
+      case CalendarSyncEnableResult.permanentlyDenied:
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Calendar access is blocked. Enable it in system settings to '
+              'sync.',
+            ),
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: service.openSystemSettings,
+            ),
+          ),
+        );
+      case CalendarSyncEnableResult.unsupported:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text("Calendar sync isn't available on this device."),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.watch<DeviceCalendarService?>();
+    if (service == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CALENDAR',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            key: const ValueKey('settings-calendar-sync-toggle'),
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.event_available_outlined),
+            title: const Text('Sync to Google / Device Calendar'),
+            subtitle: Text(
+              'Automatically mirror your shifts to a dedicated "Rostrik Roster" '
+              'calendar on your phone.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            value: service.enabled,
+            // Disabled mid-request so taps can't overlap; the trailing spinner
+            // shows the round-trip is in flight.
+            onChanged:
+                service.busy ? null : (v) => _toggle(context, service, v),
+          ),
+          if (service.busy)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
         ],
       ),
     );

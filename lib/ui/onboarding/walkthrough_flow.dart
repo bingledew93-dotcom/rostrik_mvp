@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/shift_type.dart';
+import '../app_theme.dart';
 import '../critical_dismiss_controls.dart';
 import '../roster/shift_visuals.dart';
 
@@ -482,10 +483,21 @@ class _ShakePracticePageState extends State<_ShakePracticePage> {
                 ],
               ),
             )
-          : ShakeToDismiss(
-              onDismissed: _onShaken,
-              magnitudeStream: widget.magnitudeStream,
-              clock: widget.clock,
+          : Container(
+              // The shake demo reuses the real alarm's white-on-translucent
+              // pill, which is styled for the always-dark alarm screen. Give it
+              // a dark backing so it reads correctly (and previews the real
+              // surface) even when the app is in the cream light theme.
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kRostrikBlack,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: ShakeToDismiss(
+                onDismissed: _onShaken,
+                magnitudeStream: widget.magnitudeStream,
+                clock: widget.clock,
+              ),
             ),
     );
   }

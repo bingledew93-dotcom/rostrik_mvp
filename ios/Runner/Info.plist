@@ -12,6 +12,17 @@
 		<string>Rostrik uses the camera to photograph your printed roster and read the shift times on your device.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Rostrik can read a saved photo of your roster to import shift times on your device.</string>
+		<!-- Optional Device Calendar Sync (device_calendar_plus): only requested
+	     when the user turns Calendar Sync on in Settings. Full access is needed
+	     to find-or-create the dedicated "Rostrik Roster" calendar and clear its
+	     old events before re-mirroring the roster. The legacy key covers iOS
+	     10–16; the Full/WriteOnly keys are the iOS 17+ split. -->
+		<key>NSCalendarsUsageDescription</key>
+		<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
+		<key>NSCalendarsFullAccessUsageDescription</key>
+		<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
+		<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+		<string>Rostrik adds your shifts to a dedicated "Rostrik Roster" calendar.</string>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>CFBundleDevelopmentRegion</key>

@@ -235,6 +235,7 @@ class ShiftGenerator {
     DateTime? materialiseTo,
     String? summary,
     bool fillOffDays = false,
+    String? excludeCycleIdFromOverlap,
   }) async {
     final structuralErrors = validateCustomRoster(cycleLengthDays, blocks);
     if (structuralErrors.isNotEmpty) {
@@ -324,7 +325,11 @@ class ShiftGenerator {
       );
     }
 
-    await _rejectIfTimeOverlap(draft);
+    // `excludeCycleIdFromOverlap` lets the EDIT flow regenerate a roster over
+    // its own current dates without self-clashing: the caller replaces a cycle
+    // by generating the new one (excluding the old cycle's shifts from the
+    // overlap check) and only then cascade-deleting the old one.
+    await _rejectIfTimeOverlap(draft, excludeCycleId: excludeCycleIdFromOverlap);
 
     final endDateInclusive = _addCalendarDays(start, totalDays - 1);
     final cycle = ShiftCycle(
@@ -531,6 +536,37 @@ class ShiftGenerator {
     return draft;
   }
 
+  /// Import path: persists a batch of ALREADY-DATED shifts (each carrying its
+  /// own absolute calendar [Shift.date]) as standalone records — used by the
+  /// "Import Roster via AI Bridge" flow and any future dated-import source.
+  ///
+  /// Unlike every other generate path, these shifts are NOT folded into a
+  /// [ShiftCycle]: they leave [Shift.cycleId] null, exactly like a shift added
+  /// through the single-shift editor. That is deliberate — the imported dates
+  /// are concrete, one-off facts, not a repeating rotation. Stamping them onto
+  /// an anchored cycle would make the Invisible Extender re-project the same
+  /// sequence forward forever onto dates the user never worked.
+  ///
+  /// Applies the SAME same-date time-overlap guard the generate paths use
+  /// (union of the incoming batch ∪ the existing roster in that span), so an
+  /// import that would double-book a working shift is rejected with a
+  /// [RosterGenerationException] BEFORE anything is written — nothing is
+  /// half-imported. Off days (0/0) are zero-duration and never conflict.
+  ///
+  /// The caller builds the [Shift]s (allocating ids) so the mapping from the
+  /// import source's own model stays out of `lib/logic`. Returns the shifts
+  /// that were written.
+  Future<List<Shift>> importDatedShifts(List<Shift> shifts) async {
+    if (shifts.isEmpty) {
+      throw RosterGenerationException('There are no shifts to import.');
+    }
+    await _rejectIfTimeOverlap(shifts);
+    for (final s in shifts) {
+      await _shifts.upsert(s);
+    }
+    return shifts;
+  }
+
   /// Structural validation mirroring [validateRotationPattern] but
   /// operating on [CycleBlock] (the persisted Hive type) instead of
   /// `RotationBlock` (the pure-logic type). Same error wording so the
@@ -564,7 +600,10 @@ class ShiftGenerator {
   /// same date span and throws if any same-date pair has a time overlap.
   /// Throws BEFORE any persistence call so a rejected Generate writes
   /// nothing — the user sees a SnackBar, the box is unchanged.
-  Future<void> _rejectIfTimeOverlap(List<Shift> draft) async {
+  Future<void> _rejectIfTimeOverlap(
+    List<Shift> draft, {
+    String? excludeCycleId,
+  }) async {
     if (draft.isEmpty) return;
     // Read the existing roster in the draft's exact date span. `[from, to)`
     // semantics match `getInRange`: pass `lastDate + 1 day` as the upper
@@ -579,7 +618,13 @@ class ShiftGenerator {
       minDate,
       _addCalendarDays(maxDate, 1),
     );
-    final union = [...existing, ...draft];
+    // The EDIT flow regenerates a roster before deleting the old one; exclude
+    // the old cycle's shifts so the roster doesn't clash with its own prior
+    // materialisation.
+    final priorShifts = excludeCycleId == null
+        ? existing
+        : existing.where((s) => s.cycleId != excludeCycleId).toList();
+    final union = [...priorShifts, ...draft];
     final conflicts = findTimeOverlaps(union);
     if (conflicts.isEmpty) return;
     // Every conflict here is the new roster against shifts ALREADY in the box:

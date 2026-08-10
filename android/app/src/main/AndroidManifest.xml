@@ -60,6 +60,13 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
+    <!-- Optional Device Calendar Sync (feature-calendar-sync): mirrors the
+         roster to a dedicated "Rostrik Roster" calendar via device_calendar_plus.
+         READ is needed to find-or-create that calendar and clear its future
+         events; WRITE creates the shift events. Runtime-requested ONLY when the
+         user toggles Calendar Sync on in Settings — never at launch. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR"/>
+    <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
     <application
         android:label="Rostrik"
         android:name="${applicationName}"
@@ -175,6 +182,15 @@
             android:exported="false"
             android:directBootAware="true"
             android:foregroundServiceType="mediaPlayback"/>
+        <!-- Sleep-sounds player (Sleep tab). A SEPARATE mediaPlayback foreground
+             service from the alarm audio above — calm looping white/brown noise
+             with a wind-down auto-stop timer, kept alive with the screen off so
+             the user can fall asleep to it. Not exported — started only by our
+             own `rostrik/sleep_sounds` channel while the app is foreground. -->
+        <service
+            android:name=".SleepSoundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"/>
         <!-- Native (NON-Flutter) full-screen alarm screen, launched by
              AlarmReceiver's full-screen-intent notification. Its OWN task
              (taskAffinity="") + excludeFromRecents so a dismiss can
@@ -211,6 +227,23 @@
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+        <!-- Phase-2 HOME-SCREEN WIDGET provider (home_widget). Extends the
+             plugin's HomeWidgetProvider; the Flutter WidgetService writes the
+             hero data it reads. exported="true" is required — the launcher /
+             AppWidgetHost (a different process) binds it to host the widget.
+             The APPWIDGET_UPDATE filter + provider meta-data is the standard
+             AppWidget registration; taps deep-link into MainActivity. -->
+        <receiver
+            android:name=".RostrikWidgetProvider"
+            android:exported="true"
+            android:label="Rostrik">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/rostrik_widget_info"/>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -11,6 +11,7 @@ import 'alarms/native_alarm_scheduler.dart';
 import 'alarms/pending_alarm_delete_guard.dart';
 import 'alarms/pending_dismissal_guard.dart';
 import 'alarms/pending_snooze_guard.dart';
+import 'calendar_sync/device_calendar_service.dart';
 import 'data/repositories/app_alarm_repository.dart';
 import 'data/repositories/shift_repository.dart';
 import 'data/storage/local_storage.dart';
@@ -20,6 +21,9 @@ import 'purchase/entitlement_service.dart';
 import 'purchase/purchase_gate.dart';
 import 'reminders/activity_reminder_scheduler.dart';
 import 'reminders/activity_reminder_service.dart';
+import 'reminders/sleep_reminder_service.dart';
+import 'services/widget_service.dart';
+import 'sleep/sleep_sound_controller.dart';
 import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
 import 'ui/app_theme.dart';
@@ -161,6 +165,21 @@ void main() async {
   );
   await reminderService.start();
 
+  // SLEEP NUDGES (Sleep tab) — the wind-down + bedtime reminders. Reuses the
+  // SAME isolated reminder scheduler as the activity reminders above (a plain,
+  // DND-respecting notification, never the shift-alarm chain). It recomputes the
+  // roster-derived sleep plan and reconciles the two fixed-id nudges whenever the
+  // roster or a sleep preference changes; a fresh reconcile on each launch also
+  // re-arms them after a reboot.
+  final sleepReminderService = SleepReminderService(
+    shifts: storage.shifts,
+    alarms: storage.alarms,
+    alarmSettings: storage.alarmSettings,
+    settingsBox: Hive.box('settings'),
+    scheduler: reminderScheduler,
+  );
+  await sleepReminderService.start();
+
   // FEATURE #4 — 14-day free trial + one-time full-access purchase. Records the
   // trial clock on first launch, writes the lock + horizon-cap gates the alarm
   // sync reads (a locked app fires NO alarms; an in-trial app arms nothing past
@@ -175,6 +194,39 @@ void main() async {
     onEntitlementChanged: syncService.syncAlarms,
   );
   await entitlementService.init();
+
+  // PHASE 2 — HOME-SCREEN WIDGET bridge. Pushes an initial snapshot of the
+  // Dashboard hero to the Android widget and refreshes it on every roster
+  // change (shift/cycle streams) and app resume. Self-guards on unsupported
+  // platforms and swallows its own errors, so it can never disturb startup or
+  // the alarm engine. Started AFTER syncService so the roster it reads is
+  // whatever the initial reconcile has settled on.
+  final widgetService = WidgetService(
+    shifts: storage.shifts,
+    cycles: storage.cycles,
+    settingsBox: Hive.box('settings'),
+  );
+  await widgetService.start();
+
+  // OPTIONAL DEVICE CALENDAR SYNC (feature-calendar-sync). Mirrors the roster to
+  // a dedicated "Rostrik Roster" calendar when the user turns it on in Settings.
+  // Off by default and self-guarding: start() only subscribes to the roster
+  // streams and never prompts for permission — the initial stream emission
+  // triggers a re-sync only if sync is already enabled (and permission held), so
+  // the 180-day window rolls forward on each launch with zero cost when off.
+  final deviceCalendarService = DeviceCalendarService(
+    shifts: storage.shifts,
+    cycles: storage.cycles,
+    settingsBox: Hive.box('settings'),
+  );
+  await deviceCalendarService.start();
+
+  // SLEEP SOUNDS controller (Sleep tab) — the Flutter-side mirror of the native
+  // SleepSoundService foreground player. Provided app-wide so the Sleep tab can
+  // play/stop the looping white/brown-noise sounds and show the wind-down
+  // countdown. Constructed here so it can observe app lifecycle (re-syncs its
+  // "is playing" state on resume after a background auto-stop).
+  final sleepSoundController = SleepSoundController();
 
   // Register the main-isolate liveness beacon — the background sync checks for
   // it (`mainIsolateIsAlive`) and bails rather than reconcile Hive concurrently
@@ -211,6 +263,9 @@ void main() async {
     // UI display preferences ride the already-opened generic 'settings' box.
     preferences: AppPreferences(Hive.box('settings')),
     entitlementService: entitlementService,
+    widgetService: widgetService,
+    deviceCalendarService: deviceCalendarService,
+    sleepSoundController: sleepSoundController,
     child: RostrikApp(legalAccepted: legalAccepted),
   ));
 
@@ -355,19 +410,20 @@ class RostrikApp extends StatelessWidget {
       // it, but field-testing happens on debug builds too and the banner
       // reads as broken UI to a beta tester.
       debugShowCheckedModeBanner: false,
-      // Forced dark mode: most app activity is around alarm-fire time
-      // (early morning / late night) where dark is correct regardless
-      // of OS setting. WakeUpScreen and the notification audio are
-      // already calibrated for low-light. The `theme:` fallback below
-      // is defensive — `themeMode: ThemeMode.dark` always picks
-      // `darkTheme:` so the light theme is effectively unreachable.
+      // Appearance: dark by default (the app's identity — most activity is
+      // around alarm-fire time, early morning / late night, where dark is
+      // correct regardless of OS setting, and the native alarm surface is
+      // always dark). Users can opt into the warm cream `rostrikLightTheme()`
+      // or "follow system" from Settings → Preferences; the choice persists in
+      // `AppPreferences` and is WATCHED here, so flipping it re-themes the whole
+      // app instantly. When no provider is in the tree (bare widget tests) the
+      // tolerant reader falls back to dark — nothing goes light by accident.
       //
-      // The premium pitch-black + high-vis-orange "industrial tool"
-      // identity lives in `rostrikDarkTheme()` — every accent (selection
-      // states, progress, primary buttons) reads from its single orange
-      // seed, so the whole app adopts the look without per-screen edits.
-      themeMode: ThemeMode.dark,
-      theme: rostrikDarkTheme(),
+      // Both themes read from ONE orange seed via `_rostrikThemeFromScheme`, so
+      // every accent (selection states, progress, primary buttons) adopts the
+      // look without per-screen edits.
+      themeMode: AppPreferences.themeModeOf(context),
+      theme: rostrikLightTheme(),
       darkTheme: rostrikDarkTheme(),
       // First-launch gate: read the `onboarding_complete` flag from
       // the already-opened `settings` box. On a fresh install the key

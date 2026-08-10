@@ -5,6 +5,8 @@ import '../../data/models/alarm_settings.dart';
 import '../../data/models/app_alarm.dart';
 import '../../data/models/shift.dart';
 import '../../logic/sleep_plan.dart';
+import '../../sleep/sleep_sound_controller.dart';
+import '../../sleep/sleep_sounds_catalog.dart';
 import '../../state/app_preferences.dart';
 import '../app_theme.dart';
 import '../settings_screen.dart';
@@ -12,12 +14,13 @@ import '../shift_format.dart';
 
 /// Context-aware Sleep tab. Reads the live roster (`List<Shift>`), alarm rules,
 /// the global lead time, and the user's sleep preferences, then renders a
-/// dynamic hero plan plus the (UI-only, for now) reminder / wind-down / sounds
-/// controls.
+/// dynamic hero plan plus the working reminder / wind-down / sound controls.
 ///
-/// All the planning brains live in the pure [computeSleepPlan]; this screen is
-/// presentation only. It degrades gracefully to a calm empty state when there
-/// is no upcoming shift.
+/// The planning brains live in the pure [computeSleepPlan]; the reminder
+/// scheduling is handled off-screen by `SleepReminderService` (which watches the
+/// same preferences these toggles write), and sound playback by the native
+/// `SleepSoundService` via [SleepSoundController]. This screen is presentation +
+/// preference writes only.
 class SleepScreen extends StatelessWidget {
   const SleepScreen({super.key});
 
@@ -57,34 +60,84 @@ class SleepScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            // BETA LOCKDOWN: the reminders / wind-down / sounds backend is a
-            // Phase-2 item, so the controls below are shown (so testers see the
-            // plan) but disabled — wrapped in [_LockedControl], which fades them
-            // and routes any tap to the "coming soon" snackbar.
-            const _BetaLimitationBanner(),
-            const SizedBox(height: 16),
             _SleepHeroCard(plan: plan, use24Hour: use24Hour),
             const SizedBox(height: 28),
+
+            // ── Sleep target (hours) ─────────────────────────────────────────
+            const _SectionHeader('SLEEP TARGET'),
+            const SizedBox(height: 4),
+            const _SectionSub(
+              'How many hours you want. Rostrik counts back from your next '
+              'wake-up alarm to set tonight’s bedtime.',
+            ),
+            const SizedBox(height: 12),
+            _TargetHoursChips(
+              selectedHours: prefs.sleepGoalHours,
+              onSelected: (h) => context.read<AppPreferences>().setSleepGoalHours(h),
+            ),
+            const SizedBox(height: 28),
+
+            // ── Reminders ────────────────────────────────────────────────────
             const _SectionHeader('REMINDERS'),
             const SizedBox(height: 4),
-            _LockedControl(
-              child:
-                  _RemindersSection(plan: plan, prefs: prefs, use24Hour: use24Hour),
+            _RemindersSection(
+              plan: plan,
+              prefs: prefs,
+              use24Hour: use24Hour,
+              onBedtimeChanged: (v) =>
+                  context.read<AppPreferences>().setBedtimeReminderEnabled(v),
+              onWindDownChanged: (v) =>
+                  context.read<AppPreferences>().setWindDownReminderEnabled(v),
             ),
             const SizedBox(height: 28),
-            const _SectionHeader('WIND-DOWN DURATION'),
+
+            // ── Wind-down lead (how early the wind-down nudge fires) ─────────
+            const _SectionHeader('WIND-DOWN LEAD'),
+            const SizedBox(height: 4),
+            const _SectionSub(
+              'How long before bedtime the wind-down nudge lands.',
+            ),
             const SizedBox(height: 12),
-            _LockedControl(
-              child: _WindDownDurationChips(selectedMinutes: prefs.windDownMinutes),
+            _WindDownDurationChips(
+              selectedMinutes: prefs.windDownMinutes,
+              onSelected: (m) =>
+                  context.read<AppPreferences>().setWindDownMinutes(m),
             ),
             const SizedBox(height: 28),
+
+            // ── Sleep sounds ─────────────────────────────────────────────────
             const _SectionHeader('SLEEP SOUNDS'),
+            const SizedBox(height: 4),
+            const _SectionSub(
+              'White & brown noise to drift off to. Pick an auto-stop timer and '
+              'tap a sound.',
+            ),
             const SizedBox(height: 12),
-            const _LockedControl(child: _SleepSoundsGrid()),
+            _SleepTimerChips(
+              selectedMinutes: prefs.sleepSoundTimerMinutes,
+              onSelected: (m) => _onTimerChanged(context, m),
+            ),
+            const SizedBox(height: 14),
+            _SleepSoundsGrid(timerMinutes: prefs.sleepSoundTimerMinutes),
           ],
         ),
       ),
     );
+  }
+
+  /// Persists the new auto-stop timer, and — if a sound is already playing —
+  /// restarts it with the new timer so the change takes effect immediately.
+  void _onTimerChanged(BuildContext context, int minutes) {
+    context.read<AppPreferences>().setSleepSoundTimerMinutes(minutes);
+    final controller = context.read<SleepSoundController?>();
+    final playing = controller?.playingResource;
+    if (controller != null && playing != null) {
+      final sound = kSleepSounds.firstWhere(
+        (s) => s.resource == playing,
+        orElse: () => kSleepSounds.first,
+      );
+      controller.play(sound, timerMinutes: minutes);
+    }
   }
 }
 
@@ -108,98 +161,21 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ─── Beta lockdown ──────────────────────────────────────────────────────────
+/// Muted one-line description under a section header.
+class _SectionSub extends StatelessWidget {
+  const _SectionSub(this.text);
 
-/// Shown whenever a gated Sleep control is tapped while the Phase-2 backend is
-/// still under construction.
-const String _kComingSoonMessage =
-    'Coming soon! We are perfecting the alarm engine first.';
-
-void _showComingSoon(BuildContext context) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(const SnackBar(content: Text(_kComingSoonMessage)));
-}
-
-/// Premium "under construction" banner pinned at the top of the Sleep tab. It
-/// uses the brand orange so it reads as an intentional status, not an error.
-class _BetaLimitationBanner extends StatelessWidget {
-  const _BetaLimitationBanner();
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      key: const ValueKey('sleep-beta-banner'),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: kRostrikOrange.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kRostrikOrange.withValues(alpha: 0.5)),
+    return Text(
+      text,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+        height: 1.35,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.construction, color: kRostrikOrange, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Beta Limitation',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: kRostrikOrange,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Sleep & Wind-down intelligence is currently under '
-                  'construction for Phase 2.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Wraps a not-yet-functional control: fades it (so it reads as disabled) and
-/// IgnorePointers its inner gestures, then lays a transparent tap-catcher over
-/// the whole thing so ANY tap surfaces the "coming soon" snackbar instead of
-/// silently doing nothing.
-class _LockedControl extends StatelessWidget {
-  const _LockedControl({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Opacity(
-          opacity: 0.45,
-          child: IgnorePointer(child: child),
-        ),
-        Positioned.fill(
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => _showComingSoon(context),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -247,7 +223,11 @@ class _HeroShell extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: kRostrikOrange.withValues(alpha: 0.22)),
       ),
-      child: child,
+      // The hero is deliberately dark ("night") in BOTH app themes. Force the
+      // dark scheme on its subtree so descendant text/icons (which read
+      // `onSurface` / `onSurfaceVariant`) stay light-on-dark even when the app
+      // is in the cream light theme — otherwise dark text would vanish here.
+      child: Theme(data: rostrikDarkTheme(), child: child),
     );
   }
 }
@@ -335,8 +315,7 @@ class _NightTransitionContent extends StatelessWidget {
 }
 
 /// State — next working shift is beyond the 36h planning horizon. Calm,
-/// non-prescriptive: no bedtime to chase, recovery is the message. Shares the
-/// label + headline + body rhythm of the other advisory states.
+/// non-prescriptive: no bedtime to chase, recovery is the message.
 class _RestRecoveryContent extends StatelessWidget {
   const _RestRecoveryContent();
 
@@ -487,21 +466,63 @@ class _PlanStat extends StatelessWidget {
   }
 }
 
+// ─── Sleep target chips ──────────────────────────────────────────────────────
+
+class _TargetHoursChips extends StatelessWidget {
+  const _TargetHoursChips({
+    required this.selectedHours,
+    required this.onSelected,
+  });
+
+  final int selectedHours;
+  final ValueChanged<int> onSelected;
+
+  static const List<int> _options = <int>[6, 7, 8, 9, 10];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: _options.map((h) {
+        final selected = selectedHours == h;
+        return ChoiceChip(
+          key: ValueKey('sleep-goal-$h'),
+          label: Text('${h}h'),
+          selected: selected,
+          showCheckmark: false,
+          selectedColor: kRostrikOrange,
+          onSelected: (_) => onSelected(h),
+          labelStyle: theme.textTheme.labelLarge?.copyWith(
+            color: selected ? Colors.black : theme.colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
 // ─── Reminders ────────────────────────────────────────────────────────────
 
-/// Two reminder toggles. State + persistence only (no notification wiring yet);
-/// subtitles surface the computed times when a concrete plan exists. Active
-/// track inherits the theme's safety-orange via `switchTheme`.
+/// Two wired reminder toggles. Persisting to [AppPreferences] flips the pref
+/// that `SleepReminderService` watches, which schedules / cancels the nudge.
+/// Subtitles surface the computed times when a concrete plan exists.
 class _RemindersSection extends StatelessWidget {
   const _RemindersSection({
     required this.plan,
     required this.prefs,
     required this.use24Hour,
+    required this.onBedtimeChanged,
+    required this.onWindDownChanged,
   });
 
   final SleepPlan plan;
   final AppPreferences prefs;
   final bool use24Hour;
+  final ValueChanged<bool> onBedtimeChanged;
+  final ValueChanged<bool> onWindDownChanged;
 
   String? _clock(DateTime? t) =>
       t == null ? null : formatClock(t.hour * 60 + t.minute, use24Hour: use24Hour);
@@ -526,9 +547,7 @@ class _RemindersSection extends StatelessWidget {
                 : "A nudge when it's time to head to bed",
           ),
           value: prefs.bedtimeReminderEnabled,
-          // Disabled for the beta — onChanged:null renders the greyed switch;
-          // the [_LockedControl] overlay catches taps and shows the snackbar.
-          onChanged: null,
+          onChanged: onBedtimeChanged,
         ),
         SwitchListTile(
           key: const ValueKey('sleep-winddown-reminder-toggle'),
@@ -540,7 +559,7 @@ class _RemindersSection extends StatelessWidget {
                 : 'An earlier heads-up to start winding down',
           ),
           value: prefs.windDownReminderEnabled,
-          onChanged: null,
+          onChanged: onWindDownChanged,
         ),
       ],
     );
@@ -550,9 +569,13 @@ class _RemindersSection extends StatelessWidget {
 // ─── Wind-down duration chips ────────────────────────────────────────────────
 
 class _WindDownDurationChips extends StatelessWidget {
-  const _WindDownDurationChips({required this.selectedMinutes});
+  const _WindDownDurationChips({
+    required this.selectedMinutes,
+    required this.onSelected,
+  });
 
   final int selectedMinutes;
+  final ValueChanged<int> onSelected;
 
   static const List<int> _options = <int>[15, 30, 45, 60];
 
@@ -561,16 +584,16 @@ class _WindDownDurationChips extends StatelessWidget {
     final theme = Theme.of(context);
     return Wrap(
       spacing: 10,
+      runSpacing: 10,
       children: _options.map((m) {
         final selected = selectedMinutes == m;
         return ChoiceChip(
+          key: ValueKey('sleep-winddown-$m'),
           label: Text('${m}m'),
           selected: selected,
           showCheckmark: false,
           selectedColor: kRostrikOrange,
-          // Disabled for the beta — onSelected:null greys the chip; the
-          // [_LockedControl] overlay catches taps and shows the snackbar.
-          onSelected: null,
+          onSelected: (_) => onSelected(m),
           labelStyle: theme.textTheme.labelLarge?.copyWith(
             color: selected ? Colors.black : theme.colorScheme.onSurface,
             fontWeight: FontWeight.w600,
@@ -581,58 +604,154 @@ class _WindDownDurationChips extends StatelessWidget {
   }
 }
 
-// ─── Sleep sounds (mocked) ──────────────────────────────────────────────────
+// ─── Sleep-sound auto-stop timer chips ───────────────────────────────────────
 
-class _SleepSoundsGrid extends StatelessWidget {
-  const _SleepSoundsGrid();
+class _SleepTimerChips extends StatelessWidget {
+  const _SleepTimerChips({
+    required this.selectedMinutes,
+    required this.onSelected,
+  });
+
+  final int selectedMinutes;
+  final ValueChanged<int> onSelected;
+
+  /// 0 == "Off" (play until stopped).
+  static const List<int> _options = <int>[0, 15, 30, 45, 60];
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: _options.map((m) {
+        final selected = selectedMinutes == m;
+        return ChoiceChip(
+          key: ValueKey('sleep-timer-$m'),
+          label: Text(m == 0 ? 'Off' : '${m}m'),
+          selected: selected,
+          showCheckmark: false,
+          selectedColor: kRostrikOrange,
+          onSelected: (_) => onSelected(m),
+          labelStyle: theme.textTheme.labelLarge?.copyWith(
+            color: selected ? Colors.black : theme.colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─── Sleep sounds grid ───────────────────────────────────────────────────────
+
+/// The 6-sound grid. Watches [SleepSoundController] so the playing tile
+/// highlights and shows its wind-down countdown; tapping toggles play/stop.
+/// Tolerant of a missing controller (a bare widget test) — the tiles still
+/// render, taps just no-op.
+class _SleepSoundsGrid extends StatelessWidget {
+  const _SleepSoundsGrid({required this.timerMinutes});
+
+  final int timerMinutes;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<SleepSoundController?>();
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 0.92,
       children: [
-        Expanded(child: _SoundCard(icon: Icons.grain, label: 'Rain')),
-        SizedBox(width: 12),
-        Expanded(child: _SoundCard(icon: Icons.waves, label: 'Ocean')),
-        SizedBox(width: 12),
-        Expanded(
-          child: _SoundCard(icon: Icons.graphic_eq, label: 'White Noise'),
-        ),
+        for (final sound in kSleepSounds)
+          _SoundCard(
+            sound: sound,
+            playing: controller?.isPlayingResource(sound.resource) ?? false,
+            remaining: controller?.isPlayingResource(sound.resource) ?? false
+                ? controller?.remaining
+                : null,
+            onTap: controller == null
+                ? null
+                : () => controller.toggle(sound, timerMinutes: timerMinutes),
+          ),
       ],
     );
   }
 }
 
-/// A premium sound tile. The audio engine is a Phase-2 item; the whole grid is
-/// wrapped in [_LockedControl], so this is a pure visual — taps are caught by
-/// the overlay and routed to the "coming soon" snackbar.
+/// A premium sound tile. Highlights (orange) while playing and shows a stop
+/// glyph + the remaining countdown when an auto-stop timer is set.
 class _SoundCard extends StatelessWidget {
-  const _SoundCard({required this.icon, required this.label});
+  const _SoundCard({
+    required this.sound,
+    required this.playing,
+    required this.remaining,
+    required this.onTap,
+  });
 
-  final IconData icon;
-  final String label;
+  final SleepSound sound;
+  final bool playing;
+  final Duration? remaining;
+  final VoidCallback? onTap;
+
+  static String _fmt(Duration d) {
+    final total = d.inSeconds;
+    final m = total ~/ 60;
+    final s = (total % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return AspectRatio(
-      aspectRatio: 1,
+    return GestureDetector(
+      key: ValueKey('sleep-sound-${sound.resource}'),
+      onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHigh,
+          color: playing
+              ? kRostrikOrange.withValues(alpha: 0.16)
+              : theme.colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: playing
+                ? kRostrikOrange
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+            width: playing ? 1.6 : 1,
+          ),
         ),
+        padding: const EdgeInsets.all(8),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: theme.colorScheme.primary, size: 30),
-            const SizedBox(height: 10),
+            Icon(
+              playing ? Icons.stop_rounded : sound.icon,
+              color: playing ? kRostrikOrange : theme.colorScheme.primary,
+              size: 28,
+            ),
+            const SizedBox(height: 8),
             Text(
-              label,
+              sound.label,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w600,
+                color: playing ? kRostrikOrange : theme.colorScheme.onSurface,
               ),
             ),
+            if (playing && remaining != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                _fmt(remaining!),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ],
         ),
       ),
