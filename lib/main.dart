@@ -410,19 +410,20 @@ class RostrikApp extends StatelessWidget {
       // it, but field-testing happens on debug builds too and the banner
       // reads as broken UI to a beta tester.
       debugShowCheckedModeBanner: false,
-      // Forced dark mode: most app activity is around alarm-fire time
-      // (early morning / late night) where dark is correct regardless
-      // of OS setting. WakeUpScreen and the notification audio are
-      // already calibrated for low-light. The `theme:` fallback below
-      // is defensive — `themeMode: ThemeMode.dark` always picks
-      // `darkTheme:` so the light theme is effectively unreachable.
+      // Appearance: dark by default (the app's identity — most activity is
+      // around alarm-fire time, early morning / late night, where dark is
+      // correct regardless of OS setting, and the native alarm surface is
+      // always dark). Users can opt into the warm cream `rostrikLightTheme()`
+      // or "follow system" from Settings → Preferences; the choice persists in
+      // `AppPreferences` and is WATCHED here, so flipping it re-themes the whole
+      // app instantly. When no provider is in the tree (bare widget tests) the
+      // tolerant reader falls back to dark — nothing goes light by accident.
       //
-      // The premium pitch-black + high-vis-orange "industrial tool"
-      // identity lives in `rostrikDarkTheme()` — every accent (selection
-      // states, progress, primary buttons) reads from its single orange
-      // seed, so the whole app adopts the look without per-screen edits.
-      themeMode: ThemeMode.dark,
-      theme: rostrikDarkTheme(),
+      // Both themes read from ONE orange seed via `_rostrikThemeFromScheme`, so
+      // every accent (selection states, progress, primary buttons) adopts the
+      // look without per-screen edits.
+      themeMode: AppPreferences.themeModeOf(context),
+      theme: rostrikLightTheme(),
       darkTheme: rostrikDarkTheme(),
       // First-launch gate: read the `onboarding_complete` flag from
       // the already-opened `settings` box. On a fresh install the key

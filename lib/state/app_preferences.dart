@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/widgets.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,13 @@ const String use24HourTimeKey = 'use24HourTime';
 
 /// Hive key for the calendar week-start preference. Default true = Monday.
 const String startWeekOnMondayKey = 'startWeekOnMonday';
+
+/// Hive key for the app-wide Appearance (theme mode). Stored as a lowercase
+/// string — `'dark'` (default, the app's identity), `'light'` (the warm cream
+/// theme), or `'system'` (follow the OS). Default is `'dark'` so existing users
+/// see no change unless they opt in. Watched, so flipping it re-themes the whole
+/// app instantly via `RostrikApp`.
+const String themeModeKey = 'themeMode';
 
 /// Hive key for which Timeline view opens first. Default false = List view.
 const String timelineDefaultMonthKey = 'timelineDefaultMonth';
@@ -82,6 +90,7 @@ class AppPreferences extends ChangeNotifier {
       keys: const <String>[
         use24HourTimeKey,
         startWeekOnMondayKey,
+        themeModeKey,
         timelineDefaultMonthKey,
         // Note: timePickerUseDialKey is deliberately NOT watched here — it's
         // read via `listen: false` only when a picker opens, and nothing on
@@ -106,6 +115,12 @@ class AppPreferences extends ChangeNotifier {
 
   bool get startWeekOnMonday =>
       _box.get(startWeekOnMondayKey, defaultValue: true) as bool;
+
+  /// The app-wide Appearance. Defaults to [ThemeMode.dark] (the app's identity)
+  /// so nothing changes for existing installs until the user opts into light or
+  /// system. Reads the same `'dark'/'light'/'system'` string the setter writes.
+  ThemeMode get themeMode =>
+      _themeModeFromString(_box.get(themeModeKey, defaultValue: 'dark') as String);
 
   /// Whether the Timeline opens on the Month calendar (true) or the List (false,
   /// default). Read once when the Timeline mounts to pick its initial view.
@@ -152,6 +167,9 @@ class AppPreferences extends ChangeNotifier {
 
   void setStartWeekOnMonday(bool value) =>
       _putAndFlush(startWeekOnMondayKey, value);
+
+  void setThemeMode(ThemeMode value) =>
+      _putAndFlush(themeModeKey, _themeModeToString(value));
 
   void setTimelineDefaultsToMonth(bool value) =>
       _putAndFlush(timelineDefaultMonthKey, value);
@@ -233,4 +251,36 @@ class AppPreferences extends ChangeNotifier {
   /// time). Watched, so the list re-sorts when the user flips the toggle.
   static bool alarmSortByShiftTypeOf(BuildContext context) =>
       context.watch<AppPreferences?>()?.alarmSortByShiftType ?? false;
+
+  /// Tolerant reader for the Appearance (theme mode). Defaults to
+  /// [ThemeMode.dark] when no provider is in the tree (widget tests) or the key
+  /// is unset — preserving the app's forced-dark identity. Watched, so
+  /// `RostrikApp` re-themes the moment the user changes it.
+  static ThemeMode themeModeOf(BuildContext context) =>
+      context.watch<AppPreferences?>()?.themeMode ?? ThemeMode.dark;
+
+  /// Maps the persisted string to a [ThemeMode]; anything unrecognised (or a
+  /// legacy install with no key) falls back to dark — never light-by-accident.
+  static ThemeMode _themeModeFromString(String value) {
+    switch (value) {
+      case 'light':
+        return ThemeMode.light;
+      case 'system':
+        return ThemeMode.system;
+      case 'dark':
+      default:
+        return ThemeMode.dark;
+    }
+  }
+
+  static String _themeModeToString(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return 'light';
+      case ThemeMode.system:
+        return 'system';
+      case ThemeMode.dark:
+        return 'dark';
+    }
+  }
 }

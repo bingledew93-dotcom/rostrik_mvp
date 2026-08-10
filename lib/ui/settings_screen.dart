@@ -848,7 +848,44 @@ class _PreferencesSection extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Appearance',
+            style: theme.textTheme.labelLarge,
+          ),
           const SizedBox(height: 8),
+          SegmentedButton<ThemeMode>(
+            key: const ValueKey('settings-theme-mode'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: ThemeMode.system,
+                label: Text('System'),
+                icon: Icon(Icons.brightness_auto),
+              ),
+              ButtonSegment(
+                value: ThemeMode.light,
+                label: Text('Light'),
+                icon: Icon(Icons.light_mode_outlined),
+              ),
+              ButtonSegment(
+                value: ThemeMode.dark,
+                label: Text('Dark'),
+                icon: Icon(Icons.dark_mode_outlined),
+              ),
+            ],
+            selected: {prefs.themeMode},
+            onSelectionChanged: (s) =>
+                context.read<AppPreferences>().setThemeMode(s.first),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Dark is Rostrik’s default. Light uses a warm cream palette.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
           SwitchListTile(
             key: const ValueKey('settings-use-24h-toggle'),
             contentPadding: EdgeInsets.zero,

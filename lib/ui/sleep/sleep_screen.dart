@@ -223,7 +223,11 @@ class _HeroShell extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: kRostrikOrange.withValues(alpha: 0.22)),
       ),
-      child: child,
+      // The hero is deliberately dark ("night") in BOTH app themes. Force the
+      // dark scheme on its subtree so descendant text/icons (which read
+      // `onSurface` / `onSurfaceVariant`) stay light-on-dark even when the app
+      // is in the cream light theme — otherwise dark text would vanish here.
+      child: Theme(data: rostrikDarkTheme(), child: child),
     );
   }
 }
