@@ -1,6 +1,7 @@
 package com.example.rostrik_mvp
 
 import android.content.Context
+import android.os.UserManager
 import android.util.Log
 import androidx.work.Configuration
 import androidx.work.CoroutineWorker
@@ -103,6 +104,14 @@ class AlarmSyncWorker(
         /// zero platform calls when nothing changed.
         private const val PERIODIC_INTERVAL_HOURS = 12L
 
+        /** True once credential-encrypted storage is available, i.e. the user
+         *  has unlocked at least once since boot. Defaults to true if the
+         *  service is somehow unavailable — unreachable on API 24+, and of the
+         *  two impossible-case failures "reconcile anyway" beats "never
+         *  reconcile again" for an alarm app. */
+        private fun isUserUnlocked(context: Context): Boolean =
+            context.getSystemService(UserManager::class.java)?.isUserUnlocked ?: true
+
         /** [WorkManager.getInstance] with the DIRECT-BOOT repair (Pixel 9 XL
          *  field bug): on FBE devices LOCKED_BOOT_COMPLETED starts this app's
          *  process BEFORE first unlock, where androidx-startup's
@@ -111,11 +120,35 @@ class AlarmSyncWorker(
          *  post-unlock BOOT_COMPLETED then lands in that SAME process, where
          *  getInstance STILL throws "WorkManager is not initialized" — the
          *  boot reconcile silently died this way on every reboot. Initialize
-         *  on demand and retry; pre-unlock the initialize itself fails and
-         *  the exception propagates to the caller's catch (the native store
-         *  re-arm has already restored the alarms by then). */
-        private fun workManager(context: Context): WorkManager =
-            try {
+         *  on demand and retry.
+         *
+         *  **Returns null before first unlock, and that gate is load-bearing.**
+         *  The previous version documented "pre-unlock the initialize itself
+         *  fails and the exception propagates to the caller's catch". It does
+         *  not. `WorkManager.initialize` RETURNS NORMALLY and then posts
+         *  `ForceStopRunnable` to WorkManager's own executor; that runnable
+         *  opens the Room DB in credential-encrypted storage, which pre-unlock
+         *  does not exist, and throws THERE — on `WM.task-1`, a thread we do
+         *  not own, long after every try/catch on the calling stack has
+         *  returned. Uncaught background exception, process dead.
+         *
+         *  Observed in the field 2026-08-23 on a Pixel 9 Pro XL that rebooted
+         *  on a flat battery: `IllegalStateException: WorkManager can't be
+         *  accessed from direct boot` / `SQLiteCantOpenDatabaseException:
+         *  Directory /data/user/0/com.rostrik.app/no_backup doesn't exist`,
+         *  fatal, during boot recovery.
+         *
+         *  So: never touch WorkManager pre-unlock — not getInstance, and above
+         *  all not initialize. Nothing is lost by waiting. The alarms are
+         *  already re-armed by `NativeAlarmScheduling.rearmFromStore`, which
+         *  runs first and reads device-protected storage, and the post-unlock
+         *  ACTION_BOOT_COMPLETED re-enters this path within seconds. */
+        private fun workManagerOrNull(context: Context): WorkManager? {
+            if (!isUserUnlocked(context)) {
+                Log.i(TAG, "pre-unlock — not touching WorkManager; BOOT_COMPLETED will retry")
+                return null
+            }
+            return try {
                 WorkManager.getInstance(context)
             } catch (e: IllegalStateException) {
                 Log.w(TAG, "WorkManager uninitialized (direct-boot-born process) — initializing on demand")
@@ -127,19 +160,27 @@ class AlarmSyncWorker(
                 }
                 WorkManager.getInstance(context)
             }
+        }
 
-        fun enqueueOneShot(context: Context) {
+        /** Returns true if the work was actually enqueued, false if it was
+         *  skipped because the user has not unlocked yet. Callers log the
+         *  difference: a boot trace that says "enqueued" when nothing was
+         *  enqueued is exactly the kind of thing that costs an hour the next
+         *  time this path misbehaves. */
+        fun enqueueOneShot(context: Context): Boolean {
+            val workManager = workManagerOrNull(context) ?: return false
             val request = OneTimeWorkRequestBuilder<AlarmSyncWorker>()
                 // No constraints — boot recovery must run regardless
                 // of charging / network / idle state. The work is
                 // light and the user expects alarms to be ready
                 // immediately after unlock.
                 .build()
-            workManager(context).enqueueUniqueWork(
+            workManager.enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.KEEP,
                 request,
             )
+            return true
         }
 
         /** The 14-day-window ROLL guarantee (audit F1): without this, the OS
@@ -158,7 +199,7 @@ class AlarmSyncWorker(
                 // No constraints — same rationale as the boot path: the roll
                 // must happen regardless of charging/network/idle state.
                 .build()
-            workManager(context).enqueueUniquePeriodicWork(
+            workManagerOrNull(context)?.enqueueUniquePeriodicWork(
                 UNIQUE_PERIODIC_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 request,

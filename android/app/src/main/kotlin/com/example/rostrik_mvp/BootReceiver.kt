@@ -3,6 +3,7 @@ package com.example.rostrik_mvp
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.UserManager
 import android.util.Log
 
 /**
@@ -118,16 +119,54 @@ class BootReceiver : BroadcastReceiver() {
         // execution. ExistingWorkPolicy.KEEP — if a previous boot's worker is
         // somehow still queued (reboot loop), don't pile on a second.
         try {
-            AlarmSyncWorker.enqueueOneShot(context)
-            Log.d(TAG, "AlarmSyncWorker enqueued for $action")
+            val enqueued = AlarmSyncWorker.enqueueOneShot(context)
+            Log.d(
+                TAG,
+                if (enqueued) {
+                    "AlarmSyncWorker enqueued for $action"
+                } else {
+                    "AlarmSyncWorker deferred (pre-unlock) for $action"
+                },
+            )
         } catch (e: Exception) {
-            // Pre-unlock (LOCKED_BOOT_COMPLETED) this always lands here:
-            // WorkManager's Room DB lives in credential-encrypted storage.
-            // Harmless — the native re-arm above already restored the alarms,
-            // and the post-unlock BOOT_COMPLETED retries the enqueue (with
-            // AlarmSyncWorker.workManager's on-demand init fixing the
-            // direct-boot-born-process trap).
+            // Pre-unlock the enqueue is now a logged NO-OP inside
+            // AlarmSyncWorker (see workManagerOrNull), not an exception, so
+            // this catch is for genuinely unexpected failures only.
+            //
+            // Do NOT "simplify" it away, and do NOT let anything call
+            // WorkManager before first unlock on the strength of it: the
+            // direct-boot failure does not arrive as a throw on this stack.
+            // WorkManager.initialize returns cleanly and then dies on its own
+            // executor thread, which no try/catch here can reach. That was a
+            // FATAL boot crash in the field (2026-08-23, Pixel 9 Pro XL).
+            //
+            // Either way the alarms are safe — the native re-arm above has
+            // already restored them from device-protected storage — and the
+            // post-unlock BOOT_COMPLETED re-runs the enqueue for real.
             Log.e(TAG, "Failed to enqueue AlarmSyncWorker", e)
+        }
+
+        // WIDGET TICK RECOVERY. The home-screen widget keeps itself current by
+        // scheduling its own inexact AlarmManager redraw, and a reboot erases
+        // every AlarmManager alarm -- including that one. Without this poke the
+        // card would sit frozen until `updatePeriodMillis` next came round.
+        // A clock change matters for the same reason the alarms above do: the
+        // widget's countdown targets are epoch instants, so the text is wrong
+        // until something re-renders it.
+        //
+        // Skipped before first unlock -- the widget's SharedPreferences live in
+        // credential-encrypted storage and there is no home screen to look at
+        // yet. BOOT_COMPLETED (post-unlock) covers it moments later.
+        //
+        // Gated on the ACTUAL unlock state rather than on the action name: this
+        // receiver is directBootAware, and while ACTION_LOCKED_BOOT_COMPLETED is
+        // the documented pre-unlock signal, the OEM QUICKBOOT actions carry no
+        // such guarantee. Asking UserManager is the only answer that cannot be
+        // wrong.
+        if (context.getSystemService(UserManager::class.java)?.isUserUnlocked == true) {
+            RostrikWidgetProvider.refresh(context)
+        } else {
+            Log.d(TAG, "pre-unlock — deferring widget refresh to BOOT_COMPLETED")
         }
     }
 }
