@@ -223,6 +223,8 @@ class DashboardHero {
     required this.mainText,
     required this.subtitle,
     required this.shiftType,
+    this.countdownTo,
+    this.countdownPrefix,
   });
 
   /// Title line — emoji + type (`hero_badge`).
@@ -238,6 +240,21 @@ class DashboardHero {
   /// → "day" / "afternoon" / "night" / "off".
   final ShiftType shiftType;
 
+  /// The instant the [mainText] countdown is counting TOWARDS — a shift start
+  /// (Tier A upcoming) or a shift end (Tier A in-progress). Null on the Tier B
+  /// rotation fallback and the Tier C empty state, which have no countdown.
+  ///
+  /// This exists so the home-screen widget can re-derive the countdown for
+  /// ITSELF at draw time. [mainText] is rendered against the `now` passed to
+  /// [buildDashboardHero] and is therefore stale the moment it is written; the
+  /// widget process outlives the app, so it needs the target instant, not a
+  /// snapshot of the remaining duration. In-app callers keep using [mainText].
+  final DateTime? countdownTo;
+
+  /// The verb the widget prefixes to its self-computed countdown — "Starts in"
+  /// or "Ends in". Paired with [countdownTo]; both null or both set.
+  final String? countdownPrefix;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -246,10 +263,19 @@ class DashboardHero {
           badge == other.badge &&
           mainText == other.mainText &&
           subtitle == other.subtitle &&
-          shiftType == other.shiftType;
+          shiftType == other.shiftType &&
+          countdownTo == other.countdownTo &&
+          countdownPrefix == other.countdownPrefix;
 
   @override
-  int get hashCode => Object.hash(badge, mainText, subtitle, shiftType);
+  int get hashCode => Object.hash(
+        badge,
+        mainText,
+        subtitle,
+        shiftType,
+        countdownTo,
+        countdownPrefix,
+      );
 
   @override
   String toString() =>
@@ -280,6 +306,8 @@ DashboardHero buildDashboardHero({
       mainText: inProgress ? 'Ends in $countdown' : 'Starts in $countdown',
       subtitle: formatHeroAbsoluteWhen(start, now, inProgress, use24Hour),
       shiftType: next.type,
+      countdownTo: target,
+      countdownPrefix: inProgress ? 'Ends in' : 'Starts in',
     );
   }
 

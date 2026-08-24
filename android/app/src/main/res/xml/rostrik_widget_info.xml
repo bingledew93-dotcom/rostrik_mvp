@@ -5,8 +5,11 @@
      (resizeMode="horizontal", no vertical drag) so it can't be stretched back
      into the old oversized 2-row block. previewLayout renders the real card in
      the picker on Android 12+, with the launcher icon as the fallback preview.
-     updatePeriodMillis is the OS re-draw cadence (min 30m); the authoritative
-     refresh is the app pushing fresh data via WidgetService. -->
+     updatePeriodMillis is only a COARSE BACKSTOP (min 30m). The widget keeps
+     itself current by scheduling its own inexact redraw after every paint
+     (see RostrikWidgetProvider), and the app pushes a fresh forecast on resume
+     and on any roster change. Neither can be relied on alone: the app may not
+     be opened for weeks, and a reboot clears the self-scheduled tick. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_description"
     android:initialLayout="@layout/rostrik_widget"

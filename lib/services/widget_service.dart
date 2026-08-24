@@ -12,6 +12,7 @@ import '../data/repositories/shift_repository.dart';
 import '../state/app_preferences.dart' show use24HourTimeKey;
 import '../ui/dashboard_hero.dart';
 import '../util/clock.dart';
+import 'widget_forecast.dart';
 
 /// Bridges the app's live roster/dashboard state onto the Android home-screen
 /// widget (Phase 2). It recomputes the SAME hero payload the Dashboard shows
@@ -53,6 +54,11 @@ class WidgetService with WidgetsBindingObserver {
   static const String keyMain = 'hero_main_text';
   static const String keySubtitle = 'hero_subtitle';
   static const String keyShiftType = 'shift_type';
+
+  /// The piecewise `[{from,to,badge,sub,type,main,cdTo,cdPre}, ...]` timeline
+  /// the native provider renders itself from. See `widget_forecast.dart` for
+  /// why the widget cannot be handed a finished countdown string.
+  static const String keyForecast = 'hero_forecast';
 
   final ShiftRepository _shifts;
   final ShiftCycleRepository _cycles;
@@ -132,6 +138,21 @@ class WidgetService with WidgetsBindingObserver {
       await HomeWidget.saveWidgetData<String>(
         keyShiftType,
         hero.shiftType.name,
+      );
+      // The TIME-INDEPENDENT payload — this is what actually keeps the widget
+      // live. The four keys above are a rendered snapshot and are retained only
+      // so a widget whose forecast is missing or unparseable (first paint after
+      // an update, a truncated write) still shows something sensible.
+      await HomeWidget.saveWidgetData<String>(
+        keyForecast,
+        encodeWidgetForecast(
+          buildWidgetForecast(
+            shifts: shifts,
+            cycles: cycles,
+            now: _clock.now(),
+            use24Hour: use24Hour,
+          ),
+        ),
       );
       await HomeWidget.updateWidget(qualifiedAndroidName: androidProvider);
     } catch (e) {
