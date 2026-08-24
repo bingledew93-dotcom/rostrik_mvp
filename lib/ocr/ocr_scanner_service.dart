@@ -160,6 +160,16 @@ class OcrScannerService {
 
       final cropped = await _cropper.cropImage(
         sourcePath: photo.path,
+        // Hard cap on the CROP OUTPUT bitmap (Play Console: "Improve your
+        // app's performance with bitmap downsampling"). The picked image is
+        // already capped above, but image_picker's resize is documented as
+        // best-effort and some OEM camera paths hand back the full-res frame
+        // regardless — in which case uCrop would decode it, and then ML Kit
+        // would decode the oversized crop AGAIN. Capping here makes the bound
+        // on every bitmap that reaches the recognizer unconditional rather
+        // than dependent on the picker honouring its own request.
+        maxWidth: kMaxScanEdgePx,
+        maxHeight: kMaxScanEdgePx,
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop to YOUR row only — not the whole team',

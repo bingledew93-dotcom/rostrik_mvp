@@ -71,6 +71,26 @@
         android:label="Rostrik"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- LARGE-SCREEN RESIZABILITY OPT-OUT (Play Console: "Remove
+             resizability and orientation restrictions in your app to support
+             large screen devices").
+
+             We target SDK 36, and Android 16 IGNORES android:screenOrientation
+             and resizability restrictions on displays of sw600dp or larger —
+             tablets and unfolded foldables. That silently defeated BOTH portrait
+             locks (this manifest's and main.dart's
+             SystemChrome.setPreferredOrientations, which is equally ignored),
+             letting those devices rotate into the landscape overflow the locks
+             exist to prevent.
+
+             This property restores the locks on large screens. It is a STOPGAP
+             by design: the framework drops the opt-out entirely at API 37, so
+             the real fix is making the roster/alarm/review layouts landscape-
+             safe and then deleting this block along with both locks. Until then
+             a portrait tablet beats a broken landscape one. -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+            android:value="true" />
         <!-- android:screenOrientation="portrait" is a hard OS-level lock so
              devices/OEM ROMs that ignore Flutter's
              SystemChrome.setPreferredOrientations can't rotate the app into the

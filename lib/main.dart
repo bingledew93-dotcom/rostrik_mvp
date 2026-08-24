@@ -76,6 +76,22 @@ void main() async {
     const [DeviceOrientation.portraitUp],
   );
 
+  // EDGE-TO-EDGE on every Android version (Play Console: "Edge-to-edge may not
+  // display for all users").
+  //
+  // targetSdk 36 means Android 15+ (API 35+) ALREADY forces edge-to-edge on us —
+  // that is what 1.2.0 shipped with and what those users see today. Below API 35
+  // the OS does not, so the app letterboxed itself inside opaque system bars:
+  // one binary rendering two different ways depending on OS version, which is
+  // exactly what Play is flagging. Setting the mode explicitly makes API 24–34
+  // render the way API 35+ already does — parity, not a new layout.
+  //
+  // Inset handling is unchanged: edgeToEdge keeps the status and navigation bars
+  // VISIBLE and still reports them through `MediaQuery.viewPadding`, so the
+  // existing Scaffold / AppBar / SafeArea chrome positions content exactly as it
+  // does on Android 15 today.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
   final storage = await LocalStorage.init();
   // Generic key-value Hive box for app-wide preferences that don't warrant
   // their own typed repository (currently: `snooze_duration` minutes).
