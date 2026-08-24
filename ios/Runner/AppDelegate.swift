@@ -11,7 +11,7 @@ import UIKit
 /// past the original cutoff loses its OS alarm.
 ///
 /// `BGTaskScheduler` is the iOS-native fix. We register one task identifier,
-/// `com.example.rostrikMvp.alarmSyncRefresh`, and ask iOS to fire it no
+/// `com.rostrik.app.alarmSyncRefresh`, and ask iOS to fire it no
 /// earlier than 4 hours from now whenever we get a chance to schedule.
 /// iOS decides the actual fire time based on usage patterns, charging
 /// state, and the system's overall health; the request is a request, not
@@ -49,7 +49,7 @@ import UIKit
   /// background entrypoint expects. Hard-coded rather than pulled from
   /// the bundle so a typo in `Info.plist` surfaces at registration
   /// time (iOS asserts on mismatch) rather than silently never firing.
-  private static let refreshTaskIdentifier = "com.example.rostrikMvp.alarmSyncRefresh"
+  private static let refreshTaskIdentifier = "com.rostrik.app.alarmSyncRefresh"
 
   /// Channel name shared with `lib/alarms/background_sync_entrypoint.dart`.
   /// Lives on its own dedicated channel — NOT the
@@ -117,6 +117,15 @@ import UIKit
     // pre-BGTaskScheduler delegate. The headless background engine
     // registers plugins separately inside `handleAppRefresh`.
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    // Rostrik's own `rostrik/native_alarms` channel — the iOS counterpart of
+    // MainActivity's handler on Android. Not a pub plugin, so
+    // GeneratedPluginRegistrant knows nothing about it and it must be wired by
+    // hand. Without this, every `NativeAlarmScheduler.scheduleAt` throws
+    // MissingPluginException and the app schedules nothing at all.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NativeAlarmPlugin") {
+      NativeAlarmPlugin.register(with: registrar.messenger())
+    }
   }
 
   // MARK: - BGTaskScheduler
@@ -166,6 +175,13 @@ import UIKit
     // live binary messenger to attach to. Order matters here — the
     // reverse is undefined behaviour per Flutter's own docs.
     GeneratedPluginRegistrant.register(with: engine)
+
+    // The background engine needs the alarm channel too — arguably more than
+    // the UI one does. `syncAlarmsBackgroundEntrypoint` exists precisely to
+    // re-arm the rolling horizon, and every one of those re-arms goes through
+    // `rostrik/native_alarms`. Miss this and the refresh runs, finds work to
+    // do, and fails on the first schedule.
+    NativeAlarmPlugin.register(with: engine.binaryMessenger)
 
     let channel = FlutterMethodChannel(
       name: AppDelegate.backgroundSyncChannel,

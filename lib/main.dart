@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'alarms/alarm_sync_service.dart';
+import 'alarms/ios_alarm_sound_installer.dart';
 import 'alarms/main_isolate_liveness.dart';
 import 'alarms/native_alarm_scheduler.dart';
 import 'alarms/pending_alarm_delete_guard.dart';
@@ -106,6 +107,12 @@ void main() async {
   // implements the same AlarmScheduler interface, so AlarmSyncService's
   // idempotent reconcile is unchanged.
   final scheduler = await NativeAlarmScheduler.init();
+
+  // iOS tone install. Must happen BEFORE the first sync, because a
+  // UNNotificationRequest names its sound file at SCHEDULE time — an alarm
+  // armed before the WAV exists in Library/Sounds is stuck with the default
+  // chime until it is rescheduled. No-op on Android and in tests.
+  await installIosAlarmSounds();
 
   // NATIVE DISMISS FAIL-SAFE — replay killed-app dismissals from the
   // Kotlin-readable ledger into Hive BEFORE the first reconcile and before

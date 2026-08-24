@@ -84,6 +84,14 @@ class NativeAlarmScheduler implements AlarmScheduler {
   // so a half-asleep swipe can't silence a must-not-miss alarm; when false the
   // normal slide-to-dismiss applies. Sourced from the alarm's `isCritical` flag.
   static const String _argRequiresShake = 'requiresShake';
+  // iOS ONLY. `bundledResource` above is an ANDROID `res/raw` name
+  // ("classic_alarm"); iOS resolves a notification sound by FILENAME
+  // ("classic.wav") out of the app container's Library/Sounds. Sending both
+  // keeps one call shape for both platforms — Android ignores this key, iOS
+  // ignores `bundledResource`. Always populated from the bundled catalog, even
+  // for a custom tone: iOS cannot play an arbitrary vault/content URI as a
+  // notification sound, so the bundled tone is the honest fallback there.
+  static const String _argIosSound = 'iosSound';
 
   /// Hive `settings` key for the user's snooze interval (minutes). Same key the
   /// SettingsScreen writes and the old snooze handler read; default 1.
@@ -174,6 +182,7 @@ class NativeAlarmScheduler implements AlarmScheduler {
         _argSnoozeMinutes: _readSnoozeMinutes(),
         // Critical-shift alarms require a shake to dismiss; normal alarms slide.
         _argRequiresShake: decoded?.isCritical ?? false,
+        _argIosSound: resolveAlarmSound(soundKey).iosSoundName,
       });
     } on PlatformException catch (e) {
       // Native refused the schedule — 'EXACT_ALARM_DENIED' when the user

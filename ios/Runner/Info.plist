@@ -23,12 +23,19 @@
 		<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
 		<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 		<string>Rostrik adds your shifts to a dedicated "Rostrik Roster" calendar.</string>
+		<!-- AlarmKit (iOS 26+), the preferred alarm delivery path: it breaks
+	     through the silent switch and Focus, which an ordinary notification
+	     cannot. iOS refuses to schedule an AlarmKit alarm without this string.
+	     Harmless on older iOS, which ignores the key and takes the
+	     UNUserNotificationCenter fallback in NativeAlarmPlugin.swift. -->
+		<key>NSAlarmKitUsageDescription</key>
+		<string>Rostrik uses alarms so your pre-shift wake-up rings even when your phone is silenced or in a Focus mode.</string>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Rostrik Mvp</string>
+		<string>Rostrik</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -36,7 +43,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>rostrik_mvp</string>
+		<string>Rostrik</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -104,7 +111,7 @@
 	     AppDelegate.swift is the authoritative list. -->
 		<key>BGTaskSchedulerPermittedIdentifiers</key>
 		<array>
-			<string>com.example.rostrikMvp.alarmSyncRefresh</string>
+			<string>com.rostrik.app.alarmSyncRefresh</string>
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
