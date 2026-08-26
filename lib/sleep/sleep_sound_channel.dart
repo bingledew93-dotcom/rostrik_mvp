@@ -84,9 +84,12 @@ class SleepSoundChannel {
     });
   }
 
+  /// Android runs the foreground `SleepSoundService`; iOS runs the
+  /// `AVAudioPlayer` in `SleepSoundPlugin.swift`. Everything else (desktop,
+  /// widget tests) has no handler and keeps the tolerant no-op behaviour.
   bool get _supported {
     try {
-      return Platform.isAndroid;
+      return Platform.isAndroid || Platform.isIOS;
     } catch (_) {
       return false;
     }

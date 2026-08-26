@@ -126,6 +126,27 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NativeAlarmPlugin") {
       NativeAlarmPlugin.register(with: registrar.messenger())
     }
+
+    // `rostrik/ringtone_picker` preview-only handler — UI engine only, the
+    // background sync engine never previews a tone.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RingtonePreviewPlugin") {
+      RingtonePreviewPlugin.register(with: registrar.messenger())
+    }
+
+    // `rostrik/sleep_sounds` — the Sleep tab's looping player. UI engine only;
+    // nothing in a background refresh plays audio.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SleepSoundPlugin") {
+      SleepSoundPlugin.register(with: registrar.messenger())
+    }
+
+    // `rostrik/activity_reminders` — activity nudges plus the Sleep tab's
+    // wind-down/bedtime reminders. Registered on the UI engine here and on the
+    // background engine below, for the same reason the alarm channel is: a
+    // background refresh reconciles reminders too, and an unregistered channel
+    // there would drop every re-arm.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ActivityReminderPlugin") {
+      ActivityReminderPlugin.register(with: registrar.messenger())
+    }
   }
 
   // MARK: - BGTaskScheduler
@@ -182,6 +203,10 @@ import UIKit
     // `rostrik/native_alarms`. Miss this and the refresh runs, finds work to
     // do, and fails on the first schedule.
     NativeAlarmPlugin.register(with: engine.binaryMessenger)
+
+    // Reminders are reconciled by the same background sync, so this channel has
+    // to answer on the headless engine too.
+    ActivityReminderPlugin.register(with: engine.binaryMessenger)
 
     let channel = FlutterMethodChannel(
       name: AppDelegate.backgroundSyncChannel,

@@ -23,6 +23,13 @@
 		<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
 		<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 		<string>Rostrik adds your shifts to a dedicated "Rostrik Roster" calendar.</string>
+		<!-- Custom alarm tone (create_alarm_sheet.dart "Select from Files" ->
+	     FilePicker.pickFiles(type: FileType.audio)): on iOS file_picker's audio
+	     type opens MPMediaPickerController (the Music library grid), not a
+	     Files browser. iOS won't show that picker's permission prompt without
+	     this string and gets stuck rather than failing cleanly. -->
+		<key>NSAppleMusicUsageDescription</key>
+		<string>Rostrik lets you pick a song from your library to use as a custom alarm tone.</string>
 		<!-- AlarmKit (iOS 26+), the preferred alarm delivery path: it breaks
 	     through the silent switch and Focus, which an ordinary notification
 	     cannot. iOS refuses to schedule an AlarmKit alarm without this string.
@@ -102,6 +109,11 @@
 		<array>
 			<string>fetch</string>
 			<string>processing</string>
+			<!-- Sleep sounds (SleepSoundPlugin.swift). Without this iOS silences
+		     AVAudioPlayer the moment the screen locks — which is exactly when a
+		     wind-down sound needs to keep playing. Android's equivalent is the
+		     SleepSoundService foreground service. -->
+			<string>audio</string>
 		</array>
 		<!-- Identifiers iOS will accept BGTaskScheduler.register calls for.
 	     Must match the constant in AppDelegate.swift exactly — a typo
