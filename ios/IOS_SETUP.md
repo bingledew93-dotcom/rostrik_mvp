@@ -23,7 +23,7 @@ failure modes that cost hours to rediscover.
 | Alarm delivery | ✅ works — `UNUserNotificationCenter`, bundled tones |
 | Foreground alarms | ✅ works — `ForegroundAlarmPresenter` |
 | Snooze | ✅ implemented — notification action + `pending_snoozes` ledger |
-| One-time alarm cleanup | ✅ works — notification response + Dart nudge (§4.4) |
+| One-time alarm cleanup | ✅ works — anchored instant + notification response (§4.4) |
 | Reminders / sleep nudges | ✅ works — `ActivityReminderPlugin.swift` |
 | Sleep sounds | ✅ works — `SleepSoundPlugin.swift` (`AVAudioPlayer`) |
 | Custom-tone preview | implemented (`RingtonePreviewPlugin.swift`), **not yet verified on device** |
@@ -252,12 +252,22 @@ Three signals now feed the same ledger, so the existing Dart drain is unchanged:
    common case of all, the user dismissing one. (A first attempt built solely
    on this failed on device for exactly that reason.)
 
-**The hole:** clearing the notification via "Clear All" without ever opening the
-app reports nothing, so the rule survives. Fully closing it needs a time-based
-sweep — retire a one-time alarm once its intended instant has passed, with no OS
-cooperation. `AppAlarm` has no `createdAt`/target date (its fire time is a
-time-of-day, which is precisely why it rolls), so that means a model field and a
-Hive migration. See TODO.md §1.1.
+4. **The anchor** — `AppAlarm.oneTimeFireAt`, the absolute instant the alarm was
+   set for. The other three all depend on iOS telling us *something*, and
+   clearing a notification without opening the app tells us nothing. The anchor
+   needs no OS cooperation: a spent alarm is recognisable from its own
+   timestamp, offline, from a cold start, days later. `sweepSpentOneTimeAlarms`
+   runs it on launch and on every drain.
+
+   This is what makes the guarantee unconditional. It exists because a one-time
+   alarm previously had only `minutesOfDay` — a time of day with no date — so
+   nothing in the record could distinguish "set for 06:00 tomorrow" from
+   "already rang at 06:00 today". Legacy records read a null anchor and keep the
+   old rolling behaviour; their intended date cannot be reconstructed, and
+   deleting an alarm the user may still rely on is the worse failure.
+
+Verified on device: backgrounded, force-quit, and cleared from Notification
+Centre without opening the app.
 
 Separately, `pending_dismissals` still has no iOS writer, so a fired alarm is
 never marked *acknowledged* in Hive. That matters less than on Android — a
@@ -288,7 +298,8 @@ be meaningfully tested in a simulator anyway.
 - [x] An alarm fires with the correct preset tone, for ~28s
 - [x] An alarm fires while the app is **foregrounded**
 - [x] **An alarm fires with the app force-quit**
-- [x] A fired one-time alarm is retired, backgrounded **and** force-quit
+- [x] A fired one-time alarm is retired: backgrounded, force-quit, and cleared
+      from Notification Centre without opening the app
 - [x] Wind-down / bedtime nudges fire
 - [x] Sleep sounds play and loop
 - [ ] Sleep sound keeps playing with the **screen locked** (needs the `audio`

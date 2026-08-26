@@ -32,6 +32,9 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       // migration. Absent on legacy records → null URI/name, classic source.
       customRingtoneUri: fields[12] as String?,
       customRingtoneName: fields[13] as String?,
+      // HAND-EDITED: RingtoneSource has no registered Hive adapter, so it is
+      // persisted as its int index (see the enum's doc — order is append-only).
+      // Do not let the generator replace this with a raw cast; it throws.
       ringtoneSource: fields[14] == null
           ? RingtoneSource.classic
           : RingtoneSource.values[(fields[14] as num).toInt()],
@@ -44,13 +47,17 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       // in the early-skip coverage migration. Absent on legacy records → null
       // (nothing skipped).
       skippedThrough: fields[17] as DateTime?,
+      // Field 18 (one-time anchor instant) added so a spent one-shot can be
+      // recognised without OS cooperation. Absent on legacy records → null,
+      // which keeps the old next-occurrence behaviour.
+      oneTimeFireAt: fields[18] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppAlarm obj) {
     writer
-      ..writeByte(17)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -78,13 +85,16 @@ class AppAlarmAdapter extends TypeAdapter<AppAlarm> {
       ..writeByte(13)
       ..write(obj.customRingtoneName)
       ..writeByte(14)
+      // HAND-EDITED — see the read path: persisted as an int index.
       ..write(obj.ringtoneSource.index)
       ..writeByte(15)
       ..write(obj.isExactTime)
       ..writeByte(16)
       ..write(obj.exactTimeMinutes)
       ..writeByte(17)
-      ..write(obj.skippedThrough);
+      ..write(obj.skippedThrough)
+      ..writeByte(18)
+      ..write(obj.oneTimeFireAt);
   }
 
   @override

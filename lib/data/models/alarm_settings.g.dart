@@ -23,7 +23,7 @@ class AlarmSettingsAdapter extends TypeAdapter<AlarmSettings> {
     // survive.
     return AlarmSettings(
       leadTime: fields[0] as Duration,
-      vibrationEnabled: (fields[4] as bool?) ?? true,
+      vibrationEnabled: fields[4] == null ? true : fields[4] as bool,
     );
   }
 

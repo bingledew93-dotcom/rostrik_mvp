@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../alarms/alarm_projection.dart' show nextDailyOccurrence;
 import '../alarms/alarm_sound.dart';
 import '../alarms/default_tone_prefs.dart';
 import '../alarms/ringtone_channel.dart';
@@ -477,6 +478,15 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       customRingtoneUri: _customRingtoneUri,
       customRingtoneName: _customRingtoneName,
       ringtoneSource: _ringtoneSource,
+      // ANCHOR a one-time alarm to the absolute instant it was set for. This is
+      // the ONLY thing that lets a spent one-shot be recognised as spent —
+      // `minutesOfDay` alone is a time of day, so the projection could only
+      // ever roll it forward, turning a one-time alarm into a daily one. Null
+      // for every other repeat type, including when EDITING an alarm away from
+      // one-time, since this rebuilds the record from scratch.
+      oneTimeFireAt: _repeatType == AppAlarmRepeatType.oneTime
+          ? nextDailyOccurrence(_minutesOfDay, DateTime.now())
+          : null,
     );
     await repo.upsert(alarm);
     if (!mounted) return;
