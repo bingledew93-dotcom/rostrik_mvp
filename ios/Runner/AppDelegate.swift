@@ -124,7 +124,10 @@ import UIKit
     // hand. Without this, every `NativeAlarmScheduler.scheduleAt` throws
     // MissingPluginException and the app schedules nothing at all.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NativeAlarmPlugin") {
-      NativeAlarmPlugin.register(with: registrar.messenger())
+      // isUiEngine: this engine's channel is the one kept for calling INTO
+      // Dart (a spent alarm needs draining). The background engine below must
+      // NOT claim it — it is destroyed after every refresh.
+      NativeAlarmPlugin.register(with: registrar.messenger(), isUiEngine: true)
     }
 
     // `rostrik/ringtone_picker` preview-only handler — UI engine only, the

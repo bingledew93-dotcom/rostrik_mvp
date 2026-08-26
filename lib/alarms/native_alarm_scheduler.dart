@@ -52,6 +52,8 @@ class NativeAlarmScheduler implements AlarmScheduler {
   static const String _methodSetExact = 'setExactAlarm';
   static const String _methodCancel = 'cancelAlarm';
   static const String _methodGetAliveAlarmIds = 'getAliveAlarmIds';
+  // iOS-only handler; Android writes the same ledger natively at fire time.
+  static const String _methodRecordSpentAlarms = 'recordSpentAlarms';
 
   // Argument keys — MUST match what MainActivity reads (and the keys
   // AlarmReceiver / AlarmAudioService expect on the fire Intent).
@@ -230,6 +232,54 @@ class NativeAlarmScheduler implements AlarmScheduler {
     } catch (_) {
       return 1;
     }
+  }
+
+  /// iOS ONLY in practice: asks the native side to record every alarm the OS has
+  /// already DELIVERED into the `pending_alarm_deletes` ledger, so
+  /// [drainPendingAlarmDeletesIntoHive] can retire spent one-time alarms.
+  ///
+  /// **Must be awaited immediately before that drain.** Android needs nothing
+  /// here — it writes the same ledger natively at fire time — but iOS runs no
+  /// app code when a notification fires, so without this the ledger was always
+  /// empty and a fired one-time alarm was never deleted. The reconciler then
+  /// re-projected it to the next occurrence of its time-of-day, silently
+  /// turning a one-time alarm into a daily one.
+  ///
+  /// Best-effort, like the drains it feeds: a missing handler (Android, tests)
+  /// or a native error reads as "nothing was spent", and the next launch
+  /// retries. Never throws — this sits on the pre-`runApp` boot path.
+  Future<void> recordSpentAlarms() async {
+    try {
+      final recorded =
+          await _channel.invokeMethod<int>(_methodRecordSpentAlarms);
+      if (recorded != null && recorded > 0) {
+        debugPrint('[NativeAlarmScheduler] recorded $recorded spent alarm(s)');
+      }
+    } on PlatformException catch (e) {
+      debugPrint('[NativeAlarmScheduler] recordSpentAlarms failed: ${e.code}');
+    } on MissingPluginException {
+      // Android / tests — the ledger is written natively at fire time there.
+    }
+  }
+
+  /// Registers [onRecorded], invoked when the native side reports that an alarm
+  /// has fired and been written to the `pending_alarm_deletes` ledger
+  /// (`onSpentAlarmRecorded`). Pass null to clear.
+  ///
+  /// iOS only in practice. Without this the ledger is only drained on the next
+  /// resume — and since tapping a notification foregrounds the app, that resume
+  /// has typically already happened by the time iOS delivers the response, so a
+  /// spent one-time alarm would linger (and be re-projected to tomorrow) until
+  /// some later app switch.
+  void setSpentAlarmListener(void Function()? onRecorded) {
+    if (onRecorded == null) {
+      _channel.setMethodCallHandler(null);
+      return;
+    }
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onSpentAlarmRecorded') onRecorded();
+      return null;
+    });
   }
 
   @override

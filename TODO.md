@@ -10,8 +10,10 @@ Living checklist. iOS-specific mechanics live in
 Implemented but never confirmed on hardware. Each is a real risk, not a
 formality — today proved how much can look fine and do nothing.
 
-- [ ] **Alarm fires with the app force-quit** — the single most important test.
-      Nothing else in the app matters if this fails.
+- [x] **Alarm fires with the app force-quit** — verified 2026-08-27.
+- [x] **One-time alarms retire after firing**, both backgrounded and force-quit
+      — verified 2026-08-27. See §1.1 for the case still open.
+- [x] **Alarm tones ring for ~28s** rather than the tone's raw 4.7s length.
 - [ ] **Snooze from a force-quit app.** Snooze writes `pending_snoozes` and
       re-arms; the drain only runs on next launch. This is the path where the
       ledger design earns its keep, and the one most likely to be subtly wrong.
@@ -24,6 +26,24 @@ formality — today proved how much can look fine and do nothing.
 - [ ] OCR scanner: camera → crop → parse.
 - [ ] Calendar sync creates the "Rostrik Roster" calendar.
 - [ ] Light and dark theme.
+
+### 1.1 Known gap: an alarm cleared without ever opening the app
+
+A fired one-time alarm is retired from three signals: the notification response
+(tap or explicit dismiss — the dependable one, delivered even from a killed
+app), a Dart nudge so cleanup is immediate rather than waiting for a later
+resume, and a sweep of still-delivered notifications as a backstop.
+
+All three depend on iOS telling us *something*. Clearing the notification via
+**"Clear All" in Notification Center**, without ever opening the app, tells us
+nothing — so the rule survives and rings again tomorrow.
+
+Closing it properly needs a time-based sweep: retire a one-time alarm once its
+intended instant has passed, with no OS cooperation at all. `AppAlarm` has no
+`createdAt` or target date today (its fire time is a time-of-day, which is
+exactly why it rolls forward), so this means a model field plus a Hive adapter
+migration. Worth doing — it is the only fully robust mechanism — but it is a
+change to the alarm core and deserves its own pass, not a fourth bolt-on.
 
 ---
 

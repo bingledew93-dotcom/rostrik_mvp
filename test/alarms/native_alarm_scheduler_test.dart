@@ -184,4 +184,55 @@ void main() {
     expect(await scheduler.pendingIds(), isEmpty);
     expect(box.get(ledgerKey), anyOf(isNull, isEmpty));
   });
+
+  group('recordSpentAlarms', () {
+    // iOS harvests delivered alarms into the deletes ledger so a fired
+    // one-time alarm is retired instead of being re-projected to tomorrow.
+    test('invokes the native handler', () async {
+      const channel = MethodChannel(NativeAlarmScheduler.channelName);
+      final calls = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        return 2;
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      await NativeAlarmScheduler(channel: channel).recordSpentAlarms();
+      expect(calls, ['recordSpentAlarms']);
+    });
+
+    // This runs on the pre-runApp boot path, where an escaping error strands
+    // the app on the splash screen. Android has no handler at all (it writes
+    // the same ledger natively at fire time), and a native failure must not be
+    // fatal either — the next launch simply retries.
+    test('never throws when the platform has no handler', () async {
+      const channel = MethodChannel(NativeAlarmScheduler.channelName);
+      // No mock handler registered at all → MissingPluginException.
+      await expectLater(
+        NativeAlarmScheduler(channel: channel).recordSpentAlarms(),
+        completes,
+      );
+    });
+
+    test('never throws when the native side errors', () async {
+      const channel = MethodChannel(NativeAlarmScheduler.channelName);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'BOOM');
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      await expectLater(
+        NativeAlarmScheduler(channel: channel).recordSpentAlarms(),
+        completes,
+      );
+    });
+  });
 }
