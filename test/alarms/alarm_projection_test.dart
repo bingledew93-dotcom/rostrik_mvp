@@ -37,6 +37,7 @@ void main() {
     String id = 'o',
     bool enabled = true,
     DateTime? skippedThrough,
+    DateTime? anchor,
   }) =>
       AppAlarm(
         id: id,
@@ -45,6 +46,7 @@ void main() {
         repeatType: AppAlarmRepeatType.oneTime,
         enabled: enabled,
         skippedThrough: skippedThrough,
+        oneTimeFireAt: anchor,
       );
 
   AppAlarm weekly(
@@ -101,6 +103,44 @@ void main() {
         horizon: horizon,
         isSchedulePaused: paused,
       );
+
+  // THE one-time-becomes-daily regression. Without an anchor the only thing
+  // computable from the record is "next occurrence of this time of day", which
+  // rolls forward forever, so a spent one-shot re-armed itself every night.
+  group('projectAlarmRings — anchored one-time alarms', () {
+    test('rings at its anchored instant, not the next occurrence of its time',
+        () {
+      // now is Mon 05:00; the anchor is WEDNESDAY, so a time-of-day projection
+      // would wrongly fire it today at 06:00.
+      final anchor = DateTime(2026, 6, 17, 6, 0);
+      final rings = project([oneTime(6 * 60, anchor: anchor)], []);
+      expect(rings.single.fireAt, anchor);
+    });
+
+    test('a PAST anchor never rings again — the spent one-shot', () {
+      final rings = project(
+        [oneTime(6 * 60, anchor: DateTime(2026, 6, 15, 4, 0))], // an hour ago
+        [],
+      );
+      expect(rings, isEmpty,
+          reason: 'a fired one-time alarm must not re-project to tomorrow');
+    });
+
+    test('an anchor beyond the horizon is not scheduled yet', () {
+      final rings = project(
+        [oneTime(6 * 60, anchor: DateTime(2026, 8, 1, 6, 0))], // ~7 weeks out
+        [],
+      );
+      expect(rings, isEmpty);
+    });
+
+    // Records written before the anchor existed must keep working rather than
+    // being retired on sight — their intended date cannot be reconstructed.
+    test('a legacy alarm with no anchor keeps the old rolling behaviour', () {
+      final rings = project([oneTime(6 * 60)], []);
+      expect(rings.single.fireAt, DateTime(2026, 6, 15, 6, 0));
+    });
+  });
 
   group('projectAlarmRings — occurrence enumeration', () {
     test('follows-rotation fires at shiftStart − lead, carrying its shift', () {

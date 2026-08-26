@@ -11,8 +11,8 @@ Implemented but never confirmed on hardware. Each is a real risk, not a
 formality — today proved how much can look fine and do nothing.
 
 - [x] **Alarm fires with the app force-quit** — verified 2026-08-27.
-- [x] **One-time alarms retire after firing**, both backgrounded and force-quit
-      — verified 2026-08-27. See §1.1 for the case still open.
+- [x] **One-time alarms retire after firing** — backgrounded, force-quit, and
+      cleared from Notification Center. Verified 2026-08-27; see §1.1.
 - [x] **Alarm tones ring for ~28s** rather than the tone's raw 4.7s length.
 - [ ] **Snooze from a force-quit app.** Snooze writes `pending_snoozes` and
       re-arms; the drain only runs on next launch. This is the path where the
@@ -27,23 +27,28 @@ formality — today proved how much can look fine and do nothing.
 - [ ] Calendar sync creates the "Rostrik Roster" calendar.
 - [ ] Light and dark theme.
 
-### 1.1 Known gap: an alarm cleared without ever opening the app
+### 1.1 One-time alarm retirement — closed
 
-A fired one-time alarm is retired from three signals: the notification response
-(tap or explicit dismiss — the dependable one, delivered even from a killed
-app), a Dart nudge so cleanup is immediate rather than waiting for a later
-resume, and a sweep of still-delivered notifications as a backstop.
+A fired one-time alarm is now retired by three layers, deepest first:
 
-All three depend on iOS telling us *something*. Clearing the notification via
-**"Clear All" in Notification Center**, without ever opening the app, tells us
-nothing — so the rule survives and rings again tomorrow.
+1. **The anchor** (`AppAlarm.oneTimeFireAt`) — the absolute instant the alarm
+   was set for. Needs no OS cooperation at all: a spent alarm is recognisable
+   offline, from a cold start, days later. This is what makes the guarantee
+   unconditional rather than best-effort.
+2. **The notification response** — a tap or an explicit dismiss, plus a nudge
+   into Dart so cleanup is immediate rather than waiting for a later resume.
+   `.customDismissAction` on the category is what makes a *cleared* notification
+   deliver a response at all.
+3. **A sweep of still-delivered notifications**, as a backstop for ignored ones.
 
-Closing it properly needs a time-based sweep: retire a one-time alarm once its
-intended instant has passed, with no OS cooperation at all. `AppAlarm` has no
-`createdAt` or target date today (its fire time is a time-of-day, which is
-exactly why it rolls forward), so this means a model field plus a Hive adapter
-migration. Worth doing — it is the only fully robust mechanism — but it is a
-change to the alarm core and deserves its own pass, not a fourth bolt-on.
+Verified on device 2026-08-27: backgrounded, force-quit, and — the case that
+defeated the previous build — cleared from Notification Center without opening
+the app.
+
+Legacy one-time alarms (written before the anchor existed) read a null anchor
+and deliberately keep the old rolling behaviour: their intended date cannot be
+reconstructed, and deleting an alarm the user may still rely on is the worse
+failure. They self-correct on the next edit.
 
 ---
 

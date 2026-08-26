@@ -14,6 +14,7 @@ import 'alarms/native_alarm_scheduler.dart';
 import 'alarms/pending_alarm_delete_guard.dart';
 import 'alarms/pending_dismissal_guard.dart';
 import 'alarms/pending_snooze_guard.dart';
+import 'alarms/spent_one_time_sweep.dart';
 import 'calendar_sync/device_calendar_service.dart';
 import 'data/repositories/app_alarm_repository.dart';
 import 'data/repositories/shift_repository.dart';
@@ -138,6 +139,12 @@ void main() async {
   // or the drain reads a file that is still empty. No-op on Android.
   await scheduler.recordSpentAlarms();
   await drainPendingAlarmDeletesIntoHive(storage.alarms);
+
+  // ANCHOR-BASED BACKSTOP. The ledger drains above all depend on the OS having
+  // told us the alarm fired; clearing a notification without opening the app
+  // tells us nothing, and the one-shot would ring again tomorrow. This needs no
+  // OS cooperation — a spent alarm is recognisable from its own timestamp.
+  await sweepSpentOneTimeAlarms(storage.alarms);
 
   // SELF-CLEANING AD-HOC SHIFTS — archive (NEVER delete) any one-off shift
   // whose end is >24h past, keeping the active roster/alarm set lean as
@@ -379,6 +386,7 @@ Future<void> drainNativeLedgers({
   await drainPendingSnoozesIntoHive(shifts);
   await scheduler.recordSpentAlarms();
   await drainPendingAlarmDeletesIntoHive(alarms);
+  await sweepSpentOneTimeAlarms(alarms);
   await syncService.syncAlarms();
 }
 

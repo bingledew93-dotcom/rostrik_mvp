@@ -77,6 +77,7 @@ class AppAlarm {
     this.isExactTime = false,
     this.exactTimeMinutes,
     this.skippedThrough,
+    this.oneTimeFireAt,
   })  : assert(
           minutesOfDay >= 0 && minutesOfDay < 1440,
           'minutesOfDay must be 0..1439',
@@ -246,6 +247,35 @@ class AppAlarm {
   @HiveField(17)
   final DateTime? skippedThrough;
 
+  /// The absolute instant a **one-time** alarm was set for. Null for every
+  /// other repeat type, and null on legacy one-time records written before this
+  /// field existed.
+  ///
+  /// ## Why a one-time alarm needs an anchor at all
+  ///
+  /// Every other repeat type is self-describing: a weekly alarm has its
+  /// weekday mask, a rotation alarm has its shift. A one-time alarm had only
+  /// [minutesOfDay] — a time of day with no date — so the projection could only
+  /// ever compute "the next future occurrence", which by construction rolls
+  /// forward. Nothing in the record could distinguish "set for 06:00 tomorrow"
+  /// from "already fired at 06:00 this morning", so a spent one-shot silently
+  /// became a daily alarm unless something external retired it.
+  ///
+  /// On Android that something is a native ledger written at fire time. iOS
+  /// runs no app code when a notification fires, so it had no equivalent, and
+  /// every signal available there (a tap, a dismiss, a still-delivered
+  /// notification) can be defeated by the user simply clearing the notification.
+  /// This field removes the need for any OS cooperation: once the instant has
+  /// passed, the alarm is spent — knowable offline, from a cold start, days
+  /// later.
+  ///
+  /// **Legacy records read null** and keep the old rolling behaviour rather
+  /// than being retired on sight; there is no honest way to reconstruct the
+  /// intended date, and deleting a record the user might still be relying on is
+  /// the worse failure. They self-correct on the next edit.
+  @HiveField(18)
+  final DateTime? oneTimeFireAt;
+
   /// The exact-time fire clock when exact-time mode is ACTIVE and well-formed,
   /// else null (= lead-time mode). This is the single mode-decision gate shared
   /// by the engine (`rotationAlarmFireAt`) and every UI projection
@@ -308,6 +338,8 @@ class AppAlarm {
     int? exactTimeMinutes,
     bool clearExactTime = false,
     DateTime? skippedThrough,
+    DateTime? oneTimeFireAt,
+    bool clearOneTimeFireAt = false,
   }) =>
       AppAlarm(
         id: id ?? this.id,
@@ -336,6 +368,9 @@ class AppAlarm {
         // No clear flag: the skip watermark only ever advances (a past value
         // is inert), so `null` always means "leave unchanged".
         skippedThrough: skippedThrough ?? this.skippedThrough,
+        oneTimeFireAt: clearOneTimeFireAt
+            ? null
+            : (oneTimeFireAt ?? this.oneTimeFireAt),
       );
 
   @override
@@ -359,7 +394,8 @@ class AppAlarm {
           ringtoneSource == other.ringtoneSource &&
           isExactTime == other.isExactTime &&
           exactTimeMinutes == other.exactTimeMinutes &&
-          skippedThrough == other.skippedThrough;
+          skippedThrough == other.skippedThrough &&
+          oneTimeFireAt == other.oneTimeFireAt;
 
   @override
   int get hashCode => Object.hash(
@@ -380,6 +416,7 @@ class AppAlarm {
         isExactTime,
         exactTimeMinutes,
         skippedThrough,
+        oneTimeFireAt,
       );
 
   @override
@@ -395,7 +432,8 @@ class AppAlarm {
       'customRingtoneName: $customRingtoneName, '
       'ringtoneSource: $ringtoneSource, '
       'isExactTime: $isExactTime, exactTimeMinutes: $exactTimeMinutes, '
-      'skippedThrough: $skippedThrough)';
+      'skippedThrough: $skippedThrough, '
+      'oneTimeFireAt: $oneTimeFireAt)';
 }
 
 /// Whether the alarm [a] should be permanently removed from Hive once it has

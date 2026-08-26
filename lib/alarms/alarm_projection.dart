@@ -89,7 +89,24 @@ List<AlarmRing> projectAlarmRings({
           }
           continue;
         }
-        final fireAt = _nextDailyOccurrence(alarm.minutesOfDay, now);
+        // ANCHORED one-time alarm: ring at the exact instant it was set for,
+        // and NEVER re-project once that instant has passed. Without the anchor
+        // the only thing computable from the record is "the next occurrence of
+        // this time of day", which rolls forward forever — so a spent one-shot
+        // silently became a daily alarm unless something external retired it.
+        // See [AppAlarm.oneTimeFireAt].
+        final anchor = alarm.oneTimeFireAt;
+        if (anchor != null) {
+          if (!anchor.isAfter(now)) continue; // already fired — spent
+          if (!anchor.isBefore(until)) continue; // beyond the horizon
+          if (skipped(anchor)) continue;
+          rings.add(AlarmRing(alarm: alarm, fireAt: anchor));
+          continue;
+        }
+        // Legacy record written before the anchor existed. Keeps the old
+        // rolling behaviour: the intended date cannot be reconstructed, and
+        // dropping an alarm the user may still rely on is the worse failure.
+        final fireAt = nextDailyOccurrence(alarm.minutesOfDay, now);
         if (!fireAt.isBefore(until)) continue;
         if (skipped(fireAt)) continue;
         rings.add(AlarmRing(alarm: alarm, fireAt: fireAt));
@@ -217,7 +234,12 @@ AlarmRing? nextRotationRing({
 
 /// Next future occurrence of [minutesOfDay] in local time: today if it's still
 /// ahead, else tomorrow.
-DateTime _nextDailyOccurrence(int minutesOfDay, DateTime now) {
+///
+/// Public because the create/edit sheet stamps a one-time alarm's
+/// [AppAlarm.oneTimeFireAt] with exactly this instant — the anchor and the
+/// projection must agree on which occurrence was meant, or an alarm could be
+/// retired a day before it rings.
+DateTime nextDailyOccurrence(int minutesOfDay, DateTime now) {
   final today = DateTime(
     now.year,
     now.month,
