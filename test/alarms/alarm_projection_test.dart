@@ -178,6 +178,57 @@ void main() {
       );
     });
 
+    // The core "follows the rotation" guarantee: an alarm is bound to ONE
+    // shift type. Previously only the OFF case was covered, so a bug matching
+    // a Day alarm against a Night shift would have gone unnoticed — and would
+    // wake someone at 06:00 before a night shift they work at 22:00.
+    test('a rotation alarm ignores every OTHER working shift type', () {
+      for (final other in [ShiftType.afternoon, ShiftType.night]) {
+        expect(
+          project(
+            [rotation(type: ShiftType.day)],
+            [shift(id: 'x', date: DateTime(2026, 6, 16), type: other)],
+          ),
+          isEmpty,
+          reason: 'a Day alarm must not ring for a $other shift',
+        );
+      }
+    });
+
+    // A rotation alarm rings once per MATCHING shift across the horizon, and
+    // the interleaved off/other-type days stay silent — i.e. it tracks the
+    // roster rather than becoming a daily alarm.
+    test('a rotation alarm rings once per matching shift across a block', () {
+      final rings = project([
+        rotation(type: ShiftType.day)
+      ], [
+        shift(id: 'd1', date: DateTime(2026, 6, 16)),
+        shift(id: 'd2', date: DateTime(2026, 6, 17)),
+        shift(id: 'n1', date: DateTime(2026, 6, 18), type: ShiftType.night),
+        shift(id: 'o1', date: DateTime(2026, 6, 19), type: ShiftType.off),
+        shift(id: 'd3', date: DateTime(2026, 6, 20)),
+      ]);
+      expect(
+        rings.map((r) => r.shift?.id).toList(),
+        ['d1', 'd2', 'd3'],
+        reason: 'only the Day shifts ring, in date order',
+      );
+    });
+
+    // Marking leave sets Shift.isPaused (see mark_leave_screen.dart) and leaves
+    // the roster intact, so the day must go quiet WITHOUT the shift being
+    // deleted — and the surrounding worked days must be untouched.
+    test('leave on one day of a block silences only that day', () {
+      final rings = project([
+        rotation(type: ShiftType.day)
+      ], [
+        shift(id: 'd1', date: DateTime(2026, 6, 16)),
+        shift(id: 'd2', date: DateTime(2026, 6, 17), isPaused: true), // on leave
+        shift(id: 'd3', date: DateTime(2026, 6, 18)),
+      ]);
+      expect(rings.map((r) => r.shift?.id).toList(), ['d1', 'd3']);
+    });
+
     test('every per-shift suppression flag drops the ring', () {
       for (final s in [
         shift(id: 'm', date: DateTime(2026, 6, 16), isMuted: true),

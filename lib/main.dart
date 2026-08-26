@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'alarms/alarm_sync_service.dart';
-import 'alarms/ios_alarm_sound_installer.dart';
 import 'alarms/main_isolate_liveness.dart';
 import 'alarms/native_alarm_scheduler.dart';
 import 'alarms/pending_alarm_delete_guard.dart';
@@ -111,12 +110,6 @@ void main() async {
   // idempotent reconcile is unchanged.
   final scheduler = await NativeAlarmScheduler.init();
 
-  // iOS tone install. Must happen BEFORE the first sync, because a
-  // UNNotificationRequest names its sound file at SCHEDULE time — an alarm
-  // armed before the WAV exists in Library/Sounds is stuck with the default
-  // chime until it is rescheduled. No-op on Android and in tests.
-  await installIosAlarmSounds();
-
   // NATIVE DISMISS FAIL-SAFE — replay killed-app dismissals from the
   // Kotlin-readable ledger into Hive BEFORE the first reconcile and before
   // any wake routing. Pixel-9-class battery management can reap the
@@ -139,6 +132,11 @@ void main() async {
   // silently becoming a daily cycle). The native dismiss/auto-timeout records
   // the fired `appAlarmId` in the `pending_alarm_deletes` ledger; this drain
   // resolves each to its AppAlarm and deletes the one-time ones.
+  //
+  // On iOS nothing runs at fire time to write that ledger, so it is harvested
+  // from what the OS actually delivered — which must happen BEFORE the drain,
+  // or the drain reads a file that is still empty. No-op on Android.
+  await scheduler.recordSpentAlarms();
   await drainPendingAlarmDeletesIntoHive(storage.alarms);
 
   // SELF-CLEANING AD-HOC SHIFTS — archive (NEVER delete) any one-off shift
@@ -271,8 +269,21 @@ void main() async {
   // covered by the drain above; there is no longer any FSI payload to pull —
   // AlarmActivity, not MainActivity, owns the alarm event end to end.
   WidgetsBinding.instance.addObserver(
-    _AlarmDismissalDrain(storage.shifts, storage.alarms, syncService),
+    _AlarmDismissalDrain(storage.shifts, storage.alarms, syncService, scheduler),
   );
+
+  // iOS: a fired alarm is only knowable from the notification response, which
+  // iOS delivers AFTER the app is already active — i.e. after the resume drain
+  // above has run. This nudge closes that window, retiring a spent one-time
+  // alarm immediately instead of leaving it to be re-projected to tomorrow.
+  scheduler.setSpentAlarmListener(() {
+    unawaited(drainNativeLedgers(
+      shifts: storage.shifts,
+      alarms: storage.alarms,
+      scheduler: scheduler,
+      syncService: syncService,
+    ));
+  });
 
   // LEGAL CONSENT GATE — read the accepted legal version from
   // shared_preferences (the source of truth the consent screen writes). If it
@@ -313,11 +324,17 @@ void main() async {
 /// `dismissedAlarmIds` write trips AlarmSyncService's shift watcher, which
 /// cancels the dismissed ring's now-stale OS alarm — and ONLY that one.
 class _AlarmDismissalDrain with WidgetsBindingObserver {
-  _AlarmDismissalDrain(this._shifts, this._alarms, this._syncService);
+  _AlarmDismissalDrain(
+    this._shifts,
+    this._alarms,
+    this._syncService,
+    this._scheduler,
+  );
 
   final ShiftRepository _shifts;
   final AppAlarmRepository _alarms;
   final AlarmSyncService _syncService;
+  final NativeAlarmScheduler _scheduler;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -337,12 +354,32 @@ class _AlarmDismissalDrain with WidgetsBindingObserver {
   /// process resumed after days of quiet would otherwise keep a stale 14-day
   /// window. An explicit sync is safe to run unconditionally — it's
   /// idempotent and issues zero platform calls when nothing changed.
-  Future<void> _drainNativeLedgers() async {
-    await _syncNativePendingDismissals(_shifts);
-    await drainPendingSnoozesIntoHive(_shifts);
-    await drainPendingAlarmDeletesIntoHive(_alarms);
-    await _syncService.syncAlarms();
-  }
+  Future<void> _drainNativeLedgers() => drainNativeLedgers(
+        shifts: _shifts,
+        alarms: _alarms,
+        scheduler: _scheduler,
+        syncService: _syncService,
+      );
+}
+
+/// The full ledger-drain sequence, shared by the resume observer and the
+/// native `onSpentAlarmRecorded` nudge so both converge identically.
+///
+/// Order is load-bearing: dismissals first (a dismiss is final and clears any
+/// snooze), then snoozes, then the delivered-alarm harvest BEFORE the deletes
+/// drain that consumes it, and finally a reconcile so the OS set matches the
+/// Hive writes the drains just made.
+Future<void> drainNativeLedgers({
+  required ShiftRepository shifts,
+  required AppAlarmRepository alarms,
+  required NativeAlarmScheduler scheduler,
+  required AlarmSyncService syncService,
+}) async {
+  await _syncNativePendingDismissals(shifts);
+  await drainPendingSnoozesIntoHive(shifts);
+  await scheduler.recordSpentAlarms();
+  await drainPendingAlarmDeletesIntoHive(alarms);
+  await syncService.syncAlarms();
 }
 
 /// Drains the native dismiss fail-safe ledger into Hive, then clears it.

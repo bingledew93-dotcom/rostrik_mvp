@@ -17,16 +17,20 @@
 		631916347F98D4A45229A722 /* RingtonePreviewPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E765E843CF9D00F95C2C17F9 /* RingtonePreviewPlugin.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
+		7EEDE0E73E85DE8CA78332A3 /* siren.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3F5A41EE1C8D5921216E5512 /* siren.caf */; };
 		82141A7F4C27BF887B680AF8 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8504D7C2DAC21BE549609A1D /* Pods_Runner.framework */; };
 		8896B5F54456C13EBDE01C7F /* sleep_fan.wav in Resources */ = {isa = PBXBuildFile; fileRef = 4ED26B4FE3916404B692AF06 /* sleep_fan.wav */; };
+		90D66F3661DC0BBCF66B44EE /* classic.caf in Resources */ = {isa = PBXBuildFile; fileRef = 593F99DADD31E07E61A987E0 /* classic.caf */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A0928A3240729B678512E695 /* sleep_white_noise.wav in Resources */ = {isa = PBXBuildFile; fileRef = FAF01DB55BE5E5B9AAD27442 /* sleep_white_noise.wav */; };
 		AF6A3AEEC613A1374EA24A7E /* SleepSoundPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C8FFCB5C918777A89D1497 /* SleepSoundPlugin.swift */; };
 		B8EF3180991801D1F6A7928A /* NativeAlarmPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A82B4912B6DDB5FD77A2504 /* NativeAlarmPlugin.swift */; };
+		CEB09160CF686F2F22555B09 /* chime.caf in Resources */ = {isa = PBXBuildFile; fileRef = 672AC51CDF50029D738D4D52 /* chime.caf */; };
 		ECCCC2546B87739E8AB4FC9E /* sleep_brown_noise.wav in Resources */ = {isa = PBXBuildFile; fileRef = 0025522FE6E77B486D2E97A1 /* sleep_brown_noise.wav */; };
 		ECF4ED94FAC0622C4C7D0996 /* sleep_ocean.wav in Resources */ = {isa = PBXBuildFile; fileRef = DD36624978BB213D674B215E /* sleep_ocean.wav */; };
+		F7DCED8A49D9874CD8D0C5E0 /* digital.caf in Resources */ = {isa = PBXBuildFile; fileRef = 4B29CE4C5B074CE1CAA436C5 /* digital.caf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,9 +69,13 @@
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
+		3F5A41EE1C8D5921216E5512 /* siren.caf */ = {isa = PBXFileReference; includeInIndex = 1; name = siren.caf; path = Runner/Sounds/siren.caf; sourceTree = "<group>"; };
+		4B29CE4C5B074CE1CAA436C5 /* digital.caf */ = {isa = PBXFileReference; includeInIndex = 1; name = digital.caf; path = Runner/Sounds/digital.caf; sourceTree = "<group>"; };
 		4ED26B4FE3916404B692AF06 /* sleep_fan.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = sleep_fan.wav; path = ../android/app/src/main/res/raw/sleep_fan.wav; sourceTree = "<group>"; };
 		542AF57C303E7EFD00ACA3FC /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		593F99DADD31E07E61A987E0 /* classic.caf */ = {isa = PBXFileReference; includeInIndex = 1; name = classic.caf; path = Runner/Sounds/classic.caf; sourceTree = "<group>"; };
 		61C8C14AD73B21524A120E55 /* sleep_pink_noise.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = sleep_pink_noise.wav; path = ../android/app/src/main/res/raw/sleep_pink_noise.wav; sourceTree = "<group>"; };
+		672AC51CDF50029D738D4D52 /* chime.caf */ = {isa = PBXFileReference; includeInIndex = 1; name = chime.caf; path = Runner/Sounds/chime.caf; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		74DE117022B0D751272C513A /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
@@ -190,9 +198,21 @@
 				2E7E1AAB03ACE7697B0FED69 /* ActivityReminderPlugin.swift */,
 				11C8FFCB5C918777A89D1497 /* SleepSoundPlugin.swift */,
 				48F7E7D3B6AA75231EC0391E /* SleepSounds */,
+				A75B328E2D640DC3759813AD /* Sounds */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
+		};
+		A75B328E2D640DC3759813AD /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				593F99DADD31E07E61A987E0 /* classic.caf */,
+				3F5A41EE1C8D5921216E5512 /* siren.caf */,
+				4B29CE4C5B074CE1CAA436C5 /* digital.caf */,
+				672AC51CDF50029D738D4D52 /* chime.caf */,
+			);
+			name = Sounds;
+			sourceTree = SOURCE_ROOT;
 		};
 		E70BD90D8ADA2591304959AE /* Pods */ = {
 			isa = PBXGroup;
@@ -313,6 +333,10 @@
 				8896B5F54456C13EBDE01C7F /* sleep_fan.wav in Resources */,
 				ECF4ED94FAC0622C4C7D0996 /* sleep_ocean.wav in Resources */,
 				1212D1170BC6C7430A7FDECF /* sleep_rain.wav in Resources */,
+				90D66F3661DC0BBCF66B44EE /* classic.caf in Resources */,
+				7EEDE0E73E85DE8CA78332A3 /* siren.caf in Resources */,
+				F7DCED8A49D9874CD8D0C5E0 /* digital.caf in Resources */,
+				CEB09160CF686F2F22555B09 /* chime.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

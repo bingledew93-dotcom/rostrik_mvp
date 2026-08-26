@@ -73,13 +73,33 @@ public final class NativeAlarmPlugin: NSObject {
   /// answered and did nothing while the app believed its alarms were armed.
   /// The strong capture parks ownership in the block the binary messenger
   /// retains, so the plugin lives exactly as long as its engine.
+  /// The UI engine's channel, kept so native-side events (a spent alarm) can
+  /// call INTO Dart. Deliberately only ever set for the UI engine: the headless
+  /// BGTask engine is torn down with `destroyContext()` after every refresh, and
+  /// invoking on a dead engine's channel is not safe.
+  private static var uiChannel: FlutterMethodChannel?
+
+  /// Tells Dart a spent alarm has just been written to the deletes ledger, so
+  /// it can drain and reconcile now rather than on some later resume. A no-op
+  /// when the UI engine isn't up — the ledger is durable, so the next launch
+  /// drains it anyway.
+  static func notifyDartSpentAlarmRecorded() {
+    DispatchQueue.main.async {
+      uiChannel?.invokeMethod("onSpentAlarmRecorded", arguments: nil)
+    }
+  }
+
   @discardableResult
-  public static func register(with messenger: FlutterBinaryMessenger) -> NativeAlarmPlugin {
+  public static func register(
+    with messenger: FlutterBinaryMessenger,
+    isUiEngine: Bool = false
+  ) -> NativeAlarmPlugin {
     let plugin = NativeAlarmPlugin(backend: makeBackend())
     let channel = FlutterMethodChannel(name: channelName, binaryMessenger: messenger)
     channel.setMethodCallHandler { call, result in
       plugin.handle(call, result: result)
     }
+    if isUiEngine { uiChannel = channel }
     // Foreground presentation. Without a delegate iOS shows NOTHING while the
     // app is frontmost — no banner, no sound — which reads exactly like "the
     // alarm never fired" during testing, the most common way to try one.
@@ -140,6 +160,12 @@ public final class NativeAlarmPlugin: NSObject {
       backend.cancel(id: id)
       result(nil)
 
+    // Harvests alarms iOS has already DELIVERED into the `pending_alarm_deletes`
+    // ledger, so the existing Dart drain can retire spent one-time alarms.
+    // Must be awaited before that drain runs — see the Dart side.
+    case "recordSpentAlarms":
+      backend.recordSpentAlarms { count in result(count) }
+
     case "getAliveAlarmIds":
       let ids = ((call.arguments as? [String: Any])?["ids"] as? [Int]) ?? []
       // Same purpose as the Android `FLAG_NO_CREATE` probe: the Dart ledger is
@@ -191,7 +217,10 @@ final class ForegroundAlarmPresenter: NSObject, UNUserNotificationCenterDelegate
         identifier: alarmCategoryIdentifier,
         actions: [snooze],
         intentIdentifiers: [],
-        options: [])
+        // `.customDismissAction` is what makes an explicit swipe-away reach
+        // `didReceive` at all. Without it iOS silently drops that response and
+        // a dismissed one-time alarm is never retired.
+        options: [.customDismissAction])
     ])
   }
 
@@ -200,11 +229,37 @@ final class ForegroundAlarmPresenter: NSObject, UNUserNotificationCenterDelegate
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
-    guard response.actionIdentifier == Self.snoozeActionIdentifier else {
-      completionHandler()
+    guard response.actionIdentifier != Self.snoozeActionIdentifier else {
+      snooze(response.notification, completionHandler: completionHandler)
       return
     }
-    snooze(response.notification, completionHandler: completionHandler)
+    // Anything else — a tap that opens the app, or an explicit dismiss — means
+    // this alarm is SPENT. This is the only dependable "it fired" signal iOS
+    // offers: it is delivered even when the app was killed (iOS launches it to
+    // hand the response over), unlike `getDeliveredNotifications`, which sees
+    // only notifications still sitting in Notification Center and therefore
+    // misses the most common case of all — the user dismissing one.
+    recordSpent(response.notification)
+    completionHandler()
+  }
+
+  /// Appends a fired alarm's owning rule to the deletes ledger, then tells Dart
+  /// to drain it.
+  ///
+  /// The nudge to Dart is what makes retirement immediate rather than
+  /// eventual. Tapping a notification foregrounds the app, so the resume-time
+  /// drain has usually already run by the time iOS delivers this response —
+  /// leaving the ledger sitting unread until some later resume, during which
+  /// the reconciler happily re-projects the spent alarm to tomorrow.
+  private func recordSpent(_ notification: UNNotification) {
+    guard
+      notification.request.identifier.hasPrefix(NativeAlarmPlugin.identifierPrefix),
+      let appAlarmId = notification.request.content.userInfo["appAlarmId"] as? String,
+      !appAlarmId.isEmpty
+    else { return }
+    RostrikLedger.append(appAlarmId, to: RostrikLedger.alarmDeletes)
+    NSLog("[Rostrik] alarm \(notification.request.identifier) spent — queued for cleanup")
+    NativeAlarmPlugin.notifyDartSpentAlarmRecorded()
   }
 
   /// Re-arms this alarm and records the snooze, mirroring the Android
@@ -249,32 +304,13 @@ final class ForegroundAlarmPresenter: NSObject, UNUserNotificationCenterDelegate
     }
   }
 
-  /// Appends one line to the `pending_snoozes` ledger in Application Support —
-  /// the same directory `path_provider`'s `getApplicationSupportDirectory()`
-  /// resolves to, which is how `drainPendingSnoozesIntoHive` finds it. That
-  /// drain is plain file I/O with no MethodChannel involved, so it already
-  /// worked on iOS; this writer was the only missing half.
+  /// Appends `<shiftId>|<appAlarmId>|<untilMillis>` to the snooze ledger that
+  /// `drainPendingSnoozesIntoHive` reads. That drain is plain file I/O with no
+  /// MethodChannel involved, so it already worked on iOS; this writer was the
+  /// only missing half.
   private func appendSnoozeLedgerLine(shiftId: String, appAlarmId: String, until: Date) {
-    let fm = FileManager.default
-    guard let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-      NSLog("[Rostrik] snooze ledger: no Application Support directory")
-      return
-    }
-    // path_provider creates this lazily; the snooze may well be the first
-    // writer if the app has never needed it.
-    if !fm.fileExists(atPath: dir.path) {
-      try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-    }
-    let file = dir.appendingPathComponent("pending_snoozes")
     let millis = Int(until.timeIntervalSince1970 * 1000)
-    guard let line = "\(shiftId)|\(appAlarmId)|\(millis)\n".data(using: .utf8) else { return }
-    if let handle = try? FileHandle(forWritingTo: file) {
-      defer { try? handle.close() }
-      handle.seekToEndOfFile()
-      handle.write(line)
-    } else {
-      try? line.write(to: file, options: .atomic)
-    }
+    RostrikLedger.append("\(shiftId)|\(appAlarmId)|\(millis)", to: RostrikLedger.snoozes)
   }
 
   func userNotificationCenter(
@@ -356,6 +392,54 @@ protocol AlarmBackend {
   func schedule(_ request: AlarmRequest, completion: @escaping (Error?) -> Void)
   func cancel(id: Int)
   func aliveIds(among ids: [Int], completion: @escaping ([Int]) -> Void)
+  /// Records alarms that have already fired into the `pending_alarm_deletes`
+  /// ledger. See `NotificationBackend`'s implementation for why this exists.
+  func recordSpentAlarms(completion: @escaping (Int) -> Void)
+}
+
+extension AlarmBackend {
+  /// Backends with no notion of a "delivered" alarm opt out. AlarmKit tracks
+  /// its own alarm lifecycle and would retire a one-shot itself.
+  func recordSpentAlarms(completion: @escaping (Int) -> Void) { completion(0) }
+}
+
+// MARK: - Ledger files
+
+/// Append-only handoff files in Application Support, written natively and
+/// drained by Dart. This is the same directory `path_provider`'s
+/// `getApplicationSupportDirectory()` resolves to, which is how the Dart side
+/// finds them — plain file I/O, no MethodChannel, so the drains work
+/// identically on both platforms and in the headless background isolate.
+///
+/// Filenames MUST match the Dart constants (`pendingSnoozesFileName`,
+/// `pendingAlarmDeletesFileName`) and the Kotlin ones.
+enum RostrikLedger {
+  static let snoozes = "pending_snoozes"
+  static let alarmDeletes = "pending_alarm_deletes"
+
+  /// Appends one line, creating the file (and directory) if needed.
+  /// Best-effort: a lost line costs one uncleaned alarm, never a crash on the
+  /// boot path.
+  static func append(_ line: String, to fileName: String) {
+    let fm = FileManager.default
+    guard let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+    else {
+      NSLog("[Rostrik] ledger: no Application Support directory")
+      return
+    }
+    if !fm.fileExists(atPath: dir.path) {
+      try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+    let file = dir.appendingPathComponent(fileName)
+    guard let data = "\(line)\n".data(using: .utf8) else { return }
+    if let handle = try? FileHandle(forWritingTo: file) {
+      defer { try? handle.close() }
+      handle.seekToEndOfFile()
+      handle.write(data)
+    } else {
+      try? data.write(to: file, options: .atomic)
+    }
+  }
 }
 
 // MARK: - UNUserNotificationCenter backend (iOS 15.5+)
@@ -441,6 +525,59 @@ final class NotificationBackend: AlarmBackend {
     let identifier = "\(NativeAlarmPlugin.identifierPrefix)\(id)"
     center.removePendingNotificationRequests(withIdentifiers: [identifier])
     center.removeDeliveredNotifications(withIdentifiers: [identifier])
+  }
+
+  /// Retires spent alarms by recording every DELIVERED alarm notification's
+  /// `appAlarmId` into the `pending_alarm_deletes` ledger.
+  ///
+  /// ## Why this is needed, and why it looks nothing like Android
+  ///
+  /// Android writes that ledger from `AlarmActivity` / `AlarmAudioService` at
+  /// fire time. iOS runs NO app code when a notification fires, so there is
+  /// nothing to write it — and without it, `drainPendingAlarmDeletesIntoHive`
+  /// always found an empty file. The consequence was severe and silent: a spent
+  /// one-time alarm was never deleted, so the next reconcile re-projected it to
+  /// "the next future occurrence of minutesOfDay", i.e. **a one-time alarm
+  /// quietly became a daily one** and kept waking the user every morning.
+  ///
+  /// iOS cannot tell us at fire time, but it does remember what it DELIVERED,
+  /// so this asks after the fact instead — the same shape as `aliveIds`, which
+  /// likewise trusts the OS over any local belief.
+  ///
+  /// Delivered notifications are removed once recorded: leaving them would
+  /// re-harvest the same ids on every launch, and an alarm whose rule has just
+  /// been deleted should not still be sitting in Notification Center.
+  ///
+  /// Every delivered alarm is recorded, not just one-time ones — the Dart drain
+  /// resolves each id and deletes only the one-time rules, exactly as it does
+  /// for Android. A repeating alarm's id is therefore a harmless no-op.
+  ///
+  /// A SNOOZED alarm is not affected: acting on a notification removes it from
+  /// Notification Center, so it is not "delivered" here, and its re-armed
+  /// request is pending rather than delivered.
+  func recordSpentAlarms(completion: @escaping (Int) -> Void) {
+    center.getDeliveredNotifications { notifications in
+      let ours = notifications.filter {
+        $0.request.identifier.hasPrefix(NativeAlarmPlugin.identifierPrefix)
+      }
+      var recorded = 0
+      for notification in ours {
+        guard
+          let appAlarmId = notification.request.content.userInfo["appAlarmId"] as? String,
+          !appAlarmId.isEmpty
+        else { continue }
+        RostrikLedger.append(appAlarmId, to: RostrikLedger.alarmDeletes)
+        recorded += 1
+      }
+      if !ours.isEmpty {
+        self.center.removeDeliveredNotifications(
+          withIdentifiers: ours.map { $0.request.identifier })
+      }
+      if recorded > 0 {
+        NSLog("[Rostrik] recorded \(recorded) spent alarm(s) for cleanup")
+      }
+      DispatchQueue.main.async { completion(recorded) }
+    }
   }
 
   func aliveIds(among ids: [Int], completion: @escaping ([Int]) -> Void) {

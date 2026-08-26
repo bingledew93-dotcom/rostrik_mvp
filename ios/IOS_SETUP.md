@@ -23,19 +23,22 @@ failure modes that cost hours to rediscover.
 | Alarm delivery | ✅ works — `UNUserNotificationCenter`, bundled tones |
 | Foreground alarms | ✅ works — `ForegroundAlarmPresenter` |
 | Snooze | ✅ implemented — notification action + `pending_snoozes` ledger |
+| One-time alarm cleanup | ✅ works — notification response + Dart nudge (§4.4) |
 | Reminders / sleep nudges | ✅ works — `ActivityReminderPlugin.swift` |
 | Sleep sounds | ✅ works — `SleepSoundPlugin.swift` (`AVAudioPlayer`) |
 | Custom-tone preview | implemented (`RingtonePreviewPlugin.swift`), **not yet verified on device** |
 | Background refresh | `BGTaskScheduler` wired end-to-end |
-| Alarm tones bundled | ✅ `assets/sounds/*.wav` (see §4.1 — costs the Android bundle) |
+| Alarm tones | ✅ `ios/Runner/Sounds/*.caf`, pre-looped to ~28s (§4.1) |
 | AlarmKit | stub, gated off (§4.2) |
 | Home-screen widget | not started (§4.3) |
 | In-App Purchase | **blocked** — capability needs the paid Developer Program |
 
-Verified on device: alarms firing with the correct preset tone, foreground
-delivery, wind-down/bedtime nudges, sleep-sound playback. Snooze was reported
-working; its **force-quit** path (ledger written while the app is dead, drained
-on next launch) deserves one more explicit test.
+Verified on device: alarms firing with the correct preset tone (~28s),
+**delivery with the app force-quit**, foreground delivery, wind-down/bedtime
+nudges, sleep-sound playback, and one-time alarms retiring after firing both
+backgrounded and force-quit. Snooze was reported working; its **force-quit**
+path (ledger written while the app is dead, drained on next launch) deserves one
+more explicit test.
 
 ---
 
@@ -147,26 +150,44 @@ Explain these rather than attempting them:
 
 ## 4. Open gaps
 
-### 4.1 The alarm tones cost the Android bundle ~3.9 MB — worth reclaiming
+### 4.1 Alarm tones: why iOS holds different files
 
-`assets/sounds/*.wav` are Flutter assets, and Flutter assets are **not
-per-platform**. Android plays its own `res/raw` copies and never reads these, so
-that ~3.9 MB is dead weight in the Android bundle.
+**Done — recorded here because the divergence is deliberate and looks wrong at
+a glance.**
 
-The sleep sounds show the better pattern: they are added to the Runner target as
-**iOS bundle resources** referencing the existing `res/raw` files (see the
-`SleepSounds` group in `project.pbxproj`), so only iOS pays and nothing is
-duplicated in the repo.
+iOS cannot loop a notification sound. Android plays alarm audio through a
+`MediaPlayer` with `isLooping = true`, so it rings until dismissed;
+`UNNotificationSound` plays its file exactly ONCE and offers no looping API. A
+4.7 s `classic` tone therefore meant a 4.7 s alarm.
 
-Applying that to the alarm tones would remove the Android cost **and delete
-`lib/alarms/ios_alarm_sound_installer.dart` entirely** —
-`UNNotificationSound(named:)` searches the main bundle, so the runtime copy into
-`Library/Sounds` becomes unnecessary. Deliberately not done in the same pass
-that got alarms working: it is a refactor of a now-working safety-critical path
-and wants its own test cycle.
+So the iOS copies bake the repeats into the file, filling Apple's hard **<30 s**
+ceiling (longer and iOS silently substitutes the default chime):
 
-Also worth doing first: these are 16-bit PCM WAVs, several >1 MB for a ~10 s
-loop. Trimming or downsampling cuts most of the cost on both platforms.
+| tone | master | iOS |
+|---|---|---|
+| classic | 4.7 s | 28.1 s (×6) |
+| siren | 9.0 s | 27.0 s (×3) |
+| digital | 7.2 s | 28.8 s (×4) |
+| chime | 16.1 s | 16.1 s — ×2 would breach the cap |
+
+They live in `ios/Runner/Sounds/*.caf` as Runner target resources, in IMA4 (an
+Apple-documented notification-sound format, ~4:1 smaller, so 6× the length costs
+almost nothing). Regenerate from the Android masters with
+`ios/tools/generate_alarm_tones.sh`.
+
+They are **not** Flutter assets, deliberately: assets are not per-platform, so
+`assets/sounds/*.wav` put ~3.9 MB of never-read duplicates in the ANDROID
+bundle, which plays its own `res/raw` copies. Those are now deleted. Being in
+the main bundle is also what lets `UNNotificationSound(named:)` find them with
+no runtime copy — which is why `ios_alarm_sound_installer.dart` no longer
+exists.
+
+A unit test guards both silent failure modes (a missing tone, and one that has
+grown past the cap); both otherwise present identically on device as "it rang
+with the wrong sound".
+
+Still worth doing: the masters are 16-bit PCM, several >1 MB for a ~10 s loop.
+Trimming or downsampling would cut cost on both platforms.
 
 ### 4.2 AlarmKit is still a stub
 
@@ -203,19 +224,45 @@ than Android's — the forecast's segment boundaries map almost one-to-one onto
 `TimelineEntry` dates, so iOS can schedule the whole timeline in one pass
 instead of self-ticking.
 
-### 4.4 No iOS dismissal ledger
+### 4.4 Retiring a fired alarm on iOS
 
-Android's Dismiss writes to `pending_dismissals`, drained through the
-`rostrik/alarm_routing` channel — which has **no iOS handler**, so
-`_syncNativePendingDismissals` returns early there.
+**Mostly solved — the remaining hole is narrow but real.**
 
-Consequence: on iOS a fired alarm is never marked acknowledged in Hive. It
-matters less than on Android (a notification fires once; there is no re-ring
-loop to suppress), which is why an explicit Dismiss **action** was deliberately
-not added — it would look like it worked while marking nothing. Snooze was
-implementable precisely because its ledger is a plain file that
-`drainPendingSnoozesIntoHive` already reads via `path_provider`, with no channel
-involved. A dismissal ledger should follow that same file-based pattern.
+Android writes `pending_alarm_deletes` from native code at fire time. iOS runs
+NO app code when a notification fires, so that ledger was always empty and
+`drainPendingAlarmDeletesIntoHive` never retired anything. The consequence was
+severe and silent: a spent one-time alarm was re-projected to "the next future
+occurrence of its time-of-day", so **a one-time alarm quietly became a daily
+one** and kept waking the user every morning. Confirmed on device before the
+fix.
+
+Three signals now feed the same ledger, so the existing Dart drain is unchanged:
+
+1. **The notification response** (`didReceive`) — a tap or an explicit dismiss.
+   The dependable one: iOS launches the app just to deliver it, so it works
+   from a force-quit state. The category needs `.customDismissAction` or iOS
+   silently drops swipe-away responses.
+2. **A nudge back into Dart** (`onSpentAlarmRecorded`). Without it, retirement
+   is merely eventual: tapping a notification foregrounds the app, so the
+   resume-time drain has usually already run by the time the response arrives,
+   leaving the ledger unread until some later resume.
+3. **A sweep of still-delivered notifications** on launch/resume, as a backstop
+   for alarms the user ignores. On its own this is NOT sufficient — it only
+   sees notifications still in Notification Center, i.e. it misses the most
+   common case of all, the user dismissing one. (A first attempt built solely
+   on this failed on device for exactly that reason.)
+
+**The hole:** clearing the notification via "Clear All" without ever opening the
+app reports nothing, so the rule survives. Fully closing it needs a time-based
+sweep — retire a one-time alarm once its intended instant has passed, with no OS
+cooperation. `AppAlarm` has no `createdAt`/target date (its fire time is a
+time-of-day, which is precisely why it rolls), so that means a model field and a
+Hive migration. See TODO.md §1.1.
+
+Separately, `pending_dismissals` still has no iOS writer, so a fired alarm is
+never marked *acknowledged* in Hive. That matters less than on Android — a
+notification fires once, with no re-ring loop to suppress — but it is why there
+is no explicit "Dismiss" button beyond the system one.
 
 ### 4.5 In-App Purchase needs the paid programme
 
@@ -238,15 +285,16 @@ be meaningfully tested in a simulator anyway.
 - [x] Cold launch clears the splash and reaches onboarding
 - [x] Notification permission prompt appears
 - [x] Build a roster → alarms schedule (`NSLog` shows `scheduled id=…`)
-- [x] An alarm fires with the correct preset tone
+- [x] An alarm fires with the correct preset tone, for ~28s
 - [x] An alarm fires while the app is **foregrounded**
+- [x] **An alarm fires with the app force-quit**
+- [x] A fired one-time alarm is retired, backgrounded **and** force-quit
 - [x] Wind-down / bedtime nudges fire
 - [x] Sleep sounds play and loop
 - [ ] Sleep sound keeps playing with the **screen locked** (needs the `audio`
       background mode — declared, unverified)
 - [ ] Snooze from a **force-quit** app, then relaunch: the ledger drain should
       set `snoozedUntil` and the alarm should still ring
-- [ ] An alarm fires with the app **force-quit**
 - [ ] Custom-tone preview (`AVAudioPlayer`) — needs an audio file on the device
 - [ ] Background refresh rolls the horizon. Force it in Xcode with
       `e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.rostrik.app.alarmSyncRefresh"]`
