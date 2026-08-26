@@ -64,13 +64,26 @@ public final class NativeAlarmPlugin: NSObject {
 
   /// Call from `AppDelegate.didInitializeImplicitFlutterEngine`, passing the
   /// implicit engine's binary messenger.
+  ///
+  /// ⚠️ The handler closure captures `plugin` **strongly**, and that is
+  /// load-bearing. `plugin` is a local, and every caller discards the return
+  /// value, so a `[weak plugin]` capture left NOTHING owning the instance —
+  /// ARC freed it the moment this function returned, and from then on every
+  /// call fell through to `FlutterMethodNotImplemented`, i.e. the channel
+  /// answered and did nothing while the app believed its alarms were armed.
+  /// The strong capture parks ownership in the block the binary messenger
+  /// retains, so the plugin lives exactly as long as its engine.
   @discardableResult
   public static func register(with messenger: FlutterBinaryMessenger) -> NativeAlarmPlugin {
     let plugin = NativeAlarmPlugin(backend: makeBackend())
     let channel = FlutterMethodChannel(name: channelName, binaryMessenger: messenger)
-    channel.setMethodCallHandler { [weak plugin] call, result in
-      plugin?.handle(call, result: result) ?? result(FlutterMethodNotImplemented)
+    channel.setMethodCallHandler { call, result in
+      plugin.handle(call, result: result)
     }
+    // Foreground presentation. Without a delegate iOS shows NOTHING while the
+    // app is frontmost — no banner, no sound — which reads exactly like "the
+    // alarm never fired" during testing, the most common way to try one.
+    ForegroundAlarmPresenter.install()
     return plugin
   }
 
@@ -136,6 +149,156 @@ public final class NativeAlarmPlugin: NSObject {
 
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+}
+
+// MARK: - Foreground presentation
+
+/// Makes an alarm actually show and ring while Rostrik is the frontmost app.
+///
+/// `UNUserNotificationCenter` suppresses delivery entirely for a foregrounded
+/// app unless a delegate answers `willPresent` — and neither `FlutterAppDelegate`
+/// nor this project set one, so a notification scheduled and armed correctly
+/// still produced no banner and no sound whenever the user was looking at the
+/// app. That is the exact situation someone testing an alarm is in.
+///
+/// A dedicated singleton rather than the plugin itself because
+/// `UNUserNotificationCenter.delegate` is a **weak** reference: the background
+/// BGTask engine is torn down after every refresh (`destroyContext`), so a
+/// per-engine plugin acting as delegate would leave the property nil the first
+/// time one of those runs, silently reverting to the silent-in-foreground
+/// behaviour. This instance is owned by a static and outlives every engine.
+final class ForegroundAlarmPresenter: NSObject, UNUserNotificationCenterDelegate {
+
+  private static let shared = ForegroundAlarmPresenter()
+
+  /// Category carrying the Snooze button. Must be registered before any alarm
+  /// is delivered, or the notification shows with no actions.
+  static let alarmCategoryIdentifier = "ROSTRIK_ALARM"
+  private static let snoozeActionIdentifier = "ROSTRIK_SNOOZE"
+
+  /// Idempotent — safe to call from each engine's plugin registration.
+  static func install() {
+    let center = UNUserNotificationCenter.current()
+    center.delegate = shared
+    let snooze = UNNotificationAction(
+      identifier: snoozeActionIdentifier,
+      title: "Snooze",
+      options: [])
+    center.setNotificationCategories([
+      UNNotificationCategory(
+        identifier: alarmCategoryIdentifier,
+        actions: [snooze],
+        intentIdentifiers: [],
+        options: [])
+    ])
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    guard response.actionIdentifier == Self.snoozeActionIdentifier else {
+      completionHandler()
+      return
+    }
+    snooze(response.notification, completionHandler: completionHandler)
+  }
+
+  /// Re-arms this alarm and records the snooze, mirroring the Android
+  /// `AlarmActivity` Snooze contract documented on `pendingSnoozesFileName`:
+  ///
+  ///   1. re-arm the SAME notification identifier (so the Dart ledger entry for
+  ///      this id stays truthful and the reconcile REPLACES in place rather
+  ///      than treating it as an orphan), and
+  ///   2. append `<shiftId>|<appAlarmId>|<untilMillis>` to `pending_snoozes`.
+  ///
+  /// Step 2 is what stops the next reconcile cancelling the re-armed alarm: the
+  /// drain sets `Shift.snoozedUntil` BEFORE any reconcile, so `projectAlarmRings`
+  /// resurrects the ring at that instant instead of seeing an unacknowledged
+  /// shift whose fire time has passed. Writing the ledger BEFORE re-arming
+  /// means a crash in between loses the alarm, not the user's snooze intent —
+  /// the reconcile re-arms from `snoozedUntil` either way.
+  private func snooze(_ notification: UNNotification, completionHandler: @escaping () -> Void) {
+    let request = notification.request
+    let info = request.content.userInfo
+    let minutes = (info["snoozeMinutes"] as? Int) ?? 1
+    let until = Date(timeIntervalSinceNow: TimeInterval(minutes * 60))
+
+    appendSnoozeLedgerLine(
+      shiftId: (info["alarm_id"] as? String) ?? "",
+      appAlarmId: (info["appAlarmId"] as? String) ?? "",
+      until: until)
+
+    let components = Calendar.current.dateComponents(
+      [.year, .month, .day, .hour, .minute, .second], from: until)
+    UNUserNotificationCenter.current().add(
+      UNNotificationRequest(
+        identifier: request.identifier,  // same id ⇒ replace, per the contract
+        content: request.content,
+        trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false))
+    ) { error in
+      if let error {
+        NSLog("[Rostrik] snooze re-arm FAILED \(request.identifier): \(error.localizedDescription)")
+      } else {
+        NSLog("[Rostrik] snoozed \(request.identifier) until \(until)")
+      }
+      completionHandler()
+    }
+  }
+
+  /// Appends one line to the `pending_snoozes` ledger in Application Support —
+  /// the same directory `path_provider`'s `getApplicationSupportDirectory()`
+  /// resolves to, which is how `drainPendingSnoozesIntoHive` finds it. That
+  /// drain is plain file I/O with no MethodChannel involved, so it already
+  /// worked on iOS; this writer was the only missing half.
+  private func appendSnoozeLedgerLine(shiftId: String, appAlarmId: String, until: Date) {
+    let fm = FileManager.default
+    guard let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+      NSLog("[Rostrik] snooze ledger: no Application Support directory")
+      return
+    }
+    // path_provider creates this lazily; the snooze may well be the first
+    // writer if the app has never needed it.
+    if !fm.fileExists(atPath: dir.path) {
+      try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+    let file = dir.appendingPathComponent("pending_snoozes")
+    let millis = Int(until.timeIntervalSince1970 * 1000)
+    guard let line = "\(shiftId)|\(appAlarmId)|\(millis)\n".data(using: .utf8) else { return }
+    if let handle = try? FileHandle(forWritingTo: file) {
+      defer { try? handle.close() }
+      handle.seekToEndOfFile()
+      handle.write(line)
+    } else {
+      try? line.write(to: file, options: .atomic)
+    }
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler:
+      @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    // Both of Rostrik's notification surfaces, not just alarms. Scoping this to
+    // the alarm prefix alone silently suppressed every reminder and sleep nudge
+    // whenever the app was open — indistinguishable from iOS "not allowing"
+    // foreground notifications, when in fact this delegate is the only thing
+    // that decides.
+    let identifier = notification.request.identifier
+    guard identifier.hasPrefix(NativeAlarmPlugin.identifierPrefix)
+      || identifier.hasPrefix(ActivityReminderPlugin.identifierPrefix)
+    else {
+      completionHandler([])
+      return
+    }
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .list, .sound])
+    } else {
+      completionHandler([.alert, .sound])
     }
   }
 }
@@ -227,6 +390,9 @@ final class NotificationBackend: AlarmBackend {
     // Time-sensitive breaks through most Focus modes without any entitlement.
     // It does NOT beat the ring switch — see the type doc.
     if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
+    // Carries the Snooze action. iOS has no full-screen alarm surface, so the
+    // notification itself has to be the whole control affordance.
+    content.categoryIdentifier = ForegroundAlarmPresenter.alarmCategoryIdentifier
     content.userInfo = [
       "alarm_id": request.shiftId,
       "appAlarmId": request.appAlarmId,
@@ -248,7 +414,26 @@ final class NotificationBackend: AlarmBackend {
       UNNotificationRequest(
         identifier: request.requestIdentifier, content: content, trigger: trigger)
     ) { error in
+      // NSLog, not debugPrint: alarms can only be judged on a real device, and
+      // a device build is a RELEASE build where Dart's debugPrint is compiled
+      // out. This is the only channel that still talks on the far side.
+      if let error {
+        NSLog("[Rostrik] schedule FAILED id=\(request.id): \(error.localizedDescription)")
+      } else {
+        NSLog(
+          "[Rostrik] scheduled id=\(request.id) at \(request.fireAt) "
+            + "sound=\(request.iosSound ?? "default")")
+      }
       DispatchQueue.main.async { completion(error) }
+    }
+
+    // Authorisation is the other half of "armed but silent": `add` succeeds
+    // even when the user has never granted permission, and the notification is
+    // simply dropped at delivery time.
+    center.getNotificationSettings { settings in
+      NSLog(
+        "[Rostrik] auth=\(settings.authorizationStatus.rawValue) "
+          + "sound=\(settings.soundSetting.rawValue) alert=\(settings.alertSetting.rawValue)")
     }
   }
 

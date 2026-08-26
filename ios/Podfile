@@ -48,6 +48,17 @@ post_install do |installer|
       # the 15.5 floor so a pod that inherited a lower target can't break the
       # build. Mirrors the value set in Runner.xcodeproj/project.pbxproj.
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'
+
+      # permission_handler_apple compiles EVERY permission group out by
+      # default (each strategy .m is `#if PERMISSION_X ... #else <empty
+      # @implementation> #endif`) — without this, Permission.notification
+      # silently never calls UNUserNotificationCenter, so the onboarding
+      # toggle can never grant it. Only enabling what main.dart /
+      # permissions_screen.dart actually call.
+      if target.name == 'permission_handler_apple'
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'PERMISSION_NOTIFICATIONS=1'
+      end
     end
   end
 end

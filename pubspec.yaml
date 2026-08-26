@@ -101,6 +101,13 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
 
+  # Stay on CocoaPods only. Runner.xcodeproj predates Flutter's SPM
+  # auto-migration and already has a working Podfile/Podfile.lock (see
+  # ios/IOS_SETUP.md) - letting flutter run migrate it mid-setup risks a
+  # half-integrated project. Revisit if a future plugin drops CocoaPods.
+  config:
+    enable-swift-package-manager: false
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

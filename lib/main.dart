@@ -1,3 +1,6 @@
+import 'dart:async' show unawaited;
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
@@ -280,6 +283,10 @@ void main() async {
   final legalAccepted =
       sharedPrefs.getString(kAcceptedLegalVersionKey) == kCurrentLegalVersion;
 
+  // Must come after runApp: it posts to the first frame, which only exists
+  // once there is a widget tree. See the function's own doc for why this
+  // cannot live in the pre-runApp permission block.
+  requestIosNotificationPermission();
   runApp(AppProviders(
     storage: storage,
     scheduler: scheduler,
@@ -396,8 +403,15 @@ Future<void> _syncNativePendingDismissals(ShiftRepository shifts) async {
 /// plugin-specific fallback now that flutter_local_notifications is gone). All
 /// calls are idempotent: the OS suppresses re-prompts after the user answers.
 Future<void> _requestAlarmPermissions() async {
+  // iOS asks for NOTHING here — see [requestIosNotificationPermission], which
+  // runs after the first frame instead. Every permission below is an Android
+  // concept anyway (`scheduleExactAlarm` and `systemAlertWindow` both resolve
+  // to permission_handler's "unknown" strategy on iOS, i.e. an immediate
+  // permanently-denied), so skipping the whole block off-Android costs nothing.
+  if (!Platform.isAndroid) return;
+
   // Android 13+ POST_NOTIFICATIONS — needed for AlarmReceiver's full-screen-
-  // intent notification to show. No-op on iOS / older Android.
+  // intent notification to show. No-op on older Android.
   await Permission.notification.request();
 
   // Android 12+ exact-alarm. `setAlarmClock` itself is exempt and always
@@ -415,6 +429,26 @@ Future<void> _requestAlarmPermissions() async {
   if (!await Permission.systemAlertWindow.isGranted) {
     await Permission.systemAlertWindow.request();
   }
+}
+
+/// Asks for the iOS notification permission AFTER the first frame.
+///
+/// It cannot be asked for during `main()`. permission_handler's iOS side
+/// answers a status check by blocking its thread on a semaphore until
+/// `UNUserNotificationCenter` calls back, and that callback does not arrive
+/// while the app is still launching — so asking pre-`runApp` blocks the very
+/// launch the callback is waiting on, and the app sits on the native splash
+/// screen forever. Posting it after the first frame means the app is provably
+/// live before anything blocks.
+///
+/// Unawaited by design, and safe to no-op: [PermissionsScreen] asks again on an
+/// explicit tap during onboarding, so a returning user who dismissed the
+/// system prompt still has a route back to granting it.
+void requestIosNotificationPermission() {
+  if (!Platform.isIOS) return;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(Permission.notification.request());
+  });
 }
 
 class RostrikApp extends StatelessWidget {

@@ -24,17 +24,20 @@ The catalog (keys, labels, channel IDs, resource names) lives in
 [`lib/alarms/alarm_sound.dart`](../../lib/alarms/alarm_sound.dart) — the single
 source of truth. Add a tone by adding a row there and dropping its two files.
 
-## ⚠️ res/raw swap
-
-`android/app/src/main/res/raw/` currently holds the legacy **`classic_alarm.mp3`**.
-Android resolves raw resources by bare name, so `classic_alarm.mp3` and
-`classic_alarm.wav` would **collide**. **Replace** the `.mp3` with
-`classic_alarm.wav` (delete the mp3). `res/raw` names must be lowercase
-`a–z`/`0–9`/`_`, start with a letter, and carry no hyphens, spaces, or uppercase.
+`res/raw` names must be lowercase `a–z`/`0–9`/`_`, start with a letter, and
+carry no hyphens, spaces, or uppercase. Android resolves them by bare name, so
+two files differing only in extension would collide.
 
 ## iOS
 
 No Xcode needed: these assets are copied into the app container's
-`Library/Sounds/` at startup by `installIosNotificationSounds()`
-(`lib/alarms/local_notifications_alarm_scheduler.dart`), where
-`UNNotificationSound(named:)` resolves them by filename.
+`Library/Sounds/` at startup by `installIosAlarmSounds()`
+([`lib/alarms/ios_alarm_sound_installer.dart`](../../lib/alarms/ios_alarm_sound_installer.dart)),
+where `UNNotificationSound(named:)` resolves them by filename. Verified ringing
+on device.
+
+⚠️ **These four WAVs are duplicated weight in the Android bundle** (~3.9 MB):
+Flutter assets are not per-platform, and Android plays its own `res/raw` copies
+instead. The sleep sounds avoid this by being iOS bundle resources that
+reference `res/raw` directly — see `ios/IOS_SETUP.md` §4.1 for moving the alarm
+tones to that pattern, which would also delete the installer above.
