@@ -107,7 +107,7 @@ SleepPlan computeSleepPlan({
 }) {
   // Holiday Mode: no alarms fire, so there's no wake target to plan around —
   // the tab degrades to the same calm empty state as "no upcoming shift".
-  final next = isSchedulePaused ? null : _nextWakeShift(shifts, now);
+  final next = isSchedulePaused ? null : _nextWakeShift(shifts, alarms, now);
   if (next == null) {
     return SleepPlan(
       state: SleepPlanState.none,
@@ -199,13 +199,18 @@ bool _isWorkingDay(List<Shift> shifts, DateTime day) {
 /// Unlike the Dashboard's "next shift" (which keeps an in-progress shift), the
 /// sleep planner only cares about a shift the user still has to WAKE for, so an
 /// already-started shift is skipped.
-Shift? _nextWakeShift(List<Shift> shifts, DateTime now) {
+Shift? _nextWakeShift(List<Shift> shifts, List<AppAlarm> alarms, DateTime now) {
   Shift? best;
   DateTime? bestStart;
   for (final s in shifts) {
     if (s.type == ShiftType.off) continue;
-    if (s.isMuted) continue;
-    if (s.isAcknowledged) continue;
+    // ONE shared rule with the alarm engine. This used to spell out only
+    // `isMuted` and `isAcknowledged`, so a shift on annual leave — which is
+    // `isPaused`, like Sick and Public Holiday — rang no alarm but still sent a
+    // wind-down and a bedtime reminder. There is no point preparing someone to
+    // sleep for a shift that will never wake them.
+    if (s.suppressesWakeUp) continue;
+    if (_everyRingDismissed(s, alarms)) continue;
     final start = s.startDateTime;
     if (!start.isAfter(now)) continue;
     if (bestStart == null || start.isBefore(bestStart)) {
@@ -214,6 +219,32 @@ Shift? _nextWakeShift(List<Shift> shifts, DateTime now) {
     }
   }
   return best;
+}
+
+/// True when rules exist for this shift's type and the user has dismissed
+/// **every** one of them for this occurrence.
+///
+/// The per-occurrence counterpart to [Shift.suppressesWakeUp], and the reason
+/// it cannot live there: `dismissedAlarmIds` names individual alarms, so only a
+/// caller holding the alarm list can tell "this ring was skipped" from "the
+/// whole shift was".
+///
+/// The distinction that matters is between *no rule* and *no remaining rule*.
+/// A user with no rotation alarm at all still gets a sleep plan — that is
+/// deliberate, and `_earliestWakeTime` falls back to `shiftStart − lead` for
+/// them. But a user who swiped away tomorrow's alarm has said there is no wake
+/// to prepare for, and telling them to go to bed for it anyway contradicts what
+/// the app just showed them.
+bool _everyRingDismissed(Shift shift, List<AppAlarm> alarms) {
+  var candidates = 0;
+  for (final a in alarms) {
+    if (!a.enabled) continue;
+    if (a.repeatType != AppAlarmRepeatType.followsRotation) continue;
+    if (a.linkedShiftType != shift.type) continue;
+    candidates++;
+    if (!shift.dismissedAlarmIds.contains(a.id)) return false;
+  }
+  return candidates > 0;
 }
 
 /// The earliest fire time among enabled follows-rotation alarms that target
