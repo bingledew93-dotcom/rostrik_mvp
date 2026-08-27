@@ -130,12 +130,6 @@ import UIKit
       NativeAlarmPlugin.register(with: registrar.messenger(), isUiEngine: true)
     }
 
-    // `rostrik/ringtone_picker` preview-only handler — UI engine only, the
-    // background sync engine never previews a tone.
-    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RingtonePreviewPlugin") {
-      RingtonePreviewPlugin.register(with: registrar.messenger())
-    }
-
     // `rostrik/sleep_sounds` — the Sleep tab's looping player. UI engine only;
     // nothing in a background refresh plays audio.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SleepSoundPlugin") {

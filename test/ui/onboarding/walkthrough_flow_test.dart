@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rostrik_mvp/alarms/alarm_capabilities.dart';
 import 'package:rostrik_mvp/ui/critical_dismiss_controls.dart';
 import 'package:rostrik_mvp/ui/onboarding/walkthrough_flow.dart';
 
@@ -16,7 +17,10 @@ void main() {
     finished = 0;
   });
 
-  tearDown(() => shake.close());
+  tearDown(() {
+    shake.close();
+    AlarmCapabilities.debugOverride = null;
+  });
 
   Future<void> pump(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1200, 2600);
@@ -40,6 +44,27 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('walkthrough-next')));
     await tester.pumpAndSettle();
   }
+
+  // Where the gesture cannot dismiss an alarm, the lesson must not be taught.
+  // Teaching a gesture that will never work is the most damaging form of a
+  // control that does nothing, because it arrives as instruction.
+  testWidgets('drops the shake lesson where the gesture does nothing',
+      (tester) async {
+    AlarmCapabilities.debugOverride = AlarmCapabilities.iosNotification;
+    await pump(tester);
+
+    // The intro previews the lessons, so it must not advertise the shake one.
+    expect(find.text('A 60-second tour'), findsOneWidget);
+    expect(find.text('Shake to dismiss'), findsNothing);
+    await tapNext(tester);
+    expect(find.text('Paint your roster'), findsOneWidget);
+
+    // Straight to the final page — no shake lesson in between.
+    await tapNext(tester);
+    expect(find.byType(ShakeToDismiss), findsNothing);
+    expect(find.text('You\u2019re all set'), findsOneWidget);
+    expect(find.byKey(const ValueKey('walkthrough-done')), findsOneWidget);
+  });
 
   testWidgets('opens on the intro and Next advances through the pages',
       (tester) async {

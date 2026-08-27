@@ -131,14 +131,21 @@ xcrun devicectl device process launch --device <device-id> --terminate-existing 
 
 ## 3. What iOS genuinely cannot do
 
+These are hidden in the UI rather than offered and quietly ignored —
+`AlarmCapabilities` (`lib/alarms/alarm_capabilities.dart`) is the single source
+of truth, and the UI asks it rather than checking `Platform` ad-hoc. When
+AlarmKit lands, feed `AlarmCapabilities.current` from the native channel instead
+of computing it in Dart; the call sites will not change.
+
 Explain these rather than attempting them:
 
 - **No full-screen wake surface.** Android's `AlarmActivity` draws over the
   keyguard; iOS has no third-party equivalent. The notification is the entire
   control affordance, which is why Snooze is a notification action.
-- **No shake-to-dismiss** — it depends on that surface.
-- **No system-ringtone picker.** No public API;
-  `RingtoneChannel.pickSystemRingtone` no-ops on iOS by design.
+- **No shake-to-dismiss** — it depends on that surface. The Critical-shift
+  toggle, the walkthrough's shake lesson, and its preview on the tour's intro
+  page are all hidden on iOS.
+- **No system-ringtone picker.** No public API. Hidden on iOS.
 - **No arbitrary file as a notification sound.** Only `Library/Sounds`, so a
   custom tone degrades to its bundled fallback. Buying a song proves nothing.
 - **~30s sound cap**, and the ring/silent switch silences it. `.critical` would

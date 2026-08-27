@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../alarms/alarm_capabilities.dart';
 import '../alarms/alarm_projection.dart' show nextDailyOccurrence;
 import '../alarms/alarm_sound.dart';
 import '../alarms/default_tone_prefs.dart';
@@ -220,23 +221,32 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                         : null,
                     onTap: () => Navigator.of(sheetCtx).pop('tone:${s.key}'),
                   ),
-                const Divider(height: 1),
-                ListTile(
-                  key: const ValueKey('ringtone-source-files'),
-                  leading: const Icon(Icons.folder_open_outlined),
-                  title: const Text('Select from Files'),
-                  subtitle:
-                      const Text('Pick an audio file saved on your device'),
-                  onTap: () => Navigator.of(sheetCtx).pop('files'),
-                ),
-                ListTile(
-                  key: const ValueKey('ringtone-source-system'),
-                  leading: const Icon(Icons.library_music_outlined),
-                  title: const Text('Select System Tone'),
-                  subtitle:
-                      const Text("Choose from your device's alarm sounds"),
-                  onTap: () => Navigator.of(sheetCtx).pop('system'),
-                ),
+                // Both custom sources are hidden where they cannot ring. iOS
+                // resolves a notification sound only from the app bundle or
+                // Library/Sounds, so a picked file was silently swapped for the
+                // bundled fallback at ring time — the worst kind of failure on
+                // an alarm, since a user woken by a sound they don't recognise
+                // may not react to it. It has no system-tone API at all.
+                if (AlarmCapabilities.current.customTonePicker) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    key: const ValueKey('ringtone-source-files'),
+                    leading: const Icon(Icons.folder_open_outlined),
+                    title: const Text('Select from Files'),
+                    subtitle:
+                        const Text('Pick an audio file saved on your device'),
+                    onTap: () => Navigator.of(sheetCtx).pop('files'),
+                  ),
+                ],
+                if (AlarmCapabilities.current.systemTonePicker)
+                  ListTile(
+                    key: const ValueKey('ringtone-source-system'),
+                    leading: const Icon(Icons.library_music_outlined),
+                    title: const Text('Select System Tone'),
+                    subtitle:
+                        const Text("Choose from your device's alarm sounds"),
+                    onTap: () => Navigator.of(sheetCtx).pop('system'),
+                  ),
               ],
             ),
           ),
@@ -767,15 +777,21 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             const SizedBox(height: 8),
             // Applies to both repeat types — Critical is about the WAKE
             // mechanic, independent of when/how often the alarm fires.
-            SwitchListTile(
-              key: const ValueKey('create-alarm-critical'),
-              contentPadding: EdgeInsets.zero,
-              value: _isCriticalShift,
-              onChanged: (v) => setState(() => _isCriticalShift = v),
-              title: const Text('Critical shift'),
-              subtitle:
-                  const Text('Shake to dismiss · 3-second hold fail-safe'),
-            ),
+            //
+            // Hidden where the wake mechanic doesn't exist. On iOS the alarm is
+            // a notification, so there is no surface to shake at and no hold
+            // fail-safe; the toggle rendered and did nothing, while its subtitle
+            // promised both. See [AlarmCapabilities].
+            if (AlarmCapabilities.current.shakeToDismiss)
+              SwitchListTile(
+                key: const ValueKey('create-alarm-critical'),
+                contentPadding: EdgeInsets.zero,
+                value: _isCriticalShift,
+                onChanged: (v) => setState(() => _isCriticalShift = v),
+                title: const Text('Critical shift'),
+                subtitle:
+                    const Text('Shake to dismiss · 3-second hold fail-safe'),
+              ),
             const SizedBox(height: 8),
             // Audio — the SINGLE source of truth for this alarm's sound. Tapping
             // the name opens the source chooser (Files / System Tone / Rostrik
