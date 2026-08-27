@@ -150,6 +150,11 @@ Explain these rather than attempting them:
   custom tone degrades to its bundled fallback. Buying a song proves nothing.
 - **~30s sound cap**, and the ring/silent switch silences it. `.critical` would
   pierce both but needs an Apple-approved entitlement.
+- **No sustained vibration.** iOS buzzes ONCE on delivery, governed by the
+  user's system Sounds & Haptics settings; no app code is running to loop it and
+  `UNNotificationContent` exposes no vibration control. Android sustains it from
+  its foreground audio service. The in-app Vibrate toggle is hidden on iOS —
+  it moved but the alarm buzzed once either way.
 - iOS caps pending notifications at **64**, shared between alarms and reminders.
   The 14-day / 50-alarm horizon fits, but it is worth watching.
 
@@ -276,10 +281,21 @@ Three signals now feed the same ledger, so the existing Dart drain is unchanged:
 Verified on device: backgrounded, force-quit, and cleared from Notification
 Centre without opening the app.
 
-Separately, `pending_dismissals` still has no iOS writer, so a fired alarm is
-never marked *acknowledged* in Hive. That matters less than on Android — a
-notification fires once, with no re-ring loop to suppress — but it is why there
-is no explicit "Dismiss" button beyond the system one.
+Separately, `pending_dismissals` has no iOS writer, so a fired alarm's shift is
+never marked *acknowledged* in Hive. **Assessed 2026-08-27 as low impact — not
+worth building a ledger for:**
+
+  * alarm suppression does not depend on it. A normal dismissal writes per-ring
+    `dismissedAlarmIds`; `isAcknowledged` is the legacy whole-shift path. And an
+    iOS notification fires once, so there is no re-ring loop to suppress.
+  * the two readers — the Dashboard hero and the sleep planner — use it only to
+    skip a FUTURE shift the user has already dealt with. On iOS, between
+    dismissing the alarm and the shift starting, the hero keeps showing that
+    shift as upcoming. That is arguably correct: the shift really is still ahead.
+
+It remains the reason there is no explicit "Dismiss" action beyond the system
+one — such a button would look like it worked while marking nothing. Revisit
+only if the hero's behaviour in that window turns out to bother real users.
 
 ### 4.5 In-App Purchase needs the paid programme
 

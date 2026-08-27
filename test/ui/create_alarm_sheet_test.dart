@@ -302,6 +302,28 @@ void main() {
       expect(find.byKey(const ValueKey('create-alarm-critical')), findsNothing);
     });
 
+    // iOS vibrates once on delivery per the user's system haptic settings, and
+    // exposes no notification vibration control — so the switch moved but the
+    // alarm buzzed once either way.
+    testWidgets('hides the Vibrate toggle where the app cannot control haptics',
+        (tester) async {
+      AlarmCapabilities.debugOverride = AlarmCapabilities.iosNotification;
+      addTearDown(() => AlarmCapabilities.debugOverride = null);
+
+      await pumpSheet(tester);
+      expect(find.byKey(const ValueKey('create-alarm-vibrate')), findsNothing);
+    });
+
+    testWidgets('offers the Vibrate toggle where haptics ARE controllable',
+        (tester) async {
+      AlarmCapabilities.debugOverride = AlarmCapabilities.android;
+      addTearDown(() => AlarmCapabilities.debugOverride = null);
+
+      await pumpSheet(tester);
+      expect(
+          find.byKey(const ValueKey('create-alarm-vibrate')), findsOneWidget);
+    });
+
     testWidgets('hides both custom tone sources where they cannot ring',
         (tester) async {
       AlarmCapabilities.debugOverride = AlarmCapabilities.iosNotification;

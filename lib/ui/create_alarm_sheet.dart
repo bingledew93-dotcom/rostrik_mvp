@@ -858,15 +858,23 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             // Haptics — global, bound to AlarmSettings. Governs the continuous
             // native vibration for custom-ringtone alarms (bundled-tone alarms
             // keep their channel vibration, which Android binds immutably).
-            SwitchListTile(
-              key: const ValueKey('create-alarm-vibrate'),
-              contentPadding: EdgeInsets.zero,
-              value: alarmSettings.vibrationEnabled,
-              onChanged: _setVibration,
-              secondary: const Icon(Icons.vibration),
-              title: const Text('Vibrate'),
-            ),
-            const SizedBox(height: 8),
+            //
+            // Hidden where the app has no say. iOS vibrates once on delivery
+            // per the user's system Sounds & Haptics settings; nothing is
+            // running to sustain it and the notification API exposes no
+            // vibration control, so this switch moved but changed nothing —
+            // the alarm buzzed once whichever way it was set.
+            if (AlarmCapabilities.current.vibrationControl) ...[
+              SwitchListTile(
+                key: const ValueKey('create-alarm-vibrate'),
+                contentPadding: EdgeInsets.zero,
+                value: alarmSettings.vibrationEnabled,
+                onChanged: _setVibration,
+                secondary: const Icon(Icons.vibration),
+                title: const Text('Vibrate'),
+              ),
+              const SizedBox(height: 8),
+            ],
             Align(
               alignment: Alignment.centerLeft,
               child: Text('Repeat', style: theme.textTheme.labelLarge),
