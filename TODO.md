@@ -130,42 +130,53 @@ Done:
 - [x] Authorisation flow, post-frame, chained after the notification prompt so
       the two system alerts queue rather than race (IOS_SETUP.md §1.1).
 
+Also done, verified on device 2026-08-27 (iPhone SE 3, iOS 26.6.1):
+
+- [x] **Alarm cap measured: ≥400.** 400 armed, none refused, all 400 confirmed
+      live *before* cleanup. No hybrid split needed — AlarmKit carries the whole
+      14-day horizon.
+- [x] **The alert needs no widget extension.** Full-screen with slide-to-dismiss,
+      banner when unlocked. Rings on silent, and for over five minutes.
+- [x] **Nor does the countdown.** Native snooze via `postAlert` re-alerts with no
+      widget target.
+- [x] **`RostrikStopAlarmIntent`** — verified end to end on real alarms: stop →
+      deletes ledger → Dart drain → rule retired, and the reconciler does not
+      re-arm it. The daily-alarm bug does not reproduce.
+- [x] **`RostrikSnoozeAlarmIntent`** — verified with a real rule UUID: snooze →
+      ledger → drain → re-armed at the snooze instant, and the Dashboard
+      dismiss control appears.
+- [x] **Runtime backend switch** so real alarms can run on either backend.
+
+⚠️ **Two snooze mechanisms now coexist**: AlarmKit's native `postAlert` countdown
+AND Dart re-arming from the snooze ledger. They do not double-alert, but only
+because both target the same instant *and* the same alarm UUID, so
+cancel-then-schedule collapses them. If either ever computed a different instant,
+the user would get two alarms. Worth a test pinning that invariant.
+
 Open, in the order that de-risks fastest:
 
-- [ ] **Measure the alarm cap** (`runAlarmKitBringUp` does this on launch).
-      `AlarmManager.AlarmError.maximumLimitReached` exists and its value is not
-      published. This decides the architecture: rotating rosters are not weekly,
-      so `.relative` recurrence is useless to us and every occurrence needs its
-      own alarm. If the cap is well below the 14-day horizon, AlarmKit cannot
-      carry it alone and the imminent alarms go to AlarmKit while the rest stay
-      on notifications. **Learn the number before building around it.**
-- [ ] **Does the alert present without a widget extension?** `AlarmAttributes`
-      is an `ActivityKit.ActivityAttributes`, so the UI is a Live Activity. The
-      countdown certainly needs a widget target; whether the plain alert does is
-      what the first device test answers. Hence the current config is stop-only
-      with `countdownDuration: nil` — the smallest thing that asks the question.
-- [ ] **Widget extension** + SwiftUI `ActivityConfiguration`. New target, new
-      bundle id (§2.4 — App Groups are *not* required for this; ActivityKit
-      passes attributes and state itself).
-- [ ] **Stop / Snooze App Intents.** `LiveActivityIntent`s, which is the real
-      prize: unlike a notification, **our code runs when the user responds**.
-      The Stop intent writes the deletes ledger directly, replacing
-      `recordSpentAlarms`' after-the-fact inspection of delivered notifications.
-- [ ] **Native snooze** via `Alarm.CountdownDuration(postAlert:)` +
-      `secondaryButtonBehavior: .countdown`, retiring the re-arm-the-same-id
-      trick. Needs the widget extension first (countdown presentation).
-- [ ] **Retire the repeat chain on this path.** AlarmKit sustains the alarm
-      itself, so `kChainCost` is pure waste there and the iOS alarm cap can rise
-      back from 32. Notification path keeps it.
-- [ ] Make `AlarmCapabilities.current` native-fed once a backend can actually
-      differ at runtime (§2.1), flipping `soundBeyondThirtySeconds` and
-      `piercesSilentSwitch` true under AlarmKit.
-- [ ] Only then flip `alarmKitEnabled = true`.
+- [ ] **Raise the alarm cap under AlarmKit.** Still 32, which exists to pay for
+      a 64-notification ceiling and a 16-slot repeat chain — neither applies
+      here, and the measured cap is ≥400. `_platformMaxScheduled()` and
+      `_platformChainedAlarmCount()` need to know which backend is live, which
+      is the one real reason to make `AlarmCapabilities.current` native-fed.
+      Until then iOS pre-arms a shorter horizon than it needs to.
+- [ ] **Pin the two-snooze invariant** with a test (see the warning above).
+- [ ] **Decide how the default flips.** `alarmKitEnabled` reads `UserDefaults`
+      and defaults false, so shipping as-is leaves every user on notifications.
+      Making it default-on for iOS 26 needs a sentinel that distinguishes "never
+      set" from "explicitly off", so the debug switch and any future kill-switch
+      still win.
+- [ ] **Remove the DEBUG · ALARMKIT section** from Settings before merge, along
+      with `fireAlarmKitTestAlarm`. The runtime switch itself is worth keeping as
+      a kill-switch; the synthetic test alarm is not.
+- [ ] Phase C messaging (§2.3) — `soundBeyondThirtySeconds`,
+      `piercesSilentSwitch` and `fullScreenAlarm` are all *true* under AlarmKit
+      but are consumed nowhere yet.
 
-⚠️ **Known regression if the gate is flipped early:** `recordSpentAlarms` is
-inherited as a no-op on the AlarmKit backend, so nothing writes the deletes
-ledger and one-time alarms would silently become daily — the exact fault fixed
-on the notification path. The Stop intent is the fix, not more inspection.
+⚠️ **The notification path now has no hardware to test it on** (§4). It is still
+the majority path and the permanent one for pre-26 devices. Treat any change to
+`NotificationBackend` as unverified.
 
 ### 2.2b Custom tones on iOS — reopened 2026-08-27
 
