@@ -214,6 +214,60 @@ public final class NativeAlarmPlugin: NSObject {
       #endif
       result(-1)
 
+    case "alarmKitProbeReplace":
+      #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+          AlarmKitBackend.probeReplaceSemantics { verdict in result(verdict) }
+          return
+        }
+      #endif
+      result("unavailable")
+
+    /// Arms ONE real AlarmKit alarm a few seconds out, through the production
+    /// `configuration(for:)` path.
+    ///
+    /// This is the only way to answer the question the limit probe cannot: an
+    /// AlarmKit alert is a Live Activity, and we have no widget extension yet.
+    /// Whether it still presents — and whether the bundled `.caf` rings past the
+    /// 30s that caps the notification path — is observable only by letting one
+    /// fire. Scheduling it exactly as production would means a pass here is
+    /// evidence about production, not about a special case.
+    ///
+    /// Uses a negative id so it can never collide with a real alarm, and writes
+    /// no ledger entry, so nothing in the Dart reconciler reacts to it.
+    case "alarmKitTestAlarm":
+      #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+          let args = (call.arguments as? [String: Any]) ?? [:]
+          let seconds = (args["seconds"] as? Int) ?? 60
+          let fireAt = Date(timeIntervalSinceNow: TimeInterval(seconds))
+          guard
+            let request = AlarmRequest(arguments: [
+              "id": -999,
+              "triggerAtMillis": Int(fireAt.timeIntervalSince1970 * 1000),
+              "label": "Rostrik AlarmKit test",
+              "displayTime": "",
+              "body": "Phase B bring-up",
+              "iosSound": (args["sound"] as? String) ?? "classic.caf",
+              "alarm_id": "TEST",
+              "appAlarmId": "TEST",
+              "snoozeMinutes": 1,
+            ])
+          else {
+            result(false)
+            return
+          }
+          AlarmKitBackend().schedule(request) { error in
+            NSLog(
+              "[Rostrik] AlarmKit test alarm for \(fireAt): "
+                + (error?.localizedDescription ?? "ARMED"))
+            result(error == nil)
+          }
+          return
+        }
+      #endif
+      result(false)
+
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -881,6 +935,23 @@ final class NotificationBackend: AlarmBackend {
       Task {
         var failure: Error?
         do {
+          // ⚠️ AlarmKit does NOT replace by id. `UNUserNotificationCenter.add`
+          // does, and `AlarmScheduler.scheduleAt` is specified in those terms
+          // ("if id already exists, implementations must replace it") — but
+          // scheduling over a UUID that AlarmKit still holds throws
+          // `com.apple.AlarmKit.Alarm error 0`. Observed on device 2026-08-27:
+          // arming a test alarm, then arming it again before it fired, failed
+          // twice and only succeeded once the first had fired and been
+          // dismissed.
+          //
+          // That is not an edge case here. Ids are derived deterministically
+          // from the Dart alarm id, so every re-arm of an existing alarm — which
+          // is what the reconciler does whenever a shift moves — targets a UUID
+          // already in use. Without this cancel, the alarm nearest to firing is
+          // exactly the one most likely to fail to update.
+          //
+          // Cancelling an id AlarmKit does not hold throws, hence `try?`.
+          try? AlarmManager.shared.cancel(id: uuid)
           _ = try await AlarmManager.shared.schedule(id: uuid, configuration: configuration)
           NSLog(
             "[Rostrik] AlarmKit scheduled id=\(request.id) at \(request.fireAt) "
@@ -947,6 +1018,75 @@ final class NotificationBackend: AlarmBackend {
     ///
     /// Debug-only, and self-cleaning: the alarms are dated a decade out so a
     /// crash mid-probe cannot ring anything.
+    /// A throwaway alarm dated far enough out that nothing it creates can ring,
+    /// shared by the probes below so they differ only in what they measure.
+    private static func probeConfiguration(at date: Date)
+      -> AlarmManager.AlarmConfiguration<RostrikAlarmMetadata>
+    {
+      let alert = AlarmPresentation.Alert(
+        title: "Rostrik probe",
+        stopButton: AlarmButton(
+          text: "Stop", textColor: .white, systemImageName: "stop.circle.fill"))
+      return AlarmManager.AlarmConfiguration(
+        countdownDuration: nil,
+        schedule: .fixed(date),
+        attributes: AlarmAttributes<RostrikAlarmMetadata>(
+          presentation: AlarmPresentation(alert: alert),
+          metadata: RostrikAlarmMetadata(shiftId: "probe", appAlarmId: "probe"),
+          tintColor: .orange),
+        sound: .default)
+    }
+
+    /// Settles whether AlarmKit replaces an alarm scheduled over an id it
+    /// already holds, or refuses it.
+    ///
+    /// This is not academic. `AlarmScheduler.scheduleAt` is *specified* as
+    /// replace-by-id, because `UNUserNotificationCenter.add` behaves that way,
+    /// and our AlarmKit ids are derived deterministically from the Dart alarm
+    /// id — so every re-arm of an existing alarm lands on a UUID already in use.
+    /// Device logs on 2026-08-27 showed two such schedules failing with
+    /// `com.apple.AlarmKit.Alarm error 0`, which is the evidence behind the
+    /// pre-emptive cancel in `schedule`. This confirms the reading directly
+    /// rather than inferring it from a coincidence.
+    static func probeReplaceSemantics(completion: @escaping (String) -> Void) {
+      Task {
+        let uuid = alarmUUID(for: -200_001)
+        let base = Date(timeIntervalSinceNow: 10 * 365 * 24 * 60 * 60)
+        var verdict: String
+
+        do {
+          _ = try await AlarmManager.shared.schedule(
+            id: uuid, configuration: probeConfiguration(at: base))
+          // Also the check that `aliveIds` can believe what AlarmKit reports.
+          let visible = Set(((try? AlarmManager.shared.alarms) ?? []).map(\.id))
+            .contains(uuid)
+
+          do {
+            _ = try await AlarmManager.shared.schedule(
+              id: uuid, configuration: probeConfiguration(at: base.addingTimeInterval(3600)))
+            verdict = "REPLACES in place (visible in alarms=\(visible))"
+          } catch {
+            try? AlarmManager.shared.cancel(id: uuid)
+            do {
+              _ = try await AlarmManager.shared.schedule(
+                id: uuid, configuration: probeConfiguration(at: base.addingTimeInterval(3600)))
+              verdict =
+                "REFUSES over a live id; cancel-then-schedule works "
+                + "(visible in alarms=\(visible))"
+            } catch {
+              verdict = "REFUSES, and cancel-then-schedule ALSO failed: \(error)"
+            }
+          }
+        } catch {
+          verdict = "initial schedule failed: \(error)"
+        }
+
+        try? AlarmManager.shared.cancel(id: uuid)
+        NSLog("[Rostrik] AlarmKit replace semantics: \(verdict)")
+        DispatchQueue.main.async { completion(verdict) }
+      }
+    }
+
     static func probeAlarmLimit(upTo bound: Int, completion: @escaping (Int) -> Void) {
       Task {
         let base = Date(timeIntervalSinceNow: 10 * 365 * 24 * 60 * 60)
@@ -954,22 +1094,11 @@ final class NotificationBackend: AlarmBackend {
         var limit = bound
         for index in 0..<bound {
           let uuid = alarmUUID(for: -100_000 - index)
-          let alert = AlarmPresentation.Alert(
-            title: "Rostrik probe",
-            stopButton: AlarmButton(
-              text: "Stop", textColor: .white, systemImageName: "stop.circle.fill"))
-          let attributes = AlarmAttributes<RostrikAlarmMetadata>(
-            presentation: AlarmPresentation(alert: alert),
-            metadata: RostrikAlarmMetadata(shiftId: "probe", appAlarmId: "probe"),
-            tintColor: .orange)
           do {
             _ = try await AlarmManager.shared.schedule(
               id: uuid,
-              configuration: AlarmManager.AlarmConfiguration(
-                countdownDuration: nil,
-                schedule: .fixed(base.addingTimeInterval(Double(index) * 60)),
-                attributes: attributes,
-                sound: .default))
+              configuration: probeConfiguration(
+                at: base.addingTimeInterval(Double(index) * 60)))
             created.append(uuid)
           } catch {
             limit = index
@@ -977,6 +1106,14 @@ final class NotificationBackend: AlarmBackend {
             break
           }
         }
+        // Count BEFORE cancelling. Measuring only afterwards cannot tell
+        // "cancelled cleanly" from "never persisted" — both read as zero — and
+        // the difference matters beyond this probe: `aliveIds` trusts
+        // `AlarmManager.shared.alarms` to report what is really armed, so this
+        // doubles as the check that it does.
+        let liveBefore = Set(((try? AlarmManager.shared.alarms) ?? []).map(\.id))
+          .intersection(created)
+
         for uuid in created { try? AlarmManager.shared.cancel(id: uuid) }
 
         // Verify the cleanup rather than assume it. A probe alarm that survives
@@ -987,7 +1124,7 @@ final class NotificationBackend: AlarmBackend {
           .intersection(created)
         NSLog(
           "[Rostrik] AlarmKit limit probe: armed \(created.count), refused at \(limit), "
-            + "leaked \(leaked.count)")
+            + "live before cleanup \(liveBefore.count), leaked \(leaked.count)")
         DispatchQueue.main.async { completion(limit) }
       }
     }
