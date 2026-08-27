@@ -167,6 +167,47 @@ inherited as a no-op on the AlarmKit backend, so nothing writes the deletes
 ledger and one-time alarms would silently become daily — the exact fault fixed
 on the notification path. The Stop intent is the fix, not more inspection.
 
+### 2.2b Custom tones on iOS — reopened 2026-08-27
+
+Phase A hid `customTonePicker` on iOS on the grounds that "iOS plays notification
+sounds only from its bundle or `Library/Sounds`, so a picked file is silently
+replaced". The constraint is right; **the conclusion was wrong** —
+`Library/Sounds` is inside our own container and we can write to it. Copy the
+picked file in, reference it by name, and it plays. Same mistake in kind as
+treating the ~30s cap as a wall.
+
+This is **not** AlarmKit-specific: `AlertSound.named()` and
+`UNNotificationSound(named:)` resolve the same way, so it would restore custom
+tones on the notification path too.
+
+- [ ] Verify the `Library/Sounds` route on device before promising it. Not yet
+      proven, only reasoned.
+- [ ] `UIDocumentPickerViewController(asCopy: true)` — handles iCloud Drive by
+      downloading and handing over a local copy, so the file need not already be
+      on device.
+- [ ] Convert on device to a valid notification-sound format (Linear PCM, IMA4,
+      µLaw or aLaw in `.caf`/`.aif`/`.wav`). mp3/m4a are rejected outright.
+- [ ] Trim to ≤30s. Irrelevant under AlarmKit, which loops the file — a ~29s
+      tone rang for over 5 minutes on device — but the notification path needs
+      the same pre-looping the bundled tones get.
+- [ ] Manage the files: replace on change, delete with the alarm.
+
+⚠️ **Copy the file in — never store a reference to it.** A security-scoped
+bookmark into iCloud Drive is the tidier-looking design and fails at exactly the
+wrong moment: an evicted file needs a network fetch at fire time, so no internet
+means no alarm, and a file the user has since moved or deleted is simply gone.
+Either way the failure is a silent no-sound alarm at 4am. A converted copy in our
+own `Library/Sounds` is app-owned data — not evictable by Optimize Storage, not
+movable by the user, and needing nothing but the device itself. Same principle as
+the bundled tones: **an alarm must depend on nothing that is not already on the
+phone.** (Ben's point, 2026-08-27.)
+- [ ] Then flip `customTonePicker` back on for iOS and unhide the UI.
+
+Still genuinely impossible, and the picker must not imply otherwise:
+**system ringtones** (Marimba, Radar — no public API on any iOS version) and
+**DRM-protected Apple Music tracks**, which cannot be exported. Only files the
+user actually owns.
+
 ### 2.3 Phase C — version-conditional UI (only after B works)
 
 - [ ] "Requires iOS 26" treatment for `soundBeyond30s`,

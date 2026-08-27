@@ -13,6 +13,7 @@
 		25A7FB4FB067E0D022CCCA63 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 16BD7A7EC1D4A20FC4E3BDFD /* Pods_RunnerTests.framework */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
+		44CABC957F70AEF825924AB2 /* RostrikAlarmIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849913E8C36D0EEE94CD055F /* RostrikAlarmIntents.swift */; };
 		471E91F9D75A04690BF3A4F6 /* sleep_pink_noise.wav in Resources */ = {isa = PBXBuildFile; fileRef = 61C8C14AD73B21524A120E55 /* sleep_pink_noise.wav */; };
 		4BB0471041B95D6212F1F19E /* ActivityReminderPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E7E1AAB03ACE7697B0FED69 /* ActivityReminderPlugin.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
@@ -81,6 +82,7 @@
 		74DE117022B0D751272C513A /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
+		849913E8C36D0EEE94CD055F /* RostrikAlarmIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RostrikAlarmIntents.swift; sourceTree = "<group>"; };
 		8504D7C2DAC21BE549609A1D /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9286CB599E57FF8D46F2D934 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 		9421C5E105E510ADE3DCFF40 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
@@ -199,6 +201,7 @@
 				48F7E7D3B6AA75231EC0391E /* SleepSounds */,
 				A75B328E2D640DC3759813AD /* Sounds */,
 				E6F06739AA371EBDA4630C77 /* RostrikAlarmMetadata.swift */,
+				849913E8C36D0EEE94CD055F /* RostrikAlarmIntents.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -474,6 +477,7 @@
 				4BB0471041B95D6212F1F19E /* ActivityReminderPlugin.swift in Sources */,
 				AF6A3AEEC613A1374EA24A7E /* SleepSoundPlugin.swift in Sources */,
 				0EF92A0A1868192EABDC9DDE /* RostrikAlarmMetadata.swift in Sources */,
+				44CABC957F70AEF825924AB2 /* RostrikAlarmIntents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

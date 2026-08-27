@@ -922,10 +922,17 @@ final class NotificationBackend: AlarmBackend {
       // snooze, but a countdown presentation needs the widget extension we have
       // not built. Arming one now would trade a working alarm for a broken
       // snooze.
+      //
+      // The stop intent is the whole reason this backend can be trusted with a
+      // one-time alarm. Without it nothing records that the alarm fired, and the
+      // reconciler re-projects it to tomorrow — the daily-alarm bug, reborn.
       return AlarmManager.AlarmConfiguration(
         countdownDuration: nil,
         schedule: .fixed(request.fireAt),
         attributes: attributes,
+        stopIntent: RostrikStopAlarmIntent(
+          alarmId: alarmUUID(for: request.id),
+          appAlarmId: request.appAlarmId),
         sound: sound)
     }
 
