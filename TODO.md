@@ -78,33 +78,25 @@ labels like "Requires iOS 26" on something iOS 26 also cannot do:
 Rule: **never available on this platform → hide it.** Don't tease something the
 user can never have. **Available on a newer OS → disable + "Requires iOS 26".**
 
-### 2.1 Phase A — platform honesty (do first, no AlarmKit needed)
+### 2.1 Phase A — platform honesty ✅ done 2026-08-27
 
-Independently valuable, testable on the SE today, and fixes live misleading UI.
-This is the phase that matters most and it is the smallest.
+`AlarmCapabilities` (`lib/alarms/alarm_capabilities.dart`) is now the single
+source of truth; the UI asks it instead of checking `Platform` ad-hoc. Hidden on
+iOS: the Critical-shift toggle, both custom tone sources, the walkthrough's
+shake lesson **and its preview on the intro page**, and the shake mention in
+Settings. `RingtonePreviewPlugin.swift` was removed with the pickers — a preview
+for a tone that cannot be selected is theatre.
 
-- [ ] **Capability layer.** One source of truth, resolved **natively** and
-      handed to Dart — not inferred in Dart from `Platform.operatingSystemVersion`.
-      Only the native side knows the OS version *and* which alarm backend
-      actually initialised. A Dart-side guess would drift from reality, which is
-      the same "app believes something works" class of bug as today's.
-      Suggested shape: `AlarmCapabilities` over the existing
-      `rostrik/native_alarms` channel — `shakeToDismiss`, `customToneFromFile`,
-      `systemTonePicker`, `soundBeyond30s`, `piercesSilentSwitch`,
-      `realAlarmPresentation`, plus `backend` and `iosMajorVersion` for display.
-- [ ] **Hide the "Critical shift" toggle on iOS.** Currently shown with the
-      subtitle "Shake to dismiss · 3-second hold fail-safe" — neither exists on
-      iOS. Decide whether `isCriticalShift` retains *any* iOS meaning; if not,
-      hide the control and stop writing the flag there.
-- [ ] **Fix the custom-tone lie.** Today: pick "MySong", UI shows "MySong",
-      alarm rings `classic.wav`, because `_argIosSound` is always the bundled
-      tone. Either hide the Files/System-Tone options on iOS (IOS_SETUP.md §3.5
-      recommends this) or show the real fallback tone in the row. Hiding is
-      honest; showing a fallback label is honest; today's state is not.
-- [ ] **Audit every remaining `Platform.isAndroid`** for a control that renders
-      but no-ops. `ringtone_channel.pickSystemRingtone` is the known one.
-- [ ] Walkthrough copy in `settings_screen.dart` mentions "shake-to-dismiss" —
-      needs the same conditioning.
+Built Dart-side rather than native-resolved, deviating from the original plan
+here: every distinction is currently platform-level and iOS always runs the
+notification backend, so `Platform` answers correctly and a native round-trip
+would be speculative plumbing. **When AlarmKit lands, `AlarmCapabilities.current`
+should be fed from the `rostrik/native_alarms` channel** — which backend actually
+initialised is then a runtime fact only native knows. Call sites do not change;
+they already ask the object, not the platform.
+
+The default profile is `android`, so existing widget tests keep asserting the
+full-featured UI; iOS behaviour is proven by explicit `debugOverride` tests.
 
 ### 2.2 Phase B — implement AlarmKit (needs an iOS 26 device)
 

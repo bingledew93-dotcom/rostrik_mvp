@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/shift_type.dart';
 import '../app_theme.dart';
+import '../../alarms/alarm_capabilities.dart';
 import '../critical_dismiss_controls.dart';
 import '../roster/shift_visuals.dart';
 
@@ -44,7 +45,17 @@ class _WalkthroughFlowState extends State<WalkthroughFlow> {
   final PageController _controller = PageController();
   int _page = 0;
 
-  static const _pageCount = 4;
+  /// The shake lesson only appears where the gesture actually dismisses an
+  /// alarm. On iOS the alarm is a notification with no wake surface, so
+  /// teaching the gesture would be training the user for something that will
+  /// never work — the most damaging form of the "control that does nothing"
+  /// problem, because it arrives as instruction. See [AlarmCapabilities].
+  bool get _teachesShake => AlarmCapabilities.current.shakeToDismiss;
+
+  /// Intro + painter + done, plus the shake lesson where it applies. Derived
+  /// rather than constant so the page dots and the Next/Done boundary stay in
+  /// step with what is actually built.
+  int get _pageCount => _teachesShake ? 4 : 3;
 
   void _goTo(int page) {
     _controller.animateToPage(
@@ -97,10 +108,11 @@ class _WalkthroughFlowState extends State<WalkthroughFlow> {
                 children: [
                   const _IntroPage(),
                   const _PainterPracticePage(),
-                  _ShakePracticePage(
-                    magnitudeStream: widget.shakeMagnitudeStream,
-                    clock: widget.shakeClock,
-                  ),
+                  if (_teachesShake)
+                    _ShakePracticePage(
+                      magnitudeStream: widget.shakeMagnitudeStream,
+                      clock: widget.shakeClock,
+                    ),
                   const _DonePage(),
                 ],
               ),
@@ -233,10 +245,17 @@ class _IntroPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // The intro previews whichever lessons actually follow. Where the shake
+    // gesture does nothing, both the preview row and the plural copy have to
+    // go — otherwise the tour opens by promising a feature the device cannot
+    // deliver, before the lesson it would have practised is even reached.
+    final teachesShake = AlarmCapabilities.current.shakeToDismiss;
     return _LessonPage(
       icon: Icons.waving_hand_outlined,
       title: 'A 60-second tour',
-      body: 'Two things that make Rostrik click. You can skip anytime.',
+      body: teachesShake
+          ? 'Two things that make Rostrik click. You can skip anytime.'
+          : 'The thing that makes Rostrik click. You can skip anytime.',
       child: Column(
         children: [
           _FeatureRow(
@@ -244,15 +263,17 @@ class _IntroPage extends StatelessWidget {
             label: 'Paint your roster',
             detail: 'Tap the days you work — that fast.',
           ),
-          const SizedBox(height: 12),
-          _FeatureRow(
-            icon: Icons.vibration,
-            label: 'Shake to dismiss',
-            detail: 'A firm shake switches off a critical alarm.',
-          ),
+          if (teachesShake) ...[
+            const SizedBox(height: 12),
+            _FeatureRow(
+              icon: Icons.vibration,
+              label: 'Shake to dismiss',
+              detail: 'A firm shake switches off a critical alarm.',
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
-            'Tap Next to try each one.',
+            teachesShake ? 'Tap Next to try each one.' : 'Tap Next to try it.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,

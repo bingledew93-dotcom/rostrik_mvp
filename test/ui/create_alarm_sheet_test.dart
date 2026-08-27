@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:rostrik_mvp/alarms/alarm_capabilities.dart';
 import 'package:rostrik_mvp/data/models/alarm_settings.dart';
 import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
@@ -286,6 +287,57 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('create-alarm-save')));
       await tester.pumpAndSettle();
       expect((await repo.getAll()).single.isCriticalShift, isFalse);
+    });
+
+    // A control that renders and silently does nothing is worse than an absent
+    // one — and on an alarm app, a tone the user picked but that never rings is
+    // how someone sleeps through a shift. See [AlarmCapabilities].
+    testWidgets(
+        'hides the Critical-shift toggle where the shake gesture does nothing',
+        (tester) async {
+      AlarmCapabilities.debugOverride = AlarmCapabilities.iosNotification;
+      addTearDown(() => AlarmCapabilities.debugOverride = null);
+
+      await pumpSheet(tester);
+      expect(find.byKey(const ValueKey('create-alarm-critical')), findsNothing);
+    });
+
+    testWidgets('hides both custom tone sources where they cannot ring',
+        (tester) async {
+      AlarmCapabilities.debugOverride = AlarmCapabilities.iosNotification;
+      addTearDown(() => AlarmCapabilities.debugOverride = null);
+
+      await pumpSheet(tester);
+      await tester.ensureVisible(
+          find.byKey(const ValueKey('create-alarm-ringtone-select')));
+      await tester
+          .tap(find.byKey(const ValueKey('create-alarm-ringtone-select')));
+      await tester.pumpAndSettle();
+
+      // The bundled tones remain — those genuinely ring. ("Classic" also
+      // appears in the row summary behind the sheet, hence findsWidgets.)
+      expect(find.text('Classic'), findsWidgets);
+      expect(find.text('Siren'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ringtone-source-files')), findsNothing);
+      expect(find.byKey(const ValueKey('ringtone-source-system')), findsNothing);
+    });
+
+    testWidgets('offers both custom tone sources where they DO ring',
+        (tester) async {
+      AlarmCapabilities.debugOverride = AlarmCapabilities.android;
+      addTearDown(() => AlarmCapabilities.debugOverride = null);
+
+      await pumpSheet(tester);
+      await tester.ensureVisible(
+          find.byKey(const ValueKey('create-alarm-ringtone-select')));
+      await tester
+          .tap(find.byKey(const ValueKey('create-alarm-ringtone-select')));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const ValueKey('ringtone-source-files')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('ringtone-source-system')), findsOneWidget);
     });
 
     testWidgets('the Critical-shift toggle persists isCriticalShift',

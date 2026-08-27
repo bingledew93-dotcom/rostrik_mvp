@@ -19,17 +19,20 @@ class SystemRingtonePick {
 }
 
 /// Dart side of the `rostrik/ringtone_picker` platform channel — the bridge to
-/// the native `RingtoneManager` picker + Kotlin `MediaPlayer` preview harness
-/// on Android (`MainActivity.kt`), and to the `AVAudioPlayer` preview-only
-/// handler on iOS (`RingtonePreviewPlugin.swift`).
+/// the native `RingtoneManager` picker and the Kotlin `MediaPlayer` preview
+/// harness in `MainActivity.kt`.
 ///
-/// **Deliberately tolerant.** Every method swallows `MissingPluginException` /
-/// `PlatformException`, so:
-///   * [pickSystemRingtone] still short-circuits off Android — there is no iOS
-///     system-tone picker (see `RingtonePreviewPlugin.swift`'s header), and
-///     bundled-tone selection works regardless;
-///   * widget tests that never register this channel stay green even if a tap
-///     reaches a preview/pick call (it no-ops rather than throwing).
+/// **Android only, by capability rather than by accident.** iOS resolves a
+/// notification sound solely from the app bundle or `Library/Sounds`, so a
+/// user-picked file can never ring there; the create/edit sheet hides both
+/// custom-tone sources on platforms where
+/// `AlarmCapabilities.customTonePicker` is false, so nothing reaches this
+/// channel. An `AVAudioPlayer` preview did exist briefly on iOS and was removed
+/// with the pickers — auditioning a tone that cannot be selected is theatre.
+///
+/// **Deliberately tolerant.** Every method short-circuits off Android and
+/// swallows `MissingPluginException` / `PlatformException`, so desktop builds
+/// and widget tests that never register the channel stay green.
 class RingtoneChannel {
   RingtoneChannel({MethodChannel? channel})
       : _channel = channel ?? const MethodChannel(channelName);
@@ -65,15 +68,10 @@ class RingtoneChannel {
     }
   }
 
-  /// Plays [source]'s audio, looping, through the native preview engine — the
-  /// Kotlin `MediaPlayer` on Android (resolve-and-fallback logic matching the
-  /// fire-time engine, so a corrupt path/URI audibly falls back to the bundled
-  /// classic tone instead of going silent) or the `AVAudioPlayer` in
-  /// `RingtonePreviewPlugin.swift` on iOS. No-op on other platforms / in tests.
-  ///
-  /// iOS only ever plays [RingtoneSource.vault] — see that file's header for
-  /// why `.system` and `.classic` never reach it in practice; [vibrate],
-  /// [asAlarm], and [bundledResource] are Android-only and ignored there.
+  /// Plays [source]'s audio through the native preview `MediaPlayer`, looping,
+  /// using the SAME resolve-and-fallback logic the fire-time engine uses — so a
+  /// corrupt path/URI audibly falls back to the bundled classic tone instead of
+  /// going silent. No-op off Android / in tests.
   ///
   /// [uri] is the durable vault path ([RingtoneSource.vault]) or the
   /// `content://` system URI ([RingtoneSource.system]); ignored for
@@ -85,7 +83,7 @@ class RingtoneChannel {
     bool asAlarm = false,
     String? bundledResource,
   }) async {
-    if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>('previewRingtone', <String, dynamic>{
         'source': source.index,
@@ -115,12 +113,11 @@ class RingtoneChannel {
     }
   }
 
-  /// Stops and releases the native player. On Android that's the same engine a
-  /// firing alarm's tone plays through; on iOS it's the preview-only
-  /// `AVAudioPlayer`. Safe to call when nothing is playing. No-op on other
-  /// platforms / in tests.
+  /// Stops and releases the native player (preview OR a firing alarm tone — same
+  /// engine). Safe to call when nothing is playing. No-op off Android / in
+  /// tests.
   Future<void> stopPreview() async {
-    if (!Platform.isAndroid && !Platform.isIOS) return;
+    if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>('stopPreview');
     } on PlatformException catch (e) {

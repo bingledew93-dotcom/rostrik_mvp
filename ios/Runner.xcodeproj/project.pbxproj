@@ -14,7 +14,6 @@
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		471E91F9D75A04690BF3A4F6 /* sleep_pink_noise.wav in Resources */ = {isa = PBXBuildFile; fileRef = 61C8C14AD73B21524A120E55 /* sleep_pink_noise.wav */; };
 		4BB0471041B95D6212F1F19E /* ActivityReminderPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E7E1AAB03ACE7697B0FED69 /* ActivityReminderPlugin.swift */; };
-		631916347F98D4A45229A722 /* RingtonePreviewPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E765E843CF9D00F95C2C17F9 /* RingtonePreviewPlugin.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		7EEDE0E73E85DE8CA78332A3 /* siren.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3F5A41EE1C8D5921216E5512 /* siren.caf */; };
@@ -92,7 +91,6 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DD36624978BB213D674B215E /* sleep_ocean.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = sleep_ocean.wav; path = ../android/app/src/main/res/raw/sleep_ocean.wav; sourceTree = "<group>"; };
-		E765E843CF9D00F95C2C17F9 /* RingtonePreviewPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RingtonePreviewPlugin.swift; sourceTree = "<group>"; };
 		F37A4A1DA54013C5ECBF28B6 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		FAF01DB55BE5E5B9AAD27442 /* sleep_white_noise.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = sleep_white_noise.wav; path = ../android/app/src/main/res/raw/sleep_white_noise.wav; sourceTree = "<group>"; };
 		FC7E68166AEEC1FF60450159 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
@@ -194,7 +192,6 @@
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				2A82B4912B6DDB5FD77A2504 /* NativeAlarmPlugin.swift */,
-				E765E843CF9D00F95C2C17F9 /* RingtonePreviewPlugin.swift */,
 				2E7E1AAB03ACE7697B0FED69 /* ActivityReminderPlugin.swift */,
 				11C8FFCB5C918777A89D1497 /* SleepSoundPlugin.swift */,
 				48F7E7D3B6AA75231EC0391E /* SleepSounds */,
@@ -471,7 +468,6 @@
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				B8EF3180991801D1F6A7928A /* NativeAlarmPlugin.swift in Sources */,
-				631916347F98D4A45229A722 /* RingtonePreviewPlugin.swift in Sources */,
 				4BB0471041B95D6212F1F19E /* ActivityReminderPlugin.swift in Sources */,
 				AF6A3AEEC613A1374EA24A7E /* SleepSoundPlugin.swift in Sources */,
 			);

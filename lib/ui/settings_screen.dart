@@ -4,6 +4,7 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../alarms/alarm_capabilities.dart';
 import '../alarms/alarm_scheduler.dart';
 import '../calendar_sync/device_calendar_service.dart';
 import '../data/models/alarm_settings.dart';
@@ -159,8 +160,13 @@ class _HelpSection extends StatelessWidget {
           key: const ValueKey('settings-replay-tutorial'),
           leading: const Icon(Icons.school_outlined),
           title: const Text('How it works'),
-          subtitle: const Text('Replay the quick tour — paint a roster + '
-              'shake-to-dismiss'),
+          // The tour drops its shake lesson where the gesture does nothing, so
+          // the subtitle must not advertise it either.
+          subtitle: Text(
+            AlarmCapabilities.current.shakeToDismiss
+                ? 'Replay the quick tour — paint a roster + shake-to-dismiss'
+                : 'Replay the quick tour — paint a roster',
+          ),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
