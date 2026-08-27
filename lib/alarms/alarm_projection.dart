@@ -189,12 +189,19 @@ List<AlarmRing> projectAlarmRings({
 
 /// The single earliest ring of ANY type, or null. For a per-alarm "Next ring"
 /// label, pass a single-element [alarms] list.
+///
+/// [oneOffSnoozes] must be forwarded, not dropped. Without it a snoozed
+/// shift-less alarm is invisible to every caller of this helper: the projector
+/// falls through to the `oneTimeFireAt` anchor, finds an instant already past,
+/// and returns no ring — so the UI reports nothing upcoming while the engine,
+/// which does pass the map, has the alarm armed and about to fire.
 AlarmRing? nextAlarmRing({
   required List<AppAlarm> alarms,
   required List<Shift> shifts,
   required int globalLeadMinutes,
   required DateTime now,
   Duration horizon = kRingDisplayHorizon,
+  Map<String, DateTime> oneOffSnoozes = const <String, DateTime>{},
   bool isSchedulePaused = false,
 }) {
   final rings = projectAlarmRings(
@@ -203,6 +210,7 @@ AlarmRing? nextAlarmRing({
     globalLeadMinutes: globalLeadMinutes,
     now: now,
     horizon: horizon,
+    oneOffSnoozes: oneOffSnoozes,
     isSchedulePaused: isSchedulePaused,
   );
   return rings.isEmpty ? null : rings.first;

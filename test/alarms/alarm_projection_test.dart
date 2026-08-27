@@ -420,6 +420,75 @@ void main() {
     });
   });
 
+  // Regression: `nextAlarmRing` used to accept no `oneOffSnoozes` at all and
+  // silently project without them. Because the projector's parameter defaults
+  // to an empty map, nothing failed — it just answered "nothing upcoming" for a
+  // snoozed one-time alarm, minutes before that alarm rang. Every UI caller was
+  // affected (the Dashboard skip control, the Alarms-tab "Next ring" label)
+  // while the engine, which calls `projectAlarmRings` directly, had it armed.
+  // Found on device: no swipe-to-dismiss appeared after snoozing.
+  group('nextAlarmRing — forwards one-off snoozes', () {
+    test('a snoozed one-time alarm is still the next ring', () {
+      // Anchored to 04:30 — already past at `now`, so without the snooze map
+      // the anchor rule retires it and NOTHING projects.
+      final a = oneTime(
+        4 * 60 + 30,
+        id: 'o1',
+        anchor: DateTime(2026, 6, 15, 4, 30),
+      );
+
+      final blind = nextAlarmRing(
+        alarms: [a],
+        shifts: const [],
+        globalLeadMinutes: lead,
+        now: now,
+      );
+      expect(blind, isNull, reason: 'the spent anchor correctly retires it');
+
+      final seeing = nextAlarmRing(
+        alarms: [a],
+        shifts: const [],
+        globalLeadMinutes: lead,
+        now: now,
+        oneOffSnoozes: {'o1': DateTime(2026, 6, 15, 5, 10)},
+      );
+      expect(seeing, isNotNull, reason: 'the snooze must resurrect the ring');
+      expect(seeing!.fireAt, DateTime(2026, 6, 15, 5, 10));
+      expect(seeing.shift, isNull);
+    });
+
+    test('agrees with projectAlarmRings, which is what the engine schedules from',
+        () {
+      final a = oneTime(
+        4 * 60 + 30,
+        id: 'o1',
+        anchor: DateTime(2026, 6, 15, 4, 30),
+      );
+      final snoozes = {'o1': DateTime(2026, 6, 15, 5, 10)};
+
+      final engineView = projectAlarmRings(
+        alarms: [a],
+        shifts: const [],
+        globalLeadMinutes: lead,
+        now: now,
+        horizon: horizon,
+        oneOffSnoozes: snoozes,
+      );
+      final uiView = nextAlarmRing(
+        alarms: [a],
+        shifts: const [],
+        globalLeadMinutes: lead,
+        now: now,
+        horizon: horizon,
+        oneOffSnoozes: snoozes,
+      );
+
+      // The divergence between these two views WAS the bug.
+      expect(engineView, isNotEmpty);
+      expect(uiView?.fireAt, engineView.first.fireAt);
+    });
+  });
+
   group('projectAlarmRings — one-off snooze resurrection', () {
     List<AlarmRing> projectOneOff(
       List<AppAlarm> alarms,

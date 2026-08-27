@@ -103,23 +103,129 @@ they already ask the object, not the platform.
 The default profile is `android`, so existing widget tests keep asserting the
 full-featured UI; iOS behaviour is proven by explicit `debugOverride` tests.
 
-### 2.2 Phase B — implement AlarmKit (needs an iOS 26 device)
+### 2.2 Phase B — implement AlarmKit (in progress, 2026-08-27)
 
-`AlarmKitBackend` is a stub failing loudly behind `alarmKitEnabled = false`.
-That gate stays until an alarm has actually rung on hardware — flipping it early
-would give the *newest* iPhones no alarms while older ones worked.
+`alarmKitEnabled = false` still gates everything. That gate stays until an alarm
+has actually rung on hardware — flipping it early would give the *newest*
+iPhones no alarms while older ones worked.
 
-- [ ] Research the real AlarmKit API surface. The existing stub was written
-      blind with no compiler and its type/method names are guesses — treat them
-      as a sketch, not a starting point to trust.
-- [ ] Widget extension for AlarmKit's alert presentation (see §2.4 — verify
-      whether this needs the paid account).
-- [ ] Authorisation flow, using `NSAlarmKitUsageDescription` (already in
-      Info.plist). Must follow the Phase A rule: request only when the app is
-      interactive, never during `main()` (IOS_SETUP.md §1.1).
-- [ ] Keep failing loudly until proven. A silent success is the worst outcome:
-      an alarm the app believes is set that never rings.
-- [ ] Only then flip `alarmKitEnabled = true`.
+**The API is no longer guesswork.** Xcode 26.6 ships the iOS 26.5 SDK, so the
+authoritative surface is on disk at
+`…/iPhoneOS26.5.sdk/System/Library/Frameworks/AlarmKit.framework/Modules/AlarmKit.swiftmodule/arm64e-apple-ios.swiftinterface`.
+`AlarmKitBackend` is now written against it and **compiles**.
+
+> ⚠️ The AlarmKit guide bundled with Xcode's assistant
+> (`IDEIntelligenceChat.framework/…/SwiftUI-AlarmKit-Integration.md`) is wrong in
+> specifics: it dates the framework to iOS 18, invents `AlarmButton(label:)` and
+> `.stopButton` / `.snoozeButton` statics, and makes `cancel` async. Prefer the
+> `.swiftinterface`, and let the compiler settle disputes.
+
+Done:
+
+- [x] Real API surface, verified by compiling — `AlarmManager.shared`,
+      `.fixed(Date)`, `AlarmButton(text:textColor:systemImageName:)`,
+      `AlertSound.named()` (so the bundled `.caf` tones carry over).
+- [x] `schedule` / `cancel` / `aliveIds` implemented; `RostrikAlarmMetadata`
+      carries `shiftId` + `appAlarmId`, the pair the Stop intent will need.
+- [x] Authorisation flow, post-frame, chained after the notification prompt so
+      the two system alerts queue rather than race (IOS_SETUP.md §1.1).
+
+Also done, verified on device 2026-08-27 (iPhone SE 3, iOS 26.6.1):
+
+- [x] **Alarm cap measured: ≥400.** 400 armed, none refused, all 400 confirmed
+      live *before* cleanup. No hybrid split needed — AlarmKit carries the whole
+      14-day horizon.
+- [x] **The alert needs no widget extension.** Full-screen with slide-to-dismiss,
+      banner when unlocked. Rings on silent, and for over five minutes.
+- [x] **Nor does the countdown.** Native snooze via `postAlert` re-alerts with no
+      widget target.
+- [x] **`RostrikStopAlarmIntent`** — verified end to end on real alarms: stop →
+      deletes ledger → Dart drain → rule retired, and the reconciler does not
+      re-arm it. The daily-alarm bug does not reproduce.
+- [x] **`RostrikSnoozeAlarmIntent`** — verified with a real rule UUID: snooze →
+      ledger → drain → re-armed at the snooze instant, and the Dashboard
+      dismiss control appears.
+- [x] **Runtime backend switch** so real alarms can run on either backend.
+
+⚠️ **Two snooze mechanisms now coexist**: AlarmKit's native `postAlert` countdown
+AND Dart re-arming from the snooze ledger. They do not double-alert, but only
+because both target the same instant *and* the same alarm UUID, so
+cancel-then-schedule collapses them. If either ever computed a different instant,
+the user would get two alarms. Worth a test pinning that invariant.
+
+Open, in the order that de-risks fastest:
+
+- [x] **Alarm cap raised under AlarmKit** — 50, matching Android, with no repeat
+      chains. `AlarmBackendInfo` carries which backend is live; the budgets are
+      now read per reconcile rather than captured at construction, so the
+      runtime switch takes effect without a relaunch.
+- [x] **Two-snooze invariant pinned** — a re-armed snooze must reuse the SAME id
+      and instant, which is the only reason AlarmKit's countdown and Dart's
+      re-arm collapse into one alarm instead of two.
+- [x] **Default flipped on** for iOS 26. `object(forKey:)` rather than
+      `bool(forKey:)` distinguishes "never set" from "explicitly false", so a
+      deliberate kill-switch is not overridden by the default next launch.
+- [x] **AlarmKit authorisation now requested in RELEASE builds.** It was only
+      asked from the debug-gated bring-up, so a shipped build would never have
+      prompted — and with the default on, `schedule` fails unauthorised, which
+      would have meant **no alarms at all**. `makeBackend` now also requires
+      authorisation before selecting AlarmKit, so a denied prompt costs the user
+      the weaker alarm rather than silence.
+- [ ] Phase C messaging (§2.3) — `soundBeyondThirtySeconds`,
+      `piercesSilentSwitch` and `fullScreenAlarm` are all *true* under AlarmKit
+      but are consumed nowhere yet.
+
+**DEBUG · ALARMKIT stays in Settings** — an earlier note here said to strip it
+before merge; that was wrong. It is gated on `kReleaseMode`, not `kDebugMode`,
+so it cannot reach a shipped build, and it is the only way to exercise either
+backend on a device now that the one test phone runs iOS 26. Deleting a tool
+that cannot ship, to guard against a risk it does not carry, would only cost the
+next person the ability to test.
+
+⚠️ **The notification path now has no hardware to test it on** (§4). It is still
+the majority path and the permanent one for pre-26 devices. Treat any change to
+`NotificationBackend` as unverified.
+
+### 2.2b Custom tones on iOS — reopened 2026-08-27
+
+Phase A hid `customTonePicker` on iOS on the grounds that "iOS plays notification
+sounds only from its bundle or `Library/Sounds`, so a picked file is silently
+replaced". The constraint is right; **the conclusion was wrong** —
+`Library/Sounds` is inside our own container and we can write to it. Copy the
+picked file in, reference it by name, and it plays. Same mistake in kind as
+treating the ~30s cap as a wall.
+
+This is **not** AlarmKit-specific: `AlertSound.named()` and
+`UNNotificationSound(named:)` resolve the same way, so it would restore custom
+tones on the notification path too.
+
+- [ ] Verify the `Library/Sounds` route on device before promising it. Not yet
+      proven, only reasoned.
+- [ ] `UIDocumentPickerViewController(asCopy: true)` — handles iCloud Drive by
+      downloading and handing over a local copy, so the file need not already be
+      on device.
+- [ ] Convert on device to a valid notification-sound format (Linear PCM, IMA4,
+      µLaw or aLaw in `.caf`/`.aif`/`.wav`). mp3/m4a are rejected outright.
+- [ ] Trim to ≤30s. Irrelevant under AlarmKit, which loops the file — a ~29s
+      tone rang for over 5 minutes on device — but the notification path needs
+      the same pre-looping the bundled tones get.
+- [ ] Manage the files: replace on change, delete with the alarm.
+
+⚠️ **Copy the file in — never store a reference to it.** A security-scoped
+bookmark into iCloud Drive is the tidier-looking design and fails at exactly the
+wrong moment: an evicted file needs a network fetch at fire time, so no internet
+means no alarm, and a file the user has since moved or deleted is simply gone.
+Either way the failure is a silent no-sound alarm at 4am. A converted copy in our
+own `Library/Sounds` is app-owned data — not evictable by Optimize Storage, not
+movable by the user, and needing nothing but the device itself. Same principle as
+the bundled tones: **an alarm must depend on nothing that is not already on the
+phone.** (Ben's point, 2026-08-27.)
+- [ ] Then flip `customTonePicker` back on for iOS and unhide the UI.
+
+Still genuinely impossible, and the picker must not imply otherwise:
+**system ringtones** (Marimba, Radar — no public API on any iOS version) and
+**DRM-protected Apple Music tracks**, which cannot be exported. Only files the
+user actually owns.
 
 ### 2.3 Phase C — version-conditional UI (only after B works)
 
@@ -164,15 +270,15 @@ would give the *newest* iPhones no alarms while older ones worked.
 
 ---
 
-## 4. Decision needed: which device runs iOS 26
+## 4. Which device runs iOS 26 — decided 2026-08-27
 
-The **iPhone SE 3 is almost certainly iOS 26-capable** (A15; iOS 26 supports
-roughly A13/iPhone 11 and later) — so a second phone may not be needed. But
-updating it has a real cost: it is currently the *only* hardware proof that the
-iOS 15.5–18 notification fallback works, and that fallback is what every
-non-26 user will run.
+The SE 3 is being updated to iOS 26 to start Phase B. That was held off until
+the repeat chain (§2.2's predecessor) was finished and verified, because the
+notification fallback is what *every* non-26 user runs, and the SE was the only
+hardware proving it worked.
 
-Recommendation: **don't update the SE yet.** Phase A needs no iOS 26, and the
-fallback is the path most users will be on. Decide when Phase B actually starts —
-by then either update it and accept re-verifying the fallback elsewhere, or pick
-up a cheap second device.
+**Consequence to keep in view:** once it is on 26 there is no longer a device
+that can regression-test the iOS 15.5–18 path. That path is not legacy — it is
+the majority path today and the permanent one for devices that cannot take 26.
+Changes to `NotificationBackend` after this point are effectively unverified
+until there is a second device or a downgrade. Weigh that before touching it.

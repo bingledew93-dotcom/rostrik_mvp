@@ -387,6 +387,50 @@ void main() {
           reason: 'post-fire alarm with active snooze must pin to snoozedUntil');
     });
 
+    // ── The two-snooze invariant ────────────────────────────────────────────
+    //
+    // Under AlarmKit a snooze is served TWICE over: AlarmKit re-alerts by
+    // itself after `CountdownDuration.postAlert`, and Dart also re-arms from
+    // the snooze ledger. Verified on device 2026-08-27 — both happened, and the
+    // user got ONE alarm.
+    //
+    // That is not luck, but it is fragile, and it rests on two things this
+    // group pins. Both mechanisms must target the SAME INSTANT, and Dart must
+    // re-arm under the SAME ID: AlarmKit refuses to schedule over a live id, so
+    // `AlarmKitBackend.schedule` cancels first — which is precisely what
+    // discards AlarmKit's pending countdown and collapses the two into one. Let
+    // Dart allocate a fresh id and the cancel would miss, leaving AlarmKit's
+    // countdown armed alongside the new alarm: two alarms, minutes apart, for
+    // one snooze.
+    test('a snoozed alarm re-arms under the SAME id, so the two snooze '
+        'mechanisms collapse into one alarm', () async {
+      clock.set(DateTime(2026, 6, 1, 5, 30));
+      await shifts.upsert(
+        mkShift(id: 'today', date: DateTime(2026, 6, 1), type: ShiftType.day),
+      );
+      await alarms.upsert(followsRotation());
+      await service.syncAlarms();
+
+      final idBefore = scheduler.scheduled.keys.single;
+      expect(scheduler.scheduled[idBefore]!.fireAt, DateTime(2026, 6, 1, 6, 0));
+
+      // The alarm fires and the user snoozes to 06:09.
+      clock.set(DateTime(2026, 6, 1, 6, 5));
+      await shifts.upsert(
+        mkShift(id: 'today', date: DateTime(2026, 6, 1), type: ShiftType.day)
+            .copyWith(snoozedUntil: DateTime(2026, 6, 1, 6, 9)),
+      );
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled, hasLength(1),
+          reason: 'a snooze must never leave two alarms armed');
+      expect(scheduler.scheduled.keys.single, idBefore,
+          reason: 'a re-armed snooze MUST reuse the id — a new one would leave '
+              "AlarmKit's own countdown armed alongside it");
+      expect(scheduler.scheduled[idBefore]!.fireAt, DateTime(2026, 6, 1, 6, 9),
+          reason: 'both mechanisms must target the same instant');
+    });
+
     test('snoozed PRE-fire sibling alarm keeps its original fireAt', () async {
       // Same shift, TWO alarms: wake-up uses the global lead (60 → 06:00) and
       // leave-for-work overrides with 30 (→ 06:30). "Now" is 06:05; wake-up

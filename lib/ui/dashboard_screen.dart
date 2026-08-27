@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../alarms/alarm_health.dart';
 import '../alarms/alarm_projection.dart';
+import '../alarms/one_off_snooze_store.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
@@ -141,6 +142,13 @@ class _DashboardScreenState extends State<DashboardScreen>
       // already-dismissed/skipped rings — which is what makes sequential
       // skipping work: each skip write re-lands here targeting the next ring.
       horizon: const Duration(hours: 12),
+      // Shift-less rules carry their snooze here rather than on a Shift, and
+      // omitting it made a SNOOZED one-time alarm vanish from this control
+      // entirely: with an empty map the projector falls through to the
+      // `oneTimeFireAt` anchor, sees an instant already past, and projects no
+      // ring at all. The engine has always passed this, so the alarm really was
+      // still coming — the dashboard just showed nothing to cancel it with.
+      oneOffSnoozes: readOneOffSnoozes(now: now),
       isSchedulePaused: AppPreferences.isSchedulePausedOf(context),
     );
     // The skip group, earliest first — `first` IS `upcoming`. For a rotation

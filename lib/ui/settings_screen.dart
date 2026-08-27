@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
@@ -6,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../alarms/alarm_capabilities.dart';
 import '../alarms/alarm_scheduler.dart';
+import '../alarms/alarmkit_bringup.dart';
 import '../calendar_sync/device_calendar_service.dart';
 import '../data/models/alarm_settings.dart';
 import '../data/models/shift_cycle.dart';
@@ -65,6 +68,8 @@ class SettingsScreen extends StatelessWidget {
             Divider(height: 32),
             // Debug-only trial/purchase shortcuts — renders nothing in release.
             _DebugTrialSection(),
+            // Phase B bring-up — renders nothing in release or off iOS.
+            _DebugAlarmKitSection(),
             _FactoryResetSection(),
             Divider(height: 32),
             _LegalAboutSection(),
@@ -434,6 +439,143 @@ class _DebugTrialSection extends StatelessWidget {
                 child: const Text('Grant purchase'),
               ),
             ],
+          ),
+        ),
+        const Divider(height: 32),
+      ],
+    );
+  }
+}
+
+/// Phase B bring-up: arms one real AlarmKit alarm so it can be watched firing.
+///
+/// Renders nothing in a release build AND nothing off iOS, so it can neither
+/// ship nor appear in a widget test. Gated on `kReleaseMode` rather than
+/// `kDebugMode` — unlike [_DebugTrialSection] — because a debug build cannot
+/// launch standalone on the device at all ("Cannot create a FlutterEngine
+/// instance in debug mode"), so device testing happens on profile builds. A
+/// `kDebugMode` gate would hide this in exactly the place it is needed.
+///
+/// The question it exists to answer: an AlarmKit alert is a Live Activity, and
+/// there is no widget extension yet to render one. Whether the alert still
+/// presents, and whether the tone rings past the ~30s that caps the notification
+/// path, is only observable by letting one fire.
+class _DebugAlarmKitSection extends StatefulWidget {
+  const _DebugAlarmKitSection();
+
+  @override
+  State<_DebugAlarmKitSection> createState() => _DebugAlarmKitSectionState();
+}
+
+class _DebugAlarmKitSectionState extends State<_DebugAlarmKitSection> {
+  static const _leadSeconds = 60;
+
+  Map<String, dynamic> _status = const {};
+  String? _outcome;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatus();
+  }
+
+  Future<void> _refreshStatus() async {
+    final status = await readAlarmKitStatus();
+    if (mounted) setState(() => _status = status);
+  }
+
+  Future<void> _fire() async {
+    final armed = await fireAlarmKitTestAlarm(seconds: _leadSeconds);
+    if (!mounted) return;
+    setState(() {
+      _outcome = armed
+          ? 'Armed for ${TimeOfDay.fromDateTime(DateTime.now().add(const Duration(seconds: _leadSeconds))).format(context)}'
+              ' — lock the phone and wait.'
+          : 'Refused. Check the device console for the AlarmKit error.';
+    });
+  }
+
+  /// Moves REAL alarms between backends. The scheduler comes from the tree
+  /// because the flip has to cancel on the outgoing backend first — see
+  /// [setAlarmKitBackendEnabled].
+  Future<void> _setBackend(bool enabled) async {
+    setState(() => _busy = true);
+    await setAlarmKitBackendEnabled(
+      enabled,
+      scheduler: context.read<AlarmScheduler>(),
+    );
+    await _refreshStatus();
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _outcome = enabled
+            ? 'Real alarms now run on AlarmKit. Re-armed from scratch.'
+            : 'Real alarms back on notifications.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (kReleaseMode || !Platform.isIOS) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final available = _status['available'] == true;
+    final enabled = _status['enabled'] == true;
+    final authorized = _status['authorized'] == true;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+          child: Text(
+            'DEBUG · ALARMKIT',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          child: Text(
+            _outcome ??
+                (available
+                    // `active` is what the backend factory really picks;
+                    // `enabled` is only the preference. They diverge when
+                    // AlarmKit is preferred but unauthorised, and reporting the
+                    // preference would claim alarms run on a backend they do
+                    // not.
+                    ? 'Real alarms run on '
+                        '${_status['active'] == true ? 'AlarmKit' : 'notifications'}'
+                        '${enabled && !authorized ? ' — AlarmKit preferred but NOT authorised' : ''}.'
+                    : 'AlarmKit needs iOS 26. This device uses notifications.'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        if (available)
+          SwitchListTile(
+            key: const ValueKey('debug-alarmkit-backend'),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+            title: const Text('Use AlarmKit for real alarms'),
+            subtitle: const Text(
+              'Cancels everything on the current backend, then re-arms on the '
+              'other one.',
+            ),
+            value: enabled,
+            onChanged: _busy ? null : _setBackend,
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: OutlinedButton(
+            key: const ValueKey('debug-alarmkit-fire'),
+            onPressed: _busy ? null : _fire,
+            child: const Text('Fire test alarm (bypasses your rules)'),
           ),
         ),
         const Divider(height: 32),

@@ -14,6 +14,7 @@ import '../data/repositories/shift_cycle_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../purchase/entitlement_store.dart';
 import '../util/clock.dart';
+import 'alarm_backend_info.dart';
 import 'alarm_payload.dart';
 import 'alarm_projection.dart';
 import 'alarm_scheduler.dart';
@@ -71,21 +72,29 @@ DateTime? _readHorizonCapFromSettings() {
   }
 }
 
-/// Alarm cap for the running platform. iOS shares a 64-notification ceiling
-/// across alarms, their repeat chains and every reminder, so it schedules
-/// fewer alarms further out than Android — see `ios_notification_budget.dart`.
+/// Alarm cap for the running platform AND backend.
+///
+/// The iOS notification path shares a 64-notification ceiling across alarms,
+/// their repeat chains and every reminder, so it schedules fewer alarms further
+/// out than Android — see `ios_notification_budget.dart`. **AlarmKit has no such
+/// ceiling** (measured ≥400 on device), so keeping the reduced cap there would
+/// shorten the pre-armed horizon to pay for a constraint that does not exist.
 int _platformMaxScheduled() {
   try {
-    return Platform.isIOS ? kIosMaxScheduledAlarms : 50;
+    if (!Platform.isIOS) return 50;
+    return AlarmBackendInfo.isAlarmKit ? 50 : kIosMaxScheduledAlarms;
   } catch (_) {
     return 50;
   }
 }
 
 /// Repeat chains exist only where a single alert cannot ring long enough.
+/// AlarmKit rings until dismissed — verified past five minutes on device — so a
+/// chain there would be pure waste, and worse, extra alerts nothing cancels.
 int _platformChainedAlarmCount() {
   try {
-    return Platform.isIOS ? kChainedAlarmCount : 0;
+    if (!Platform.isIOS) return 0;
+    return AlarmBackendInfo.isAlarmKit ? 0 : kChainedAlarmCount;
   } catch (_) {
     return 0;
   }
@@ -149,8 +158,8 @@ class AlarmSyncService {
         _idMap = idMap,
         _clock = clock,
         _horizon = horizon,
-        _maxScheduled = maxScheduled ?? _platformMaxScheduled(),
-        _chainedAlarmCount = chainedAlarmCount ?? _platformChainedAlarmCount(),
+        _maxScheduledOverride = maxScheduled,
+        _chainedAlarmCountOverride = chainedAlarmCount,
         _debounceWindow = debounceWindow,
         // Default reads the `settings` box (covers foreground AND the headless
         // background isolate); tests inject a closure to exercise the branch.
@@ -164,12 +173,20 @@ class AlarmSyncService {
   final NotificationIdMap _idMap;
   final Clock _clock;
   final Duration _horizon;
-  final int _maxScheduled;
+
+  /// Budgets are resolved per read rather than captured at construction,
+  /// because on iOS they depend on which backend is live and that can change
+  /// while the app runs. Injected values still win, so tests stay explicit.
+  final int? _maxScheduledOverride;
+  final int? _chainedAlarmCountOverride;
+
+  int get _maxScheduled => _maxScheduledOverride ?? _platformMaxScheduled();
 
   /// How many of the most imminent alarms get a repeat chain. Zero off iOS —
   /// Android rings until dismissed from its foreground audio service and needs
-  /// no help.
-  final int _chainedAlarmCount;
+  /// no help — and zero under AlarmKit, which does the same.
+  int get _chainedAlarmCount =>
+      _chainedAlarmCountOverride ?? _platformChainedAlarmCount();
 
   /// The chain length last requested per id, so a change in chain MEMBERSHIP
   /// re-schedules even when the fire time has not moved. Without this the
