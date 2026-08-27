@@ -169,6 +169,31 @@ class Shift {
   bool isAlarmHandledAt(DateTime now) =>
       isAcknowledged || (snoozedUntil != null && snoozedUntil!.isAfter(now));
 
+  /// Whether this shift should produce **no wake-up of any kind** — no alarm,
+  /// and nothing that exists to prepare the user for one.
+  ///
+  /// ## Why this is one getter and not a list of checks
+  ///
+  /// These five rules were written out twice: once in `projectAlarmRings` and
+  /// again in the sleep planner's `_nextWakeShift`. They drifted, and the
+  /// drift was silent — the planner honoured only [isMuted] and
+  /// [isAcknowledged], so a shift marked as **annual leave** ([isPaused], the
+  /// same field as Sick and Public Holiday) rang no alarm yet still sent a
+  /// wind-down and a bedtime reminder for a shift the user was not working.
+  /// Reported from the field on 2026-08-27; the calendar and the alarms were
+  /// both correct, which is what made it hard to see.
+  ///
+  /// Anything deciding "is there a wake to plan around" must ask THIS, so a new
+  /// suppression state cannot be added to one path and forgotten in the other.
+  ///
+  /// Deliberately excludes `Shift.type == off`: callers filter that themselves,
+  /// and an OFF day is the absence of a shift rather than a suppressed one.
+  /// Also excludes `dismissedAlarmIds`, which is PER-ALARM — one dismissed ring
+  /// does not silence a shift's siblings, so only a caller that knows which
+  /// alarm it means can apply it.
+  bool get suppressesWakeUp =>
+      isMuted || isAcknowledged || isAlarmSkipped || isPaused || isArchived;
+
   bool get isOvernight => endMinutes <= startMinutes;
 
   int get durationMinutes => isOvernight

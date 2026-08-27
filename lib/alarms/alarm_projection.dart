@@ -149,12 +149,10 @@ List<AlarmRing> projectAlarmRings({
         if (type == null) continue; // invalid config — skip
         for (final s in shifts) {
           if (s.type != type) continue;
-          // Every per-shift state modifier, in ONE place:
-          if (s.isMuted) continue;
-          if (s.isAcknowledged) continue;
-          if (s.isAlarmSkipped) continue;
-          if (s.isPaused) continue;
-          if (s.isArchived) continue;
+          // Every per-shift state modifier, in ONE place — and now in one
+          // place shared with the sleep planner, which had drifted to honouring
+          // only two of them. See [Shift.suppressesWakeUp].
+          if (s.suppressesWakeUp) continue;
           // PER-OCCURRENCE dismissal: only THIS alarm rule's ring for this
           // shift was dismissed — its siblings on the same shift must keep
           // firing. Checked BEFORE the snooze pin so a stale `snoozedUntil`

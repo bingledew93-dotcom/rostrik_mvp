@@ -67,6 +67,134 @@ void main() {
         isSchedulePaused: isSchedulePaused,
       );
 
+  // Field report, 2026-08-27 (Pixel 9 Pro XL): a round marked as ANNUAL LEAVE
+  // rang no alarms and showed correctly on the calendar, yet still sent a
+  // wind-down and a bedtime reminder. Annual leave is `isPaused` — the same
+  // field as Sick and Public Holiday — and the planner honoured only `isMuted`
+  // and `isAcknowledged` while the alarm engine honoured all five. Two code
+  // paths over one roster, silently disagreeing.
+  //
+  // These pin every state, not just the reported one, because the failure was
+  // never about leave specifically: it was about the rules being written twice.
+  // `Shift.suppressesWakeUp` is now the single source both paths read.
+  group('suppressed shifts produce no sleep plan', () {
+    Shift suppressed({
+      bool isPaused = false,
+      bool isAlarmSkipped = false,
+      bool isArchived = false,
+      bool isMuted = false,
+      bool isAcknowledged = false,
+    }) =>
+        Shift(
+          id: 's',
+          date: DateTime(2026, 6, 3),
+          type: ShiftType.day,
+          startMinutes: 7 * 60,
+          endMinutes: 15 * 60,
+          isPaused: isPaused,
+          isAlarmSkipped: isAlarmSkipped,
+          isArchived: isArchived,
+          isMuted: isMuted,
+          isAcknowledged: isAcknowledged,
+        );
+
+    test('annual leave / sick / public holiday (isPaused) — the reported bug',
+        () {
+      final p = plan(
+        shifts: [suppressed(isPaused: true)],
+        alarms: [rotation()],
+      );
+      expect(p.state, SleepPlanState.none,
+          reason: 'no alarm will fire, so there is nothing to prepare for');
+    });
+
+    test('a skipped shift alarm (isAlarmSkipped)', () {
+      final p = plan(
+        shifts: [suppressed(isAlarmSkipped: true)],
+        alarms: [rotation()],
+      );
+      expect(p.state, SleepPlanState.none);
+    });
+
+    test('an archived shift (isArchived)', () {
+      final p = plan(
+        shifts: [suppressed(isArchived: true)],
+        alarms: [rotation()],
+      );
+      expect(p.state, SleepPlanState.none);
+    });
+
+    test('the two states that already worked still work', () {
+      expect(
+        plan(shifts: [suppressed(isMuted: true)], alarms: [rotation()]).state,
+        SleepPlanState.none,
+      );
+      expect(
+        plan(shifts: [suppressed(isAcknowledged: true)], alarms: [rotation()])
+            .state,
+        SleepPlanState.none,
+      );
+    });
+
+    test('an ordinary shift STILL gets a plan', () {
+      final p = plan(shifts: [suppressed()], alarms: [rotation()]);
+      expect(p.state, isNot(SleepPlanState.none),
+          reason: 'the fix must not suppress a normal working shift');
+    });
+  });
+
+  // Per-occurrence dismissal is the same fault at a finer grain: swiping away
+  // tomorrow's alarm on the Dashboard said there is no wake to prepare for, and
+  // a bedtime reminder for it contradicts what the app just showed the user.
+  group('per-occurrence dismissal', () {
+    Shift withDismissals(List<String> ids) => Shift(
+          id: 's',
+          date: DateTime(2026, 6, 3),
+          type: ShiftType.day,
+          startMinutes: 7 * 60,
+          endMinutes: 15 * 60,
+          dismissedAlarmIds: ids,
+        );
+
+    test('every ring dismissed → no plan', () {
+      final p = plan(
+        shifts: [withDismissals(['a1', 'a2'])],
+        alarms: [rotation(id: 'a1'), rotation(id: 'a2')],
+      );
+      expect(p.state, SleepPlanState.none);
+    });
+
+    test('one of two dismissed → the shift still wakes them, so still a plan',
+        () {
+      final p = plan(
+        shifts: [withDismissals(['a1'])],
+        alarms: [rotation(id: 'a1'), rotation(id: 'a2')],
+      );
+      expect(p.state, isNot(SleepPlanState.none),
+          reason: 'a1 is skipped but a2 still rings');
+    });
+
+    // The distinction that keeps the fix from over-reaching: having NO rule is
+    // not the same as having dismissed one. Users without a rotation alarm are
+    // deliberately still planned for, from shiftStart − lead.
+    test('no rotation rule at all → still planned (unchanged behaviour)', () {
+      final p = plan(shifts: [withDismissals(const [])], alarms: const []);
+      expect(p.state, isNot(SleepPlanState.none));
+    });
+
+    test('a dismissal naming an alarm for ANOTHER shift type is ignored', () {
+      final p = plan(
+        shifts: [withDismissals(['night-alarm'])],
+        alarms: [
+          rotation(id: 'night-alarm', linkedShiftType: ShiftType.night),
+          rotation(id: 'day-alarm'),
+        ],
+      );
+      expect(p.state, isNot(SleepPlanState.none),
+          reason: 'the day shift\'s own alarm was never dismissed');
+    });
+  });
+
   group('graceful empty (state none)', () {
     test('no shifts at all', () {
       final p = plan(shifts: const []);
