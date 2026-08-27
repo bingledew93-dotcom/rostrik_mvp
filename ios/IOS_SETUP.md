@@ -204,22 +204,46 @@ with the wrong sound".
 Still worth doing: the masters are 16-bit PCM, several >1 MB for a ~10 s loop.
 Trimming or downsampling would cut cost on both platforms.
 
-### 4.2 AlarmKit is still a stub
+### 4.2 AlarmKit — implemented, still gated off
 
-`AlarmKitBackend` in `NativeAlarmPlugin.swift` is unimplemented and gated off by
-`alarmKitEnabled = false`, so every iOS version uses `NotificationBackend`.
+`AlarmKitBackend` in `NativeAlarmPlugin.swift` now compiles against the real SDK,
+but `alarmKitEnabled = false` still routes every iOS version to
+`NotificationBackend`. See `TODO.md` §2.2 for what remains.
 
 That gate is deliberate: selecting AlarmKit on `#available(iOS 26.0, *)` alone
-would hand the newest iPhones a backend that cannot schedule, so the newest
-devices would get *no* alarms while older ones worked. Its `schedule` fails
-loudly on purpose — the error keeps the id out of the Dart ledger, so the
-reconciler re-arms instead of trusting a phantom. A silent success would be the
-worst outcome: an alarm the app believes is set that never rings.
+would hand the newest iPhones a backend that cannot yet retire a fired alarm, so
+one-time alarms would silently become daily on exactly the newest devices. Its
+`schedule` fails loudly on purpose — the error keeps the id out of the Dart
+ledger, so the reconciler re-arms instead of trusting a phantom. A silent
+success would be the worst outcome: an alarm the app believes is set that never
+rings.
 
 AlarmKit is the only route to a real alarm UI, a sound past 30s, and piercing
-the silent switch. It needs a widget extension for its alert presentation, so do
-§4.3 first. Do not flip the flag until an alarm has actually rung on hardware.
-The test device is on iOS 18.6, so this cannot be validated there at all.
+the silent switch. It needs a widget extension for its alert presentation (§4.3
+covers the target setup; App Groups are *not* required — ActivityKit passes the
+attributes itself).
+
+#### ⚠️ Verify native API against the SDK, never against documentation
+
+The original stub was written with no compiler available and every AlarmKit name
+in it was wrong. The fix is not "research harder" — it is that **the ground
+truth ships with Xcode**:
+
+```
+$(xcrun --show-sdk-path --sdk iphoneos)/System/Library/Frameworks/AlarmKit.framework/Modules/AlarmKit.swiftmodule/arm64e-apple-ios.swiftinterface
+```
+
+That file is the complete public API. A scratch `.swift` file plus
+`xcrun swiftc -typecheck -sdk "$(xcrun --show-sdk-path --sdk iphoneos)" …`
+settles any question in seconds without a device, a full build, or a network
+round-trip.
+
+Do **not** trust `IDEIntelligenceChat.framework/…/SwiftUI-AlarmKit-Integration.md`
+bundled in Xcode. It reads authoritative and is materially wrong: it dates
+AlarmKit to iOS 18 (it is 26.0), invents `AlarmButton(label:)` and
+`.stopButton` / `.snoozeButton` statics that do not exist, and declares `cancel`
+async when it is synchronous and throwing. Following it reproduces the exact
+stub that never compiled.
 
 ### 4.3 No home-screen widget on iOS
 

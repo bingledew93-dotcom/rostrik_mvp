@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0EF92A0A1868192EABDC9DDE /* RostrikAlarmMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F06739AA371EBDA4630C77 /* RostrikAlarmMetadata.swift */; };
 		1212D1170BC6C7430A7FDECF /* sleep_rain.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1F282E9AC47AEA03A336550E /* sleep_rain.wav */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		25A7FB4FB067E0D022CCCA63 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 16BD7A7EC1D4A20FC4E3BDFD /* Pods_RunnerTests.framework */; };
@@ -91,6 +92,7 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DD36624978BB213D674B215E /* sleep_ocean.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = sleep_ocean.wav; path = ../android/app/src/main/res/raw/sleep_ocean.wav; sourceTree = "<group>"; };
+		E6F06739AA371EBDA4630C77 /* RostrikAlarmMetadata.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RostrikAlarmMetadata.swift; sourceTree = "<group>"; };
 		F37A4A1DA54013C5ECBF28B6 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		FAF01DB55BE5E5B9AAD27442 /* sleep_white_noise.wav */ = {isa = PBXFileReference; includeInIndex = 1; name = sleep_white_noise.wav; path = ../android/app/src/main/res/raw/sleep_white_noise.wav; sourceTree = "<group>"; };
 		FC7E68166AEEC1FF60450159 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
@@ -196,6 +198,7 @@
 				11C8FFCB5C918777A89D1497 /* SleepSoundPlugin.swift */,
 				48F7E7D3B6AA75231EC0391E /* SleepSounds */,
 				A75B328E2D640DC3759813AD /* Sounds */,
+				E6F06739AA371EBDA4630C77 /* RostrikAlarmMetadata.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -470,6 +473,7 @@
 				B8EF3180991801D1F6A7928A /* NativeAlarmPlugin.swift in Sources */,
 				4BB0471041B95D6212F1F19E /* ActivityReminderPlugin.swift in Sources */,
 				AF6A3AEEC613A1374EA24A7E /* SleepSoundPlugin.swift in Sources */,
+				0EF92A0A1868192EABDC9DDE /* RostrikAlarmMetadata.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'alarms/alarm_sync_service.dart';
+import 'alarms/alarmkit_bringup.dart';
 import 'alarms/main_isolate_liveness.dart';
 import 'alarms/native_alarm_scheduler.dart';
 import 'alarms/pending_alarm_delete_guard.dart';
@@ -492,7 +493,14 @@ Future<void> _requestAlarmPermissions() async {
 void requestIosNotificationPermission() {
   if (!Platform.isIOS) return;
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(Permission.notification.request());
+    // The AlarmKit bring-up probe is chained AFTER the notification prompt
+    // rather than fired alongside it, so the two system alerts queue instead of
+    // racing for the same window. It is a no-op in release builds and on any
+    // device below iOS 26 — see `runAlarmKitBringUp`. Still unawaited overall,
+    // which is the property that matters here: nothing blocks the first frame.
+    unawaited(
+      Permission.notification.request().whenComplete(runAlarmKitBringUp),
+    );
   });
 }
 

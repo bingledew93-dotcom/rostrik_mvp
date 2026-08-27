@@ -103,23 +103,69 @@ they already ask the object, not the platform.
 The default profile is `android`, so existing widget tests keep asserting the
 full-featured UI; iOS behaviour is proven by explicit `debugOverride` tests.
 
-### 2.2 Phase B — implement AlarmKit (needs an iOS 26 device)
+### 2.2 Phase B — implement AlarmKit (in progress, 2026-08-27)
 
-`AlarmKitBackend` is a stub failing loudly behind `alarmKitEnabled = false`.
-That gate stays until an alarm has actually rung on hardware — flipping it early
-would give the *newest* iPhones no alarms while older ones worked.
+`alarmKitEnabled = false` still gates everything. That gate stays until an alarm
+has actually rung on hardware — flipping it early would give the *newest*
+iPhones no alarms while older ones worked.
 
-- [ ] Research the real AlarmKit API surface. The existing stub was written
-      blind with no compiler and its type/method names are guesses — treat them
-      as a sketch, not a starting point to trust.
-- [ ] Widget extension for AlarmKit's alert presentation (see §2.4 — verify
-      whether this needs the paid account).
-- [ ] Authorisation flow, using `NSAlarmKitUsageDescription` (already in
-      Info.plist). Must follow the Phase A rule: request only when the app is
-      interactive, never during `main()` (IOS_SETUP.md §1.1).
-- [ ] Keep failing loudly until proven. A silent success is the worst outcome:
-      an alarm the app believes is set that never rings.
+**The API is no longer guesswork.** Xcode 26.6 ships the iOS 26.5 SDK, so the
+authoritative surface is on disk at
+`…/iPhoneOS26.5.sdk/System/Library/Frameworks/AlarmKit.framework/Modules/AlarmKit.swiftmodule/arm64e-apple-ios.swiftinterface`.
+`AlarmKitBackend` is now written against it and **compiles**.
+
+> ⚠️ The AlarmKit guide bundled with Xcode's assistant
+> (`IDEIntelligenceChat.framework/…/SwiftUI-AlarmKit-Integration.md`) is wrong in
+> specifics: it dates the framework to iOS 18, invents `AlarmButton(label:)` and
+> `.stopButton` / `.snoozeButton` statics, and makes `cancel` async. Prefer the
+> `.swiftinterface`, and let the compiler settle disputes.
+
+Done:
+
+- [x] Real API surface, verified by compiling — `AlarmManager.shared`,
+      `.fixed(Date)`, `AlarmButton(text:textColor:systemImageName:)`,
+      `AlertSound.named()` (so the bundled `.caf` tones carry over).
+- [x] `schedule` / `cancel` / `aliveIds` implemented; `RostrikAlarmMetadata`
+      carries `shiftId` + `appAlarmId`, the pair the Stop intent will need.
+- [x] Authorisation flow, post-frame, chained after the notification prompt so
+      the two system alerts queue rather than race (IOS_SETUP.md §1.1).
+
+Open, in the order that de-risks fastest:
+
+- [ ] **Measure the alarm cap** (`runAlarmKitBringUp` does this on launch).
+      `AlarmManager.AlarmError.maximumLimitReached` exists and its value is not
+      published. This decides the architecture: rotating rosters are not weekly,
+      so `.relative` recurrence is useless to us and every occurrence needs its
+      own alarm. If the cap is well below the 14-day horizon, AlarmKit cannot
+      carry it alone and the imminent alarms go to AlarmKit while the rest stay
+      on notifications. **Learn the number before building around it.**
+- [ ] **Does the alert present without a widget extension?** `AlarmAttributes`
+      is an `ActivityKit.ActivityAttributes`, so the UI is a Live Activity. The
+      countdown certainly needs a widget target; whether the plain alert does is
+      what the first device test answers. Hence the current config is stop-only
+      with `countdownDuration: nil` — the smallest thing that asks the question.
+- [ ] **Widget extension** + SwiftUI `ActivityConfiguration`. New target, new
+      bundle id (§2.4 — App Groups are *not* required for this; ActivityKit
+      passes attributes and state itself).
+- [ ] **Stop / Snooze App Intents.** `LiveActivityIntent`s, which is the real
+      prize: unlike a notification, **our code runs when the user responds**.
+      The Stop intent writes the deletes ledger directly, replacing
+      `recordSpentAlarms`' after-the-fact inspection of delivered notifications.
+- [ ] **Native snooze** via `Alarm.CountdownDuration(postAlert:)` +
+      `secondaryButtonBehavior: .countdown`, retiring the re-arm-the-same-id
+      trick. Needs the widget extension first (countdown presentation).
+- [ ] **Retire the repeat chain on this path.** AlarmKit sustains the alarm
+      itself, so `kChainCost` is pure waste there and the iOS alarm cap can rise
+      back from 32. Notification path keeps it.
+- [ ] Make `AlarmCapabilities.current` native-fed once a backend can actually
+      differ at runtime (§2.1), flipping `soundBeyondThirtySeconds` and
+      `piercesSilentSwitch` true under AlarmKit.
 - [ ] Only then flip `alarmKitEnabled = true`.
+
+⚠️ **Known regression if the gate is flipped early:** `recordSpentAlarms` is
+inherited as a no-op on the AlarmKit backend, so nothing writes the deletes
+ledger and one-time alarms would silently become daily — the exact fault fixed
+on the notification path. The Stop intent is the fix, not more inspection.
 
 ### 2.3 Phase C — version-conditional UI (only after B works)
 
@@ -164,15 +210,15 @@ would give the *newest* iPhones no alarms while older ones worked.
 
 ---
 
-## 4. Decision needed: which device runs iOS 26
+## 4. Which device runs iOS 26 — decided 2026-08-27
 
-The **iPhone SE 3 is almost certainly iOS 26-capable** (A15; iOS 26 supports
-roughly A13/iPhone 11 and later) — so a second phone may not be needed. But
-updating it has a real cost: it is currently the *only* hardware proof that the
-iOS 15.5–18 notification fallback works, and that fallback is what every
-non-26 user will run.
+The SE 3 is being updated to iOS 26 to start Phase B. That was held off until
+the repeat chain (§2.2's predecessor) was finished and verified, because the
+notification fallback is what *every* non-26 user runs, and the SE was the only
+hardware proving it worked.
 
-Recommendation: **don't update the SE yet.** Phase A needs no iOS 26, and the
-fallback is the path most users will be on. Decide when Phase B actually starts —
-by then either update it and accept re-verifying the fallback elsewhere, or pick
-up a cheap second device.
+**Consequence to keep in view:** once it is on 26 there is no longer a device
+that can regression-test the iOS 15.5–18 path. That path is not legacy — it is
+the majority path today and the permanent one for devices that cannot take 26.
+Changes to `NotificationBackend` after this point are effectively unverified
+until there is a second device or a downgrade. Weigh that before touching it.
