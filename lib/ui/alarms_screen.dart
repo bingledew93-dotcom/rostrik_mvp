@@ -7,6 +7,7 @@ import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../alarms/alarm_projection.dart';
+import '../alarms/one_off_snooze_store.dart';
 import '../logic/alarm_sort.dart';
 import '../state/app_preferences.dart';
 import 'alarm_time_projection.dart';
@@ -446,6 +447,9 @@ class _AlarmCardState extends State<_AlarmCard> {
       shifts: widget.shifts,
       globalLeadMinutes: widget.globalLeadMinutes,
       now: DateTime.now(),
+      // Without this a snoozed one-time alarm's "Next ring" label reads as
+      // though nothing is scheduled, minutes before it rings.
+      oneOffSnoozes: readOneOffSnoozes(),
     );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

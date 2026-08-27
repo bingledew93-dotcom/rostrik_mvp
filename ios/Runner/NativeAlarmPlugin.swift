@@ -891,18 +891,29 @@ final class NotificationBackend: AlarmBackend {
     {
       let stop = AlarmButton(
         text: "Stop", textColor: .white, systemImageName: "stop.circle.fill")
+      let snooze = AlarmButton(
+        text: "Snooze", textColor: .white, systemImageName: "zzz")
 
+      // `.countdown` hands the snooze to AlarmKit: it re-alerts after
+      // `postAlert` below without us re-arming anything. That is a real
+      // improvement on the notification path, which has to re-add the same
+      // identifier by hand and keep the Dart ledger truthful about it.
+      //
       // The stop button is required by the iOS 26.0 initialiser and deprecated
       // by the 26.1 one, which drops it in favour of a system-drawn control.
       // Both are called, because our availability floor for this backend is 26.0.
       let alert: AlarmPresentation.Alert
       if #available(iOS 26.1, *) {
         alert = AlarmPresentation.Alert(
-          title: LocalizedStringResource(stringLiteral: request.label))
+          title: LocalizedStringResource(stringLiteral: request.label),
+          secondaryButton: snooze,
+          secondaryButtonBehavior: .countdown)
       } else {
         alert = AlarmPresentation.Alert(
           title: LocalizedStringResource(stringLiteral: request.label),
-          stopButton: stop)
+          stopButton: stop,
+          secondaryButton: snooze,
+          secondaryButtonBehavior: .countdown)
       }
 
       let attributes = AlarmAttributes<RostrikAlarmMetadata>(
@@ -918,21 +929,34 @@ final class NotificationBackend: AlarmBackend {
       let sound: ActivityKit.AlertConfiguration.AlertSound =
         request.iosSound.map { .named($0) } ?? .default
 
-      // countdownDuration is deliberately nil: `postAlert` is AlarmKit's native
-      // snooze, but a countdown presentation needs the widget extension we have
-      // not built. Arming one now would trade a working alarm for a broken
-      // snooze.
+      // `postAlert` is how long AlarmKit waits before re-alerting a snoozed
+      // alarm — the user's own snooze setting, so iOS matches Android rather
+      // than imposing Apple's 9 minutes. `preAlert` stays nil: that is the timer
+      // case, counting down TO the alarm, which Rostrik does not have.
       //
-      // The stop intent is the whole reason this backend can be trusted with a
-      // one-time alarm. Without it nothing records that the alarm fired, and the
-      // reconciler re-projects it to tomorrow — the daily-alarm bug, reborn.
+      // ⚠️ A countdown presentation may need the widget extension the alert
+      // turned out not to need. If snooze proves not to work on device, the
+      // fallback is `.custom` behaviour plus an intent that stops and re-arms
+      // the alarm itself, the way the notification path does.
+      //
+      // The two intents are what make this backend trustworthy. Stop records
+      // that the alarm is spent — without it the reconciler re-projects a
+      // one-time alarm to tomorrow, which is the daily-alarm bug reborn. Snooze
+      // records the deferral — without it the spent-alarm sweep cancels the
+      // alarm mid-snooze.
       return AlarmManager.AlarmConfiguration(
-        countdownDuration: nil,
+        countdownDuration: Alarm.CountdownDuration(
+          preAlert: nil,
+          postAlert: TimeInterval(max(1, request.snoozeMinutes) * 60)),
         schedule: .fixed(request.fireAt),
         attributes: attributes,
         stopIntent: RostrikStopAlarmIntent(
           alarmId: alarmUUID(for: request.id),
           appAlarmId: request.appAlarmId),
+        secondaryIntent: RostrikSnoozeAlarmIntent(
+          appAlarmId: request.appAlarmId,
+          shiftId: request.shiftId,
+          snoozeMinutes: request.snoozeMinutes),
         sound: sound)
     }
 

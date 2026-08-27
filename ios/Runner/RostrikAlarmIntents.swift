@@ -76,4 +76,54 @@ import Foundation
       return .result()
     }
   }
+
+  /// Records a snooze so the Dart reconciler does not undo it.
+  ///
+  /// AlarmKit performs the snooze itself — `secondaryButtonBehavior: .countdown`
+  /// re-alerts after `CountdownDuration.postAlert` with no help from us. This
+  /// intent exists purely so **Dart finds out**, and that is not a nicety:
+  /// `sweepSpentOneTimeAlarms` retires any one-time alarm whose `oneTimeFireAt`
+  /// anchor has passed, and a snoozed alarm's anchor has passed by definition.
+  /// Without this line in the ledger the sweep would delete the rule and cancel
+  /// the alarm in the middle of the user's snooze — the alarm would simply never
+  /// come back. The sweep skips alarms with a pending snooze, which is exactly
+  /// what this writes.
+  ///
+  /// Same ledger format and contract as the Android `AlarmActivity` snooze and
+  /// `ForegroundAlarmPresenter.snooze`: `<shiftId>|<appAlarmId>|<untilMillis>`.
+  /// Deliberately does NOT re-arm anything — unlike the notification path, where
+  /// native has to re-arm because nothing else will. Here AlarmKit owns the
+  /// re-alert, so a second alarm from us would mean two.
+  @available(iOS 26.0, *)
+  struct RostrikSnoozeAlarmIntent: LiveActivityIntent {
+
+    static var title: LocalizedStringResource { "Snooze alarm" }
+    static var isDiscoverable: Bool { false }
+
+    @Parameter(title: "Rule")
+    var appAlarmId: String
+
+    @Parameter(title: "Shift")
+    var shiftId: String
+
+    @Parameter(title: "Minutes")
+    var snoozeMinutes: Int
+
+    init() {}
+
+    init(appAlarmId: String, shiftId: String, snoozeMinutes: Int) {
+      self.appAlarmId = appAlarmId
+      self.shiftId = shiftId
+      self.snoozeMinutes = snoozeMinutes
+    }
+
+    func perform() async throws -> some IntentResult {
+      let until = Date(timeIntervalSinceNow: TimeInterval(max(1, snoozeMinutes) * 60))
+      let millis = Int(until.timeIntervalSince1970 * 1000)
+      RostrikLedger.append("\(shiftId)|\(appAlarmId)|\(millis)", to: RostrikLedger.snoozes)
+      NSLog("[Rostrik] AlarmKit snooze intent — \(appAlarmId) until \(until)")
+      NativeAlarmPlugin.notifyDartSpentAlarmRecorded()
+      return .result()
+    }
+  }
 #endif
