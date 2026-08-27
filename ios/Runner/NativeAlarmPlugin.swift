@@ -107,31 +107,57 @@ public final class NativeAlarmPlugin: NSObject {
     return plugin
   }
 
-  /// Which backend serves real alarms. **Defaults to false**, i.e.
-  /// notifications, and nothing in a release build ever sets it.
+  /// Which backend serves real alarms: **AlarmKit wherever it exists**, unless
+  /// something has explicitly said otherwise.
   ///
-  /// This gate is the whole safety story for an unfinished backend. Selecting
-  /// AlarmKit purely on `#available(iOS 26.0, *)` would hand every modern
-  /// iPhone a backend that has not been proven end to end — so the newest
-  /// devices would carry the most risk. Defaulting to notifications means the
-  /// worst case is the documented weaker alarm, never a silent one.
+  /// Defaulted off until 2026-08-27, when the AlarmKit path was verified end to
+  /// end on device — stop and snooze intents driving the real ledgers, one-time
+  /// rules retiring, no daily-alarm regression. Holding it off past that point
+  /// would mean knowingly serving iOS 26 users a 28-second alarm the ring switch
+  /// silences, when the device can do far better.
   ///
-  /// Backed by `UserDefaults` rather than a compile-time constant so it can be
-  /// flipped on a running device. That is not convenience: the parts of the
-  /// AlarmKit path most likely to be wrong are the *Dart* ones — the ledger
-  /// drains, snooze suppression, the reconciler not cancelling a snoozed alarm
-  /// — and none of them are exercised by a synthetic test alarm with no rule
-  /// behind it. Proving them needs real alarms on the real backend, which needs
-  /// a switch. It doubles as a kill-switch afterwards.
+  /// `object(forKey:)` rather than `bool(forKey:)` is the whole mechanism: it
+  /// distinguishes "never set" from "explicitly false". Without that a stored
+  /// `false` is indistinguishable from an absent key, and a deliberate
+  /// kill-switch would be silently overridden by the default on the very next
+  /// launch — the failure mode a kill-switch exists to prevent.
+  ///
+  /// The `#available` check below is belt-and-braces: `makeBackend` gates on it
+  /// too, so an older device falls back regardless of what is stored.
   static var alarmKitEnabled: Bool {
-    UserDefaults.standard.bool(forKey: alarmKitEnabledKey)
+    if let explicit = UserDefaults.standard.object(forKey: alarmKitEnabledKey)
+      as? Bool
+    {
+      return explicit
+    }
+    if #available(iOS 26.0, *) { return true }
+    return false
   }
 
   fileprivate static let alarmKitEnabledKey = "rostrik.alarmKitEnabled"
 
-  private static func makeBackend() -> AlarmBackend {
+  /// True when AlarmKit is the backend that would actually be used — which is
+  /// NOT the same as [alarmKitEnabled].
+  ///
+  /// ⚠️ The authorisation check is load-bearing. AlarmKit's `schedule` does not
+  /// prompt; unauthorised, it simply throws. So selecting AlarmKit before the
+  /// user has granted it would leave the app with **no alarms at all** — every
+  /// schedule failing, the Dart ledger recording nothing, the reconciler
+  /// retrying forever, and no sound on any morning. Falling back to
+  /// notifications means a denied or not-yet-answered prompt costs the user the
+  /// weaker alarm rather than silence.
+  static var alarmKitActive: Bool {
     #if canImport(AlarmKit)
       if alarmKitEnabled, #available(iOS 26.0, *) {
+        return AlarmManager.shared.authorizationState == .authorized
+      }
+    #endif
+    return false
+  }
+
+  private static func makeBackend() -> AlarmBackend {
+    #if canImport(AlarmKit)
+      if alarmKitActive, #available(iOS 26.0, *) {
         return AlarmKitBackend()
       }
     #endif
@@ -202,6 +228,12 @@ public final class NativeAlarmPlugin: NSObject {
         }
       #endif
       status["enabled"] = Self.alarmKitEnabled
+      // `enabled` is the preference; `active` is what the backend factory would
+      // actually pick. They diverge whenever authorisation is missing, and Dart
+      // must size its alarm budget by the latter — budgeting for AlarmKit while
+      // really running on notifications would overshoot the 64-notification
+      // ceiling, which iOS enforces by silently dropping alarms.
+      status["active"] = Self.alarmKitActive
       // NSLog rather than returning quietly: on a profile build — the only kind
       // that runs standalone on the device — Dart's own logging never reaches
       // the console, so native is the only channel that talks.

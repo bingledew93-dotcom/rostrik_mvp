@@ -155,24 +155,32 @@ the user would get two alarms. Worth a test pinning that invariant.
 
 Open, in the order that de-risks fastest:
 
-- [ ] **Raise the alarm cap under AlarmKit.** Still 32, which exists to pay for
-      a 64-notification ceiling and a 16-slot repeat chain — neither applies
-      here, and the measured cap is ≥400. `_platformMaxScheduled()` and
-      `_platformChainedAlarmCount()` need to know which backend is live, which
-      is the one real reason to make `AlarmCapabilities.current` native-fed.
-      Until then iOS pre-arms a shorter horizon than it needs to.
-- [ ] **Pin the two-snooze invariant** with a test (see the warning above).
-- [ ] **Decide how the default flips.** `alarmKitEnabled` reads `UserDefaults`
-      and defaults false, so shipping as-is leaves every user on notifications.
-      Making it default-on for iOS 26 needs a sentinel that distinguishes "never
-      set" from "explicitly off", so the debug switch and any future kill-switch
-      still win.
-- [ ] **Remove the DEBUG · ALARMKIT section** from Settings before merge, along
-      with `fireAlarmKitTestAlarm`. The runtime switch itself is worth keeping as
-      a kill-switch; the synthetic test alarm is not.
+- [x] **Alarm cap raised under AlarmKit** — 50, matching Android, with no repeat
+      chains. `AlarmBackendInfo` carries which backend is live; the budgets are
+      now read per reconcile rather than captured at construction, so the
+      runtime switch takes effect without a relaunch.
+- [x] **Two-snooze invariant pinned** — a re-armed snooze must reuse the SAME id
+      and instant, which is the only reason AlarmKit's countdown and Dart's
+      re-arm collapse into one alarm instead of two.
+- [x] **Default flipped on** for iOS 26. `object(forKey:)` rather than
+      `bool(forKey:)` distinguishes "never set" from "explicitly false", so a
+      deliberate kill-switch is not overridden by the default next launch.
+- [x] **AlarmKit authorisation now requested in RELEASE builds.** It was only
+      asked from the debug-gated bring-up, so a shipped build would never have
+      prompted — and with the default on, `schedule` fails unauthorised, which
+      would have meant **no alarms at all**. `makeBackend` now also requires
+      authorisation before selecting AlarmKit, so a denied prompt costs the user
+      the weaker alarm rather than silence.
 - [ ] Phase C messaging (§2.3) — `soundBeyondThirtySeconds`,
       `piercesSilentSwitch` and `fullScreenAlarm` are all *true* under AlarmKit
       but are consumed nowhere yet.
+
+**DEBUG · ALARMKIT stays in Settings** — an earlier note here said to strip it
+before merge; that was wrong. It is gated on `kReleaseMode`, not `kDebugMode`,
+so it cannot reach a shipped build, and it is the only way to exercise either
+backend on a device now that the one test phone runs iOS 26. Deleting a tool
+that cannot ship, to guard against a risk it does not carry, would only cost the
+next person the ability to test.
 
 ⚠️ **The notification path now has no hardware to test it on** (§4). It is still
 the majority path and the permanent one for pre-26 devices. Treat any change to

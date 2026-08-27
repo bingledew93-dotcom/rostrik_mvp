@@ -544,9 +544,14 @@ class _DebugAlarmKitSectionState extends State<_DebugAlarmKitSection> {
           child: Text(
             _outcome ??
                 (available
-                    ? 'AlarmKit available${authorized ? ', authorised' : ', NOT authorised'}. '
-                        'Real alarms currently run on '
-                        '${enabled ? 'AlarmKit' : 'notifications'}.'
+                    // `active` is what the backend factory really picks;
+                    // `enabled` is only the preference. They diverge when
+                    // AlarmKit is preferred but unauthorised, and reporting the
+                    // preference would claim alarms run on a backend they do
+                    // not.
+                    ? 'Real alarms run on '
+                        '${_status['active'] == true ? 'AlarmKit' : 'notifications'}'
+                        '${enabled && !authorized ? ' — AlarmKit preferred but NOT authorised' : ''}.'
                     : 'AlarmKit needs iOS 26. This device uses notifications.'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,

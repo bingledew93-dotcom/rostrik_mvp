@@ -4,6 +4,7 @@ import 'package:hive_ce_flutter/hive_flutter.dart';
 
 import '../data/storage/local_storage.dart';
 import '../util/clock.dart';
+import 'alarm_backend_info.dart';
 import 'alarm_sync_service.dart';
 import 'main_isolate_liveness.dart';
 import 'native_alarm_scheduler.dart';
@@ -139,6 +140,13 @@ Future<void> _runSync() async {
   await Hive.openBox('settings');
 
   final scheduler = await NativeAlarmScheduler.init();
+
+  // This isolate builds its own AlarmSyncService, so it must resolve the
+  // backend itself — the foreground refresh does not reach here. Getting it
+  // wrong would have the background refresh re-arm the horizon against the
+  // wrong budget, which on the notification path means silently overshooting
+  // the 64-notification ceiling.
+  await AlarmBackendInfo.refresh();
 
   final service = AlarmSyncService(
     alarms: storage.alarms,

@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'alarm_backend_info.dart';
 import 'alarm_scheduler.dart';
 
 /// One-shot AlarmKit bring-up diagnostics — Phase B scaffolding, not product.
@@ -49,11 +50,11 @@ Future<void> runAlarmKitBringUp({
     // is most devices for now. Nothing further to ask there.
     if (status['available'] != true) return;
 
-    if (status['authorized'] != true) {
-      final granted = await channel.invokeMethod<bool>('alarmKitAuthorize');
-      if (granted != true) return; // denied — the probe would only throw
-    }
-
+    // Authorisation is NOT requested here any more. It moved to
+    // `AlarmBackendInfo.requestAuthorizationIfNeeded`, which runs in release
+    // builds too — asking only from this debug-gated path meant shipped builds
+    // would never prompt at all, and AlarmKit would silently never be used.
+    //
     // The two probes this used to run at every launch are ANSWERED, measured on
     // an iPhone SE 3 / iOS 26.6.1 on 2026-08-27:
     //
@@ -114,11 +115,16 @@ Future<bool> setAlarmKitBackendEnabled(
   if (kReleaseMode || !Platform.isIOS) return false;
   try {
     await scheduler.cancelAll();
-    return await channel.invokeMethod<bool>(
+    final ok = await channel.invokeMethod<bool>(
           'alarmKitSetEnabled',
           {'enabled': enabled},
         ) ??
         false;
+    // The budget differs per backend, and the reconcile that native triggers is
+    // already on its way — refresh before it lands or the first re-arm would
+    // size the horizon against the backend we just left.
+    await AlarmBackendInfo.refresh(channel: channel);
+    return ok;
   } on MissingPluginException {
     return false;
   } on PlatformException {

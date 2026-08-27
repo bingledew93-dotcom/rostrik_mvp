@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'alarms/alarm_backend_info.dart';
 import 'alarms/alarm_sync_service.dart';
 import 'alarms/alarmkit_bringup.dart';
 import 'alarms/main_isolate_liveness.dart';
@@ -156,6 +157,12 @@ void main() async {
   await archiveExpiredAdHocShifts(storage.shifts, now: DateTime.now());
 
   await _requestAlarmPermissions();
+
+  // Which iOS backend is live decides the alarm budget — AlarmKit has no
+  // notification ceiling and needs no repeat chains, so it pre-arms a longer
+  // horizon. Resolved before the first reconcile; the conservative default
+  // (notifications) applies if the channel cannot answer.
+  await AlarmBackendInfo.refresh();
 
   // Alarm-rule-driven scheduling. AlarmSyncService watches the AppAlarm,
   // ShiftCycle, in-horizon Shift, AND AlarmSettings streams, recomputes the
@@ -493,13 +500,19 @@ Future<void> _requestAlarmPermissions() async {
 void requestIosNotificationPermission() {
   if (!Platform.isIOS) return;
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    // The AlarmKit bring-up probe is chained AFTER the notification prompt
-    // rather than fired alongside it, so the two system alerts queue instead of
-    // racing for the same window. It is a no-op in release builds and on any
-    // device below iOS 26 — see `runAlarmKitBringUp`. Still unawaited overall,
-    // which is the property that matters here: nothing blocks the first frame.
+    // AlarmKit authorisation is chained AFTER the notification prompt rather
+    // than fired alongside it, so the two system alerts queue instead of racing
+    // for the same window. It is NOT debug-only: AlarmKit's `schedule` never
+    // prompts by itself, so without asking here the backend would fall back to
+    // notifications forever and every iOS 26 user would silently get the weaker
+    // alarm. The bring-up diagnostics that follow it are debug-only.
+    // Still unawaited overall, which is the property that matters here: nothing
+    // blocks the first frame.
     unawaited(
-      Permission.notification.request().whenComplete(runAlarmKitBringUp),
+      Permission.notification.request().whenComplete(() async {
+        await AlarmBackendInfo.requestAuthorizationIfNeeded();
+        await runAlarmKitBringUp();
+      }),
     );
   });
 }
