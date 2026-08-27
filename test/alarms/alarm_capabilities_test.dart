@@ -15,6 +15,7 @@ void main() {
       expect(c.soundBeyondThirtySeconds, isTrue);
       expect(c.piercesSilentSwitch, isTrue);
       expect(c.fullScreenAlarm, isTrue);
+      expect(c.vibrationControl, isTrue);
     });
 
     test('the iOS notification path claims none of it', () {
@@ -25,6 +26,7 @@ void main() {
       expect(c.soundBeyondThirtySeconds, isFalse);
       expect(c.piercesSilentSwitch, isFalse);
       expect(c.fullScreenAlarm, isFalse);
+      expect(c.vibrationControl, isFalse);
     });
 
     // Widget tests run off-device and must keep asserting on the full-featured

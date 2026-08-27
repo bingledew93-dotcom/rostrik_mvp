@@ -70,6 +70,7 @@ labels like "Requires iOS 26" on something iOS 26 also cannot do:
 | Sound past ~30s | ✅ | ❌ | ✅ |
 | Pierces silent switch / Focus | ✅ | ❌ | ✅ |
 | Real alarm presentation | ✅ own activity | ❌ notification only | ✅ system UI |
+| **Sustained vibration** | ✅ | ❌ one buzz | ❌ never |
 | **Shake to dismiss / hold fail-safe** | ✅ | ❌ | ❌ never |
 | **Custom tone from a file** | ✅ | ❌ | ❌ never |
 | **System ringtone picker** | ✅ | ❌ | ❌ never |
@@ -82,9 +83,9 @@ user can never have. **Available on a newer OS → disable + "Requires iOS 26".*
 
 `AlarmCapabilities` (`lib/alarms/alarm_capabilities.dart`) is now the single
 source of truth; the UI asks it instead of checking `Platform` ad-hoc. Hidden on
-iOS: the Critical-shift toggle, both custom tone sources, the walkthrough's
-shake lesson **and its preview on the intro page**, and the shake mention in
-Settings. `RingtonePreviewPlugin.swift` was removed with the pickers — a preview
+iOS: the Critical-shift toggle, both custom tone sources, the Vibrate toggle,
+the walkthrough's shake lesson **and its preview on the intro page**, and the
+shake mention in Settings. `RingtonePreviewPlugin.swift` was removed with the pickers — a preview
 for a tone that cannot be selected is theatre.
 
 Built Dart-side rather than native-resolved, deviating from the original plan
@@ -145,10 +146,12 @@ would give the *newest* iPhones no alarms while older ones worked.
       `UNNotificationSound(named:)` searches the main bundle.
 - [ ] Trim/downsample the WAVs — 16-bit PCM, several >1 MB for a ~10 s loop.
       Cuts cost on both platforms.
-- [ ] **iOS dismissal ledger** (IOS_SETUP.md §4.4). A fired alarm is never
-      marked acknowledged on iOS. Follow the file-based pattern that made snooze
-      possible, *not* the `rostrik/alarm_routing` channel, which has no iOS
-      handler. Until then, no explicit Dismiss action — it would mark nothing.
+- [x] ~~iOS dismissal ledger~~ — assessed 2026-08-27 and **deliberately not
+      built**. Nothing user-facing depends on `isAcknowledged` enough to justify
+      it: suppression uses per-ring `dismissedAlarmIds`, and its only readers
+      skip a future shift the user has dealt with, which on iOS just means the
+      Dashboard keeps showing a shift that genuinely is still ahead. See
+      IOS_SETUP.md §4.4. Still the reason there is no explicit Dismiss action.
 - [ ] Google ML Kit blocks Apple-Silicon simulators entirely (no arm64 sim
       slice + Xcode 26 dropped Rosetta). Device-only testing for now; revisit if
       a maintained OCR alternative appears.

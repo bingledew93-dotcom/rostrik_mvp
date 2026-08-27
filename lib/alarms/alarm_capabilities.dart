@@ -43,6 +43,7 @@ class AlarmCapabilities {
     required this.soundBeyondThirtySeconds,
     required this.piercesSilentSwitch,
     required this.fullScreenAlarm,
+    required this.vibrationControl,
   });
 
   /// Sustained shake (and its 3-second hold fail-safe) can dismiss a firing
@@ -67,6 +68,14 @@ class AlarmCapabilities {
   /// A full-screen wake surface is drawn over the lock screen.
   final bool fullScreenAlarm;
 
+  /// The app can control alarm vibration, and sustain it for the alarm's
+  /// duration. Android drives a continuous haptic loop from its foreground
+  /// audio service. iOS vibrates ONCE on delivery, governed entirely by the
+  /// user's system Sounds & Haptics settings — no app code is running to loop
+  /// it, and `UNNotificationContent` exposes no vibration control at all, so an
+  /// in-app toggle would change nothing in either direction.
+  final bool vibrationControl;
+
   /// The native Android stack: `AlarmManager` → `AlarmReceiver` → foreground
   /// audio service → full-screen `AlarmActivity`. Everything is available.
   static const android = AlarmCapabilities(
@@ -76,6 +85,7 @@ class AlarmCapabilities {
     soundBeyondThirtySeconds: true,
     piercesSilentSwitch: true,
     fullScreenAlarm: true,
+    vibrationControl: true,
   );
 
   /// iOS via `UNUserNotificationCenter` — today's only iOS path. The honest
@@ -83,9 +93,10 @@ class AlarmCapabilities {
   /// silenced by the ring switch, with no wake surface of our own.
   ///
   /// `soundBeyondThirtySeconds` and `piercesSilentSwitch` flip to true under
-  /// AlarmKit (iOS 26+); `shakeToDismiss` and the tone pickers never do, since
-  /// AlarmKit presents its own system UI and iOS still has no arbitrary-file
-  /// notification sound.
+  /// AlarmKit (iOS 26+); `shakeToDismiss`, the tone pickers and
+  /// `vibrationControl` never do, since AlarmKit presents its own system UI,
+  /// iOS still has no arbitrary-file notification sound, and haptics remain a
+  /// system setting rather than an app one.
   static const iosNotification = AlarmCapabilities(
     shakeToDismiss: false,
     customTonePicker: false,
@@ -93,6 +104,7 @@ class AlarmCapabilities {
     soundBeyondThirtySeconds: false,
     piercesSilentSwitch: false,
     fullScreenAlarm: false,
+    vibrationControl: false,
   );
 
   static AlarmCapabilities? _override;
