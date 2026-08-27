@@ -148,8 +148,11 @@ Explain these rather than attempting them:
 - **No system-ringtone picker.** No public API. Hidden on iOS.
 - **No arbitrary file as a notification sound.** Only `Library/Sounds`, so a
   custom tone degrades to its bundled fallback. Buying a song proves nothing.
-- **~30s sound cap**, and the ring/silent switch silences it. `.critical` would
-  pierce both but needs an Apple-approved entitlement.
+- **~30s sound cap** per alert, and the ring/silent switch silences it.
+  `.critical` would pierce both but needs an Apple-approved entitlement.
+  **Mitigated, not removed:** each alarm queues a REPEAT CHAIN of follow-up
+  notifications so it keeps alerting for ~4 minutes instead of stopping after
+  one tone — see §4.6. A single continuous sound past 30s remains impossible.
 - **No sustained vibration.** iOS buzzes ONCE on delivery, governed by the
   user's system Sounds & Haptics settings; no app code is running to loop it and
   `UNNotificationContent` exposes no vibration control. Android sustains it from
@@ -296,6 +299,41 @@ worth building a ledger for:**
 It remains the reason there is no explicit "Dismiss" action beyond the system
 one — such a button would look like it worked while marking nothing. Revisit
 only if the hero's behaviour in that window turns out to bother real users.
+
+### 4.6 The alarm repeat chain, and the 64-notification budget
+
+An iOS notification's sound stops after ~30s. Android rings until dismissed
+because it owns a foreground audio service for the alarm's duration; iOS runs no
+app code at all when a notification fires. A single alert is not an alarm for a
+heavy sleeper — which is the exact user this app exists for.
+
+Each of the most imminent alarms therefore queues follow-up notifications
+(`AlarmChain` in `NativeAlarmPlugin.swift`), identified `…<id>.r1`…`.rN`. That
+suffix keeps them invisible to the Dart reconciler: `getAliveAlarmIds` parses an
+Int out of the identifier and "7.r3" is not one, so a link is ignored rather
+than mistaken for an orphan and cancelled mid-ring.
+
+**Cancelling is the load-bearing half.** A chain that outlives its dismissal is
+worse than a short alarm, because the user cannot turn it off. Every ending path
+sweeps it — cancel, tap, explicit dismiss, snooze, and the delivered-notification
+sweep (running at all means the app is open, so the user is awake). It resolves
+the owning alarm from ANY identifier, so dismissing the fourth buzz silences the
+rest.
+
+**The budget is the binding constraint.** iOS holds at most **64 pending
+notifications** across alarms, chains, sleep nudges and activity reminders, and
+silently drops the rest — no error, the alarm simply never arrives. The
+arithmetic lives in `lib/alarms/ios_notification_budget.dart`:
+
+    32 alarms + 16 chain alerts + 12 reserved = 60, against a ceiling of 64
+
+Only [kChainedAlarmCount] alarms are chained, and the iOS alarm cap drops to pay
+for them. That pre-arms fewer days ahead on iOS than on Android — a deliberate
+trade, since the reconcile re-arms on every app open and background refresh,
+whereas an alarm that gives up after 28 seconds cannot be recovered from. The
+chained set advances as alarms fire; chain membership counts as a re-schedule
+reason, or the next alarm would keep its old single-alert scheduling and ring
+just once.
 
 ### 4.5 In-App Purchase needs the paid programme
 

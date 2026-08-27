@@ -6,6 +6,7 @@ import '../data/models/ringtone_source.dart';
 import 'alarm_payload.dart';
 import 'alarm_scheduler.dart';
 import 'alarm_sound.dart';
+import 'ios_notification_budget.dart';
 
 /// Production [AlarmScheduler] backed by the native `AlarmManager` layer —
 /// the replacement for `LocalNotificationsAlarmScheduler` (and thus for
@@ -94,6 +95,12 @@ class NativeAlarmScheduler implements AlarmScheduler {
   // for a custom tone: iOS cannot play an arbitrary vault/content URI as a
   // notification sound, so the bundled tone is the honest fallback there.
   static const String _argIosSound = 'iosSound';
+  // iOS ONLY. How many follow-up alerts keep the alarm ringing past the ~30s
+  // notification sound cap, and how far apart. Android ignores both — it rings
+  // until dismissed from its foreground audio service. See
+  // `ios_notification_budget.dart` for the ceiling that limits these.
+  static const String _argRepeatChain = 'repeatChain';
+  static const String _argRepeatIntervalSeconds = 'repeatIntervalSeconds';
 
   /// Hive `settings` key for the user's snooze interval (minutes). Same key the
   /// SettingsScreen writes and the old snooze handler read; default 1.
@@ -128,6 +135,7 @@ class NativeAlarmScheduler implements AlarmScheduler {
     required String body,
     required String soundKey,
     String? payload,
+    int repeatChain = 0,
   }) async {
     _hydrate();
 
@@ -185,6 +193,8 @@ class NativeAlarmScheduler implements AlarmScheduler {
         // Critical-shift alarms require a shake to dismiss; normal alarms slide.
         _argRequiresShake: decoded?.isCritical ?? false,
         _argIosSound: resolveAlarmSound(soundKey).iosSoundName,
+        _argRepeatChain: repeatChain,
+        _argRepeatIntervalSeconds: kAlarmRepeatInterval.inSeconds,
       });
     } on PlatformException catch (e) {
       // Native refused the schedule — 'EXACT_ALARM_DENIED' when the user

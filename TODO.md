@@ -14,6 +14,9 @@ formality — today proved how much can look fine and do nothing.
 - [x] **One-time alarms retire after firing** — backgrounded, force-quit, and
       cleared from Notification Center. Verified 2026-08-27; see §1.1.
 - [x] **Alarm tones ring for ~28s** rather than the tone's raw 4.7s length.
+- [x] **Alarms keep alerting for ~4 minutes** via the repeat chain, and stop the
+      instant they are dismissed — verified 2026-08-27 backgrounded and
+      force-quit, including dismissal mid-chain.
 - [ ] **Snooze from a force-quit app.** Snooze writes `pending_snoozes` and
       re-arms; the drain only runs on next launch. This is the path where the
       ledger design earns its keep, and the one most likely to be subtly wrong.
@@ -67,7 +70,8 @@ labels like "Requires iOS 26" on something iOS 26 also cannot do:
 | Reminders / wind-down nudges | ✅ | ✅ | ✅ |
 | Sleep sounds | ✅ | ✅ | ✅ |
 | Snooze | ✅ full-screen | ✅ notification action | ✅ system UI |
-| Sound past ~30s | ✅ | ❌ | ✅ |
+| Sound past ~30s (single tone) | ✅ | ❌ | ✅ |
+| Keeps alerting until dismissed | ✅ | ✅ repeat chain (~4 min) | ✅ |
 | Pierces silent switch / Focus | ✅ | ❌ | ✅ |
 | Real alarm presentation | ✅ own activity | ❌ notification only | ✅ system UI |
 | **Sustained vibration** | ✅ | ❌ one buzz | ❌ never |

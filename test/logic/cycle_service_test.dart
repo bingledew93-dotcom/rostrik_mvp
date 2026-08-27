@@ -153,6 +153,7 @@ class _ThrowingScheduler implements AlarmScheduler {
     required String body,
     required String soundKey,
     String? payload,
+    int repeatChain = 0,
   }) async {}
 
   @override
