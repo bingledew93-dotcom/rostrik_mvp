@@ -230,6 +230,9 @@ final class ForegroundAlarmPresenter: NSObject, UNUserNotificationCenterDelegate
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
     guard response.actionIdentifier != Self.snoozeActionIdentifier else {
+      // Snooze is a response too: stop the current ring before re-arming, or
+      // the queued links keep firing straight through the snooze window.
+      endChain(for: response.notification)
       snooze(response.notification, completionHandler: completionHandler)
       return
     }
@@ -239,8 +242,22 @@ final class ForegroundAlarmPresenter: NSObject, UNUserNotificationCenterDelegate
     // hand the response over), unlike `getDeliveredNotifications`, which sees
     // only notifications still sitting in Notification Center and therefore
     // misses the most common case of all — the user dismissing one.
+    //
+    // Tearing down the repeat chain FIRST is the whole safety story for it: the
+    // user has just told us to stop, and every remaining link is already queued
+    // inside iOS. This fires for a response to any link too, not only the
+    // primary, so dismissing the fourth buzz silences the rest.
+    endChain(for: response.notification)
     recordSpent(response.notification)
     completionHandler()
+  }
+
+  /// Cancels every remaining alert for the alarm this notification belongs to.
+  /// Resolves the owning id from either the primary or a link, so a response to
+  /// any buzz in the chain silences all of them.
+  private func endChain(for notification: UNNotification) {
+    guard let id = AlarmChain.baseId(from: notification.request.identifier) else { return }
+    AlarmChain.cancelAll(for: id, in: UNUserNotificationCenter.current())
   }
 
   /// Appends a fired alarm's owning rule to the deletes ledger, then tells Dart
@@ -360,6 +377,12 @@ struct AlarmRequest {
   /// Owning AppAlarm UUID.
   let appAlarmId: String
   let snoozeMinutes: Int
+  /// How many follow-up alerts to queue after this alarm so it keeps ringing
+  /// past the ~30s sound cap. 0 = a single alert. See `AlarmChain`.
+  let repeatChain: Int
+  /// Spacing between those alerts. Sent by Dart so the cadence lives with the
+  /// budget arithmetic that pays for it (`ios_notification_budget.dart`).
+  let repeatIntervalSeconds: Double
   /// Critical shifts require a sustained shake to dismiss on Android. There is
   /// no equivalent gesture gate on either iOS path; carried so the eventual
   /// AlarmKit presentation can at least reflect the distinction.
@@ -379,10 +402,13 @@ struct AlarmRequest {
     self.shiftId = args["alarm_id"] as? String ?? ""
     self.appAlarmId = args["appAlarmId"] as? String ?? ""
     self.snoozeMinutes = args["snoozeMinutes"] as? Int ?? 1
+    self.repeatChain = args["repeatChain"] as? Int ?? 0
+    self.repeatIntervalSeconds =
+      (args["repeatIntervalSeconds"] as? NSNumber)?.doubleValue ?? 30
     self.requiresShake = args["requiresShake"] as? Bool ?? false
   }
 
-  var requestIdentifier: String { "\(NativeAlarmPlugin.identifierPrefix)\(id)" }
+  var requestIdentifier: String { AlarmChain.primaryIdentifier(for: id) }
 }
 
 /// What both backends must provide. Deliberately narrow: the Dart reconciler
@@ -401,6 +427,64 @@ extension AlarmBackend {
   /// Backends with no notion of a "delivered" alarm opt out. AlarmKit tracks
   /// its own alarm lifecycle and would retire a one-shot itself.
   func recordSpentAlarms(completion: @escaping (Int) -> Void) { completion(0) }
+}
+
+// MARK: - Repeat chain
+
+/// Identifier scheme for an alarm's repeat chain — the follow-up alerts that
+/// keep it ringing past iOS's ~30s notification sound cap.
+///
+/// Android rings until dismissed because it owns a foreground audio service for
+/// the alarm's duration. iOS runs no app code when a notification fires, so the
+/// only way to keep alerting is to queue the follow-ups IN ADVANCE and cancel
+/// whatever is left the moment the user responds.
+///
+/// **Cancelling is the load-bearing half.** A chain that outlives its dismissal
+/// is worse than a short alarm, because the user cannot turn it off. Every
+/// path that ends an alarm — cancel, dismiss, tap, snooze — must sweep it.
+///
+/// Members are suffixed `.r1`…`.rN` rather than given ids of their own, so the
+/// Dart reconciler never sees them: `aliveIds` parses an Int out of the
+/// identifier, and "7.r3" is not one, so a chain member is ignored rather than
+/// mistaken for an orphaned alarm and cancelled mid-ring.
+enum AlarmChain {
+  /// Generous upper bound for cancellation sweeps. Independent of how many
+  /// links Dart currently asks for, so shortening the chain later cannot strand
+  /// members scheduled by an older build. Removing an identifier that was never
+  /// scheduled is a no-op.
+  static let maxLinks = 16
+
+  static func primaryIdentifier(for id: Int) -> String {
+    "\(NativeAlarmPlugin.identifierPrefix)\(id)"
+  }
+
+  static func linkIdentifier(for id: Int, link: Int) -> String {
+    "\(primaryIdentifier(for: id)).r\(link)"
+  }
+
+  /// Every identifier an alarm could own — the alarm itself plus every possible
+  /// link. Used to tear the whole thing down in one call.
+  static func allIdentifiers(for id: Int) -> [String] {
+    [primaryIdentifier(for: id)]
+      + (1...maxLinks).map { linkIdentifier(for: id, link: $0) }
+  }
+
+  /// The owning alarm id for any identifier of ours, primary or link, so a
+  /// response to a chain member tears down the same chain the primary would.
+  static func baseId(from identifier: String) -> Int? {
+    guard identifier.hasPrefix(NativeAlarmPlugin.identifierPrefix) else { return nil }
+    let tail = identifier.dropFirst(NativeAlarmPlugin.identifierPrefix.count)
+    let base = tail.split(separator: ".").first.map(String.init) ?? String(tail)
+    return Int(base)
+  }
+
+  /// Removes an alarm and every link, pending or already delivered. Safe to
+  /// call for an alarm that never had a chain.
+  static func cancelAll(for id: Int, in center: UNUserNotificationCenter) {
+    let ids = allIdentifiers(for: id)
+    center.removePendingNotificationRequests(withIdentifiers: ids)
+    center.removeDeliveredNotifications(withIdentifiers: ids)
+  }
 }
 
 // MARK: - Ledger files
@@ -494,6 +578,42 @@ final class NotificationBackend: AlarmBackend {
 
     // `add` replaces any request with the same identifier, which is exactly the
     // replace-by-id semantics `AlarmScheduler.scheduleAt` specifies.
+    // Queue the follow-up alerts BEFORE the primary's completion, so a chained
+    // alarm is armed as one unit. Each reuses the primary's content, so every
+    // alert in the chain looks and sounds identical — the user should not be
+    // able to tell the fourth buzz from the first.
+    if request.repeatChain > 0 {
+      // Clear any longer chain a previous schedule left behind. `add` replaces
+      // by identifier, so the primary and the links we are about to write take
+      // care of themselves — the stale TAIL beyond the new length would not.
+      center.removePendingNotificationRequests(
+        withIdentifiers: (1...AlarmChain.maxLinks).map {
+          AlarmChain.linkIdentifier(for: request.id, link: $0)
+        })
+      for link in 1...request.repeatChain {
+        let at = request.fireAt.addingTimeInterval(
+          Double(link) * request.repeatIntervalSeconds)
+        let linkComponents = Calendar.current.dateComponents(
+          [.year, .month, .day, .hour, .minute, .second], from: at)
+        center.add(
+          UNNotificationRequest(
+            identifier: AlarmChain.linkIdentifier(for: request.id, link: link),
+            content: content,
+            trigger: UNCalendarNotificationTrigger(
+              dateMatching: linkComponents, repeats: false))
+        ) { error in
+          if let error {
+            NSLog(
+              "[Rostrik] chain link \(link) FAILED id=\(request.id): "
+                + error.localizedDescription)
+          }
+        }
+      }
+      NSLog(
+        "[Rostrik] armed \(request.repeatChain) repeat(s) for id=\(request.id) "
+          + "(~\(Int(Double(request.repeatChain) * request.repeatIntervalSeconds))s of ringing)")
+    }
+
     center.add(
       UNNotificationRequest(
         identifier: request.requestIdentifier, content: content, trigger: trigger)
@@ -522,9 +642,9 @@ final class NotificationBackend: AlarmBackend {
   }
 
   func cancel(id: Int) {
-    let identifier = "\(NativeAlarmPlugin.identifierPrefix)\(id)"
-    center.removePendingNotificationRequests(withIdentifiers: [identifier])
-    center.removeDeliveredNotifications(withIdentifiers: [identifier])
+    // The whole chain, not just the primary — a surviving link would ring for
+    // an alarm the app has already cancelled, with nothing left to stop it.
+    AlarmChain.cancelAll(for: id, in: center)
   }
 
   /// Retires spent alarms by recording every DELIVERED alarm notification's
@@ -572,6 +692,13 @@ final class NotificationBackend: AlarmBackend {
       if !ours.isEmpty {
         self.center.removeDeliveredNotifications(
           withIdentifiers: ours.map { $0.request.identifier })
+        // Silence anything still queued for those alarms. Reaching this code
+        // means the app is running and the user has seen the alarm, so the
+        // remaining buzzes would be noise — and unlike a response, opening the
+        // app never cancels them on its own.
+        for id in Set(ours.compactMap { AlarmChain.baseId(from: $0.request.identifier) }) {
+          AlarmChain.cancelAll(for: id, in: self.center)
+        }
       }
       if recorded > 0 {
         NSLog("[Rostrik] recorded \(recorded) spent alarm(s) for cleanup")

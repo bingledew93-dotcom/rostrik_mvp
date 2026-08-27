@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:hive_ce_flutter/hive_flutter.dart';
 
@@ -16,6 +17,7 @@ import '../util/clock.dart';
 import 'alarm_payload.dart';
 import 'alarm_projection.dart';
 import 'alarm_scheduler.dart';
+import 'ios_notification_budget.dart';
 import 'notification_id_map.dart';
 import 'one_off_snooze_store.dart';
 
@@ -69,6 +71,26 @@ DateTime? _readHorizonCapFromSettings() {
   }
 }
 
+/// Alarm cap for the running platform. iOS shares a 64-notification ceiling
+/// across alarms, their repeat chains and every reminder, so it schedules
+/// fewer alarms further out than Android — see `ios_notification_budget.dart`.
+int _platformMaxScheduled() {
+  try {
+    return Platform.isIOS ? kIosMaxScheduledAlarms : 50;
+  } catch (_) {
+    return 50;
+  }
+}
+
+/// Repeat chains exist only where a single alert cannot ring long enough.
+int _platformChainedAlarmCount() {
+  try {
+    return Platform.isIOS ? kChainedAlarmCount : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
 /// Drives OS alarm scheduling from [AppAlarm] rules. Alarm-centric: it
 /// reconciles the desired OS pending set from the enabled alarms + the shift
 /// roster + the global [AlarmSettings].
@@ -111,7 +133,12 @@ class AlarmSyncService {
     required NotificationIdMap idMap,
     required Clock clock,
     Duration horizon = const Duration(days: 14),
-    int maxScheduled = 50,
+    // Null resolves per platform. iOS keeps at most 64 pending notifications
+    // across ALL surfaces, and repeat chains spend that same allowance, so its
+    // alarm cap is lower — see `ios_notification_budget.dart` for the
+    // arithmetic. Tests pass explicit values.
+    int? maxScheduled,
+    int? chainedAlarmCount,
     Duration debounceWindow = const Duration(milliseconds: 250),
     bool Function()? isPaused,
   })  : _alarms = alarms,
@@ -122,7 +149,8 @@ class AlarmSyncService {
         _idMap = idMap,
         _clock = clock,
         _horizon = horizon,
-        _maxScheduled = maxScheduled,
+        _maxScheduled = maxScheduled ?? _platformMaxScheduled(),
+        _chainedAlarmCount = chainedAlarmCount ?? _platformChainedAlarmCount(),
         _debounceWindow = debounceWindow,
         // Default reads the `settings` box (covers foreground AND the headless
         // background isolate); tests inject a closure to exercise the branch.
@@ -137,6 +165,21 @@ class AlarmSyncService {
   final Clock _clock;
   final Duration _horizon;
   final int _maxScheduled;
+
+  /// How many of the most imminent alarms get a repeat chain. Zero off iOS —
+  /// Android rings until dismissed from its foreground audio service and needs
+  /// no help.
+  final int _chainedAlarmCount;
+
+  /// The chain length last requested per id, so a change in chain MEMBERSHIP
+  /// re-schedules even when the fire time has not moved. Without this the
+  /// chain would never advance: when the front alarm fires and drops out, the
+  /// next one's `fireAt` is unchanged and the OS still holds it, so the
+  /// unchanged-state gate below would skip it and it would ring just once.
+  ///
+  /// In-memory only, deliberately. A cold start re-arms the chains it believes
+  /// in rather than trusting a persisted claim about what iOS is holding.
+  final Map<int, int> _lastChainLength = <int, int>{};
   final Duration _debounceWindow;
 
   /// Holiday-Mode gate, read fresh on every sync. When it returns true the
@@ -363,16 +406,38 @@ class AlarmSyncService {
     // The combined gate means a cold start where persisted state and
     // OS pending state agree issues zero platform calls — fixing the
     // pre-refactor cold-start burst.
+    // Which alarms carry a repeat chain: the most imminent few. An iOS
+    // notification's sound stops after ~30s, so without follow-up alerts a
+    // heavy sleeper is simply not woken. They are expensive against the 64
+    // ceiling, so only the alarms about to ring get them; the set moves forward
+    // as they fire (dismissing one triggers a resync, which re-chains the next).
+    final chained = <int>{
+      if (_chainedAlarmCount > 0)
+        ...(desired.entries.toList()
+              ..sort((a, b) => a.value.fireAt.compareTo(b.value.fireAt)))
+            .take(_chainedAlarmCount)
+            .map((e) => e.key),
+    };
+
     for (final entry in desired.entries) {
       final id = entry.key;
       final desiredFireAt = entry.value.fireAt;
       final lastKnown = _scheduledFireAt[id];
       final osHasIt = pending.contains(id);
-      final needsSchedule =
-          lastKnown == null || !osHasIt || lastKnown != desiredFireAt;
+      final chainLength = chained.contains(id) ? kAlarmRepeatChainLength : 0;
+      // Condition 4: chain membership changed. See [_lastChainLength] — without
+      // this the chain never advances past the first alarm. Absent reads as 0,
+      // NOT as "unknown": treating it as a change would re-schedule every
+      // unchained alarm on the first reconcile after launch, which is exactly
+      // the cold-start burst conditions 1-3 exist to avoid.
+      final needsSchedule = lastKnown == null ||
+          !osHasIt ||
+          lastKnown != desiredFireAt ||
+          (_lastChainLength[id] ?? 0) != chainLength;
       if (!needsSchedule) continue;
       await _scheduler.scheduleAt(
         id: id,
+        repeatChain: chainLength,
         fireAt: desiredFireAt,
         title: _titleFor(entry.value.alarm),
         body: _bodyFor(entry.value.alarm),
@@ -400,7 +465,12 @@ class AlarmSyncService {
         ),
       );
       _scheduledFireAt[id] = desiredFireAt;
+      _lastChainLength[id] = chainLength;
     }
+
+    // Drop chain bookkeeping for ids no longer desired, so a returning id is
+    // treated as unchained rather than inheriting a stale claim.
+    _lastChainLength.removeWhere((id, _) => !desired.containsKey(id));
 
     await _persistScheduledFireAt();
   }

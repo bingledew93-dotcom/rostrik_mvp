@@ -21,6 +21,7 @@ class FakeScheduledAlarm {
     required this.body,
     required this.soundKey,
     this.payload,
+    this.repeatChain = 0,
   });
 
   final int id;
@@ -30,10 +31,15 @@ class FakeScheduledAlarm {
   final String soundKey;
   final String? payload;
 
+  /// Follow-up alerts requested for this alarm — see
+  /// `AlarmScheduler.scheduleAt`. Recorded so tests can assert WHICH alarms
+  /// carry a repeat chain, not just that one was scheduled.
+  final int repeatChain;
+
   @override
   String toString() =>
       'FakeScheduledAlarm(id: $id, fireAt: $fireAt, title: "$title", '
-      'sound: "$soundKey")';
+      'sound: "$soundKey", repeatChain: $repeatChain)';
 }
 
 class FakeAlarmScheduler implements AlarmScheduler {
@@ -52,6 +58,7 @@ class FakeAlarmScheduler implements AlarmScheduler {
     required String body,
     required String soundKey,
     String? payload,
+    int repeatChain = 0,
   }) async {
     _scheduled[id] = FakeScheduledAlarm(
       id: id,
@@ -60,6 +67,7 @@ class FakeAlarmScheduler implements AlarmScheduler {
       body: body,
       soundKey: soundKey,
       payload: payload,
+      repeatChain: repeatChain,
     );
     callLog.add('schedule:$id');
   }
