@@ -53,10 +53,12 @@ public final class NativeAlarmPlugin: NSObject {
   /// same notification centre.
   fileprivate static let identifierPrefix = "rostrik.alarm."
 
-  private let backend: AlarmBackend
+  /// Resolved per call rather than captured at registration, so flipping
+  /// [alarmKitEnabled] takes effect without re-registering the channel or
+  /// relaunching. Both backends are cheap, stateless value-holders.
+  private var backend: AlarmBackend { Self.makeBackend() }
 
-  private init(backend: AlarmBackend) {
-    self.backend = backend
+  private override init() {
     super.init()
   }
 
@@ -92,7 +94,7 @@ public final class NativeAlarmPlugin: NSObject {
     with messenger: FlutterBinaryMessenger,
     isUiEngine: Bool = false
   ) -> NativeAlarmPlugin {
-    let plugin = NativeAlarmPlugin(backend: makeBackend())
+    let plugin = NativeAlarmPlugin()
     let channel = FlutterMethodChannel(name: channelName, binaryMessenger: messenger)
     channel.setMethodCallHandler { call, result in
       plugin.handle(call, result: result)
@@ -105,16 +107,27 @@ public final class NativeAlarmPlugin: NSObject {
     return plugin
   }
 
-  /// Flip to `true` ONLY once `AlarmKitBackend` is actually implemented and has
-  /// rung on a device.
+  /// Which backend serves real alarms. **Defaults to false**, i.e.
+  /// notifications, and nothing in a release build ever sets it.
   ///
-  /// This gate is the whole safety story for shipping an unfinished backend.
-  /// Selecting AlarmKit purely on `#available(iOS 26.0, *)` would hand every
-  /// modern iPhone a backend whose `schedule` currently fails — i.e. the newest
-  /// devices would get NO alarms while older ones worked. Defaulting to
-  /// notifications means the worst case is the documented weaker alarm, never
-  /// a silent one.
-  private static let alarmKitEnabled = false
+  /// This gate is the whole safety story for an unfinished backend. Selecting
+  /// AlarmKit purely on `#available(iOS 26.0, *)` would hand every modern
+  /// iPhone a backend that has not been proven end to end — so the newest
+  /// devices would carry the most risk. Defaulting to notifications means the
+  /// worst case is the documented weaker alarm, never a silent one.
+  ///
+  /// Backed by `UserDefaults` rather than a compile-time constant so it can be
+  /// flipped on a running device. That is not convenience: the parts of the
+  /// AlarmKit path most likely to be wrong are the *Dart* ones — the ledger
+  /// drains, snooze suppression, the reconciler not cancelling a snoozed alarm
+  /// — and none of them are exercised by a synthetic test alarm with no rule
+  /// behind it. Proving them needs real alarms on the real backend, which needs
+  /// a switch. It doubles as a kill-switch afterwards.
+  static var alarmKitEnabled: Bool {
+    UserDefaults.standard.bool(forKey: alarmKitEnabledKey)
+  }
+
+  fileprivate static let alarmKitEnabledKey = "rostrik.alarmKitEnabled"
 
   private static func makeBackend() -> AlarmBackend {
     #if canImport(AlarmKit)
@@ -213,6 +226,25 @@ public final class NativeAlarmPlugin: NSObject {
         }
       #endif
       result(-1)
+
+    /// Switches which backend serves real alarms, on a running device.
+    ///
+    /// Dart MUST cancel everything on the OLD backend before calling this —
+    /// alarms armed on one backend are invisible to the other, so a flip
+    /// without a sweep leaves them armed with nothing able to cancel them, and
+    /// the user gets alarms from a backend the app no longer believes it is
+    /// using.
+    ///
+    /// The nudge afterwards drives Dart's existing drain-and-reconcile, which
+    /// re-arms every alarm on the new backend. Reusing that path rather than
+    /// inventing a resync entry point means the flip converges exactly the way
+    /// every other out-of-band change does.
+    case "alarmKitSetEnabled":
+      let enabled = ((call.arguments as? [String: Any])?["enabled"] as? Bool) ?? false
+      UserDefaults.standard.set(enabled, forKey: Self.alarmKitEnabledKey)
+      NSLog("[Rostrik] alarm backend → \(enabled ? "AlarmKit" : "notifications")")
+      Self.notifyDartSpentAlarmRecorded()
+      result(true)
 
     case "alarmKitProbeReplace":
       #if canImport(AlarmKit)

@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'alarm_scheduler.dart';
+
 /// One-shot AlarmKit bring-up diagnostics — Phase B scaffolding, not product.
 ///
 /// ## Why this runs itself instead of sitting behind a button
@@ -52,23 +54,75 @@ Future<void> runAlarmKitBringUp({
       if (granted != true) return; // denied — the probe would only throw
     }
 
-    // 2026-08-27, iOS 26.6.1: a bound of 80 armed every alarm without AlarmKit
-    // ever refusing, so the ceiling is only known to be ≥80 — already enough to
-    // settle the design question (it comfortably holds the 14-day horizon).
-    // Raised to find the actual number, which decides how far the iOS alarm cap
-    // can rise once the repeat chain is retired on this path.
-    await channel.invokeMethod<int>('alarmKitProbeLimit', {'bound': 400});
-
-    // Whether AlarmKit replaces an alarm scheduled over an id it already holds.
-    // `AlarmScheduler.scheduleAt` is specified as replace-by-id, and device logs
-    // suggest AlarmKit refuses instead — which would break every re-arm of an
-    // existing alarm. Confirmed directly rather than inferred.
-    await channel.invokeMethod<String>('alarmKitProbeReplace');
+    // The two probes this used to run at every launch are ANSWERED, measured on
+    // an iPhone SE 3 / iOS 26.6.1 on 2026-08-27:
+    //
+    //   * `alarmKitProbeLimit` — 400 armed, none refused, all 400 confirmed live
+    //     before cleanup. The cap is ≥400, so `ios_notification_budget.dart`'s
+    //     arithmetic does not constrain this path at all.
+    //   * `alarmKitProbeReplace` — AlarmKit REFUSES to schedule over an id it
+    //     already holds; cancel-then-schedule works. `AlarmKitBackend.schedule`
+    //     cancels pre-emptively because of this.
+    //
+    // They are left callable on the channel but no longer run automatically:
+    // arming 400 alarms on every launch is pure noise now, and noise is exactly
+    // where a real failure would hide during an end-to-end test.
   } on MissingPluginException {
     // The channel is not registered on this engine — the background isolate,
     // for instance. Diagnostics are never worth failing a launch over.
   } on PlatformException {
     // Same reasoning: a refused probe is a result, not a crash.
+  }
+}
+
+/// Reports whether this device can run AlarmKit, and whether it currently is.
+///
+/// Keys: `compiled`, `available` (iOS 26+), `authorized`, `enabled`.
+Future<Map<String, dynamic>> readAlarmKitStatus({
+  MethodChannel channel = const MethodChannel('rostrik/native_alarms'),
+}) async {
+  if (!Platform.isIOS) return const {};
+  try {
+    return await channel.invokeMapMethod<String, dynamic>('alarmKitStatus') ??
+        const {};
+  } on MissingPluginException {
+    return const {};
+  } on PlatformException {
+    return const {};
+  }
+}
+
+/// Switches which backend serves real alarms, then re-arms everything on it.
+///
+/// ## Why the cancel first is not optional
+///
+/// Alarms armed on one backend are invisible to the other: AlarmKit keys by
+/// UUID and `UNUserNotificationCenter` by identifier string, and neither can
+/// see or cancel the other's work. Flipping without sweeping first would strand
+/// every armed alarm — still live, still able to ring, with nothing left that
+/// can cancel it, for an app that no longer believes it uses that backend.
+/// [AlarmScheduler.cancelAll] runs against the OLD backend and clears the
+/// ledger, so the reconcile that follows re-arms from scratch on the new one.
+///
+/// Native answers by nudging Dart's existing drain-and-reconcile, so the caller
+/// does not need the sync service — the alarms come back on their own.
+Future<bool> setAlarmKitBackendEnabled(
+  bool enabled, {
+  required AlarmScheduler scheduler,
+  MethodChannel channel = const MethodChannel('rostrik/native_alarms'),
+}) async {
+  if (kReleaseMode || !Platform.isIOS) return false;
+  try {
+    await scheduler.cancelAll();
+    return await channel.invokeMethod<bool>(
+          'alarmKitSetEnabled',
+          {'enabled': enabled},
+        ) ??
+        false;
+  } on MissingPluginException {
+    return false;
+  } on PlatformException {
+    return false;
   }
 }
 

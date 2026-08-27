@@ -470,7 +470,20 @@ class _DebugAlarmKitSection extends StatefulWidget {
 class _DebugAlarmKitSectionState extends State<_DebugAlarmKitSection> {
   static const _leadSeconds = 60;
 
+  Map<String, dynamic> _status = const {};
   String? _outcome;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatus();
+  }
+
+  Future<void> _refreshStatus() async {
+    final status = await readAlarmKitStatus();
+    if (mounted) setState(() => _status = status);
+  }
 
   Future<void> _fire() async {
     final armed = await fireAlarmKitTestAlarm(seconds: _leadSeconds);
@@ -483,11 +496,35 @@ class _DebugAlarmKitSectionState extends State<_DebugAlarmKitSection> {
     });
   }
 
+  /// Moves REAL alarms between backends. The scheduler comes from the tree
+  /// because the flip has to cancel on the outgoing backend first — see
+  /// [setAlarmKitBackendEnabled].
+  Future<void> _setBackend(bool enabled) async {
+    setState(() => _busy = true);
+    await setAlarmKitBackendEnabled(
+      enabled,
+      scheduler: context.read<AlarmScheduler>(),
+    );
+    await _refreshStatus();
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _outcome = enabled
+            ? 'Real alarms now run on AlarmKit. Re-armed from scratch.'
+            : 'Real alarms back on notifications.';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (kReleaseMode || !Platform.isIOS) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+    final available = _status['available'] == true;
+    final enabled = _status['enabled'] == true;
+    final authorized = _status['authorized'] == true;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -506,19 +543,34 @@ class _DebugAlarmKitSectionState extends State<_DebugAlarmKitSection> {
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
           child: Text(
             _outcome ??
-                'Fires one AlarmKit alarm in $_leadSeconds seconds. Does nothing '
-                    'to your real alarms — those still run on notifications.',
+                (available
+                    ? 'AlarmKit available${authorized ? ', authorised' : ', NOT authorised'}. '
+                        'Real alarms currently run on '
+                        '${enabled ? 'AlarmKit' : 'notifications'}.'
+                    : 'AlarmKit needs iOS 26. This device uses notifications.'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
+        if (available)
+          SwitchListTile(
+            key: const ValueKey('debug-alarmkit-backend'),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+            title: const Text('Use AlarmKit for real alarms'),
+            subtitle: const Text(
+              'Cancels everything on the current backend, then re-arms on the '
+              'other one.',
+            ),
+            value: enabled,
+            onChanged: _busy ? null : _setBackend,
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: OutlinedButton(
             key: const ValueKey('debug-alarmkit-fire'),
-            onPressed: _fire,
-            child: const Text('Fire AlarmKit alarm'),
+            onPressed: _busy ? null : _fire,
+            child: const Text('Fire test alarm (bypasses your rules)'),
           ),
         ),
         const Divider(height: 32),
