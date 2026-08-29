@@ -28,13 +28,28 @@ import 'one_off_snooze_store.dart';
 /// treats this as "render a generic 'Alarm' title; do not hit Hive".
 const String noShiftPayloadSentinel = 'NONE';
 
-/// Hive key under which the persisted `_scheduledFireAt` map lives in
-/// the (always-open) `settings` box. Stored as `Map<int, int>` —
-/// notification id → fireAt epoch millis. Hydrated on `start()` BEFORE
-/// the initial sync so a cold launch does not unconditionally re-issue
-/// `scheduleAt` for every desired id (previously a measurable
-/// platform-channel burst on budget Android).
-const String _scheduledFireAtSettingsKey = 'alarm_sync.scheduled_fire_at';
+/// Hive key under which the persisted `_scheduledSignature` map lives in the
+/// (always-open) `settings` box. Stored as `Map<int, String>` — notification id
+/// → the signature of what was last handed to the OS. Hydrated on `start()`
+/// BEFORE the initial sync so a cold launch does not unconditionally re-issue
+/// `scheduleAt` for every desired id (previously a measurable platform-channel
+/// burst on budget Android).
+///
+/// ## Why a signature and not the fire time
+///
+/// This used to store fire times alone, and the reconciler skipped any alarm
+/// whose time had not moved. Every OTHER property was therefore inert once
+/// armed: **changing an alarm's tone did nothing** — it kept ringing with the
+/// old sound until the rule was deleted and recreated — and so did editing the
+/// label, toggling Critical shift, picking a custom ringtone, or switching
+/// vibration off. Reported from the field on 2026-08-30 (Samsung S25 FE): "I
+/// went to change the alarm, but the sound is still playing the previous one."
+///
+/// The key is deliberately NEW rather than a migration of the old one. A
+/// previous install's fire-time map is simply ignored, so the first reconcile
+/// after upgrading re-arms every alarm once — which is the point: it repairs
+/// alarms currently armed with a sound the user already tried to change.
+const String _scheduledSignatureSettingsKey = 'alarm_sync.scheduled_signature';
 
 /// Holiday-Mode flag key in the (always-open) `settings` box. MUST match
 /// `AppPreferences.isSchedulePausedKey` — both isolates read the same box, so a
@@ -44,7 +59,7 @@ const String _isSchedulePausedSettingsKey = 'isSchedulePaused';
 /// Default pause source: alarms are suppressed when Holiday Mode is on OR the
 /// app is LOCKED (14-day trial lapsed without purchase — feature #4). Both mean
 /// "schedule nothing", so they're OR-ed into the one gate the projection reads.
-/// Best-effort + guarded exactly like [_hydrateScheduledFireAt] so the test
+/// Best-effort + guarded exactly like [_hydrateScheduledSignature] so the test
 /// harness (which never opens the box) simply reads "not paused / not locked".
 bool _readSchedulePausedFromSettings() {
   try {
@@ -150,20 +165,20 @@ class AlarmSyncService {
     int? chainedAlarmCount,
     Duration debounceWindow = const Duration(milliseconds: 250),
     bool Function()? isPaused,
-  })  : _alarms = alarms,
-        _shifts = shifts,
-        _cycles = cycles,
-        _alarmSettings = alarmSettings,
-        _scheduler = scheduler,
-        _idMap = idMap,
-        _clock = clock,
-        _horizon = horizon,
-        _maxScheduledOverride = maxScheduled,
-        _chainedAlarmCountOverride = chainedAlarmCount,
-        _debounceWindow = debounceWindow,
-        // Default reads the `settings` box (covers foreground AND the headless
-        // background isolate); tests inject a closure to exercise the branch.
-        _isPaused = isPaused ?? _readSchedulePausedFromSettings;
+  }) : _alarms = alarms,
+       _shifts = shifts,
+       _cycles = cycles,
+       _alarmSettings = alarmSettings,
+       _scheduler = scheduler,
+       _idMap = idMap,
+       _clock = clock,
+       _horizon = horizon,
+       _maxScheduledOverride = maxScheduled,
+       _chainedAlarmCountOverride = chainedAlarmCount,
+       _debounceWindow = debounceWindow,
+       // Default reads the `settings` box (covers foreground AND the headless
+       // background isolate); tests inject a closure to exercise the branch.
+       _isPaused = isPaused ?? _readSchedulePausedFromSettings;
 
   final AppAlarmRepository _alarms;
   final ShiftRepository _shifts;
@@ -196,7 +211,6 @@ class AlarmSyncService {
   ///
   /// In-memory only, deliberately. A cold start re-arms the chains it believes
   /// in rather than trusting a persisted claim about what iOS is holding.
-  final Map<int, int> _lastChainLength = <int, int>{};
   final Duration _debounceWindow;
 
   /// Holiday-Mode gate, read fresh on every sync. When it returns true the
@@ -211,31 +225,69 @@ class AlarmSyncService {
 
   /// In-flight sync queue. New calls chain onto the tail of the
   /// previous sync so two concurrent triggers can't race on the
-  /// `_scheduledFireAt` map or on `idMap.idFor`'s non-atomic
+  /// `_scheduledSignature` map or on `idMap.idFor`'s non-atomic
   /// read-modify-write.
   Future<void> _inFlight = Future<void>.value();
 
   /// Last fireAt we asked the scheduler for, keyed by notification id.
   /// Persisted via [_persistScheduledFireAt] at the tail of every
-  /// `_doSync` and hydrated by [_hydrateScheduledFireAt] in `start()`
+  /// `_doSync` and hydrated by [_hydrateScheduledSignature] in `start()`
   /// — so cold start can skip the scheduleAt call for any id where the
   /// OS pending set and our persisted fireAt already agree.
-  final Map<int, DateTime> _scheduledFireAt = {};
+  final Map<int, String> _scheduledSignature = {};
+
+  /// Everything about an alarm that the OS is actually holding, as one
+  /// comparable value: if any of it differs from what we last armed, the alarm
+  /// must be replaced.
+  ///
+  /// Must include every field passed to [AlarmScheduler.scheduleAt] — the fire
+  /// time, the tone, the copy, and each payload field the native side reads.
+  /// Anything omitted here becomes a property the user can change in the UI
+  /// while the alarm keeps its old behaviour, which is exactly the bug this
+  /// replaced. `vibrationEnabled` is a GLOBAL setting rather than a per-alarm
+  /// one and belongs here for the same reason: turning it off must reach alarms
+  /// that are already armed.
+  static String _signatureFor({
+    required DateTime fireAt,
+    required String title,
+    required String body,
+    required String soundKey,
+    required bool isCritical,
+    required String? customRingtoneUri,
+    required bool vibrationEnabled,
+    required int chainLength,
+  }) => [
+    fireAt.millisecondsSinceEpoch,
+    title,
+    body,
+    soundKey,
+    isCritical,
+    customRingtoneUri ?? '',
+    vibrationEnabled,
+    chainLength,
+    // Explicit separator, because a label is free text. Joining with
+    // nothing lets two different alarms produce the SAME signature, and a
+    // collision here reads as "no change" — silently discarding the edit,
+    // which is precisely the bug this exists to fix. \u0001 cannot be
+    // typed into a label, so no user input can forge a field boundary.
+  ].join('\u0001');
 
   /// Performs an initial sync, then re-syncs on every `AppAlarm`,
   /// `ShiftCycle`, OR `Shift` change. Stream-driven syncs are
   /// debounced; the initial sync is awaited directly so [start] only
   /// returns once the OS state has converged.
   Future<void> start() async {
-    _hydrateScheduledFireAt();
+    _hydrateScheduledSignature();
     await syncAlarms();
     final now = _clock.now();
-    _alarmsSub = _alarms.watch().skip(1).listen(
-          (_) => _scheduleDebouncedSync(),
-        );
-    _cyclesSub = _cycles.watch().skip(1).listen(
-          (_) => _scheduleDebouncedSync(),
-        );
+    _alarmsSub = _alarms
+        .watch()
+        .skip(1)
+        .listen((_) => _scheduleDebouncedSync());
+    _cyclesSub = _cycles
+        .watch()
+        .skip(1)
+        .listen((_) => _scheduleDebouncedSync());
     // A direct shift mutation (manual time edit, mute toggle, dismiss
     // or snooze write from the foreground/background dispatcher) used
     // to escape the reconcile because we only watched alarms + cycles.
@@ -248,9 +300,10 @@ class AlarmSyncService {
     // The global lead time is the default fireAt offset for every
     // followsRotation alarm, so changing it must re-arm the pending set —
     // this is the wiring whose absence orphaned the Settings slider before.
-    _settingsSub = _alarmSettings.watch().skip(1).listen(
-          (_) => _scheduleDebouncedSync(),
-        );
+    _settingsSub = _alarmSettings
+        .watch()
+        .skip(1)
+        .listen((_) => _scheduleDebouncedSync());
   }
 
   Future<void> stop() async {
@@ -287,7 +340,7 @@ class AlarmSyncService {
     return next;
   }
 
-  /// Primes the in-memory `_scheduledFireAt` map from the persisted
+  /// Primes the in-memory `_scheduledSignature` map from the persisted
   /// `settings` snapshot WITHOUT starting any stream subscriptions or
   /// running a sync. [start] already does this internally; the native
   /// background re-sync entrypoint calls [syncAlarms] directly (never
@@ -297,7 +350,7 @@ class AlarmSyncService {
   /// defeating the platform-channel-burst avoidance the persistence layer
   /// exists for. Best-effort + idempotent: a no-op when the `settings`
   /// box isn't open (e.g. under the test harness).
-  void hydrate() => _hydrateScheduledFireAt();
+  void hydrate() => _hydrateScheduledSignature();
 
   Future<void> _doSync() async {
     final now = _clock.now();
@@ -308,7 +361,9 @@ class AlarmSyncService {
     final cap = _readHorizonCapFromSettings();
     if (cap != null) {
       final capDur = cap.difference(now);
-      if (capDur < horizon) horizon = capDur.isNegative ? Duration.zero : capDur;
+      if (capDur < horizon) {
+        horizon = capDur.isNegative ? Duration.zero : capDur;
+      }
     }
     final until = now.add(horizon);
 
@@ -372,7 +427,7 @@ class AlarmSyncService {
     for (final id in pending) {
       if (!desired.containsKey(id)) {
         await _scheduler.cancel(id);
-        _scheduledFireAt.remove(id);
+        _scheduledSignature.remove(id);
       }
     }
 
@@ -381,7 +436,7 @@ class AlarmSyncService {
     // user's roster changed so they're not desired any more). Without
     // this, the persisted map would accumulate dead ids over the life
     // of the install.
-    _scheduledFireAt.removeWhere(
+    _scheduledSignature.removeWhere(
       (id, _) => !pending.contains(id) && !desired.containsKey(id),
     );
 
@@ -439,18 +494,28 @@ class AlarmSyncService {
     for (final entry in desired.entries) {
       final id = entry.key;
       final desiredFireAt = entry.value.fireAt;
-      final lastKnown = _scheduledFireAt[id];
       final osHasIt = pending.contains(id);
       final chainLength = chained.contains(id) ? kAlarmRepeatChainLength : 0;
-      // Condition 4: chain membership changed. See [_lastChainLength] — without
-      // this the chain never advances past the first alarm. Absent reads as 0,
-      // NOT as "unknown": treating it as a change would re-schedule every
-      // unchained alarm on the first reconcile after launch, which is exactly
-      // the cold-start burst conditions 1-3 exist to avoid.
-      final needsSchedule = lastKnown == null ||
-          !osHasIt ||
-          lastKnown != desiredFireAt ||
-          (_lastChainLength[id] ?? 0) != chainLength;
+      final signature = _signatureFor(
+        fireAt: desiredFireAt,
+        title: _titleFor(entry.value.alarm),
+        body: _bodyFor(entry.value.alarm),
+        soundKey: entry.value.alarm.soundKey,
+        isCritical: entry.value.alarm.isCriticalShift,
+        customRingtoneUri: entry.value.alarm.customRingtoneUri,
+        vibrationEnabled: settings.vibrationEnabled,
+        chainLength: chainLength,
+      );
+      // Two conditions, and the signature carries what used to be four. It
+      // subsumes the fire-time compare and the chain-membership compare (which
+      // is what makes a chain advance past its first alarm), and it adds every
+      // property that previously could not reach an armed alarm at all.
+      //
+      // An absent signature means "never armed, or armed by a build that did
+      // not track this" — both correctly re-schedule. That costs one re-arm per
+      // alarm on the upgrade reconcile and repairs anything currently armed
+      // with a stale tone.
+      final needsSchedule = !osHasIt || _scheduledSignature[id] != signature;
       if (!needsSchedule) continue;
       await _scheduler.scheduleAt(
         id: id,
@@ -481,33 +546,27 @@ class AlarmSyncService {
           vibrationEnabled: settings.vibrationEnabled,
         ),
       );
-      _scheduledFireAt[id] = desiredFireAt;
-      _lastChainLength[id] = chainLength;
+      _scheduledSignature[id] = signature;
     }
 
-    // Drop chain bookkeeping for ids no longer desired, so a returning id is
-    // treated as unchained rather than inheriting a stale claim.
-    _lastChainLength.removeWhere((id, _) => !desired.containsKey(id));
-
-    await _persistScheduledFireAt();
+    await _persistScheduledSignature();
   }
 
-  /// Reads the persisted `_scheduledFireAt` map from the `settings`
+  /// Reads the persisted `_scheduledSignature` map from the `settings`
   /// box into memory. Best-effort — the box is opened in `main()` on
   /// the live app but may not exist under the test harness, which
   /// constructs the service without bootstrapping Hive. Any failure
   /// here is silently swallowed and the in-memory map stays empty;
   /// the next sync will re-populate it via fresh `scheduleAt` calls.
-  void _hydrateScheduledFireAt() {
+  void _hydrateScheduledSignature() {
     try {
       if (!Hive.isBoxOpen('settings')) return;
-      final raw = Hive.box('settings').get(_scheduledFireAtSettingsKey);
+      final raw = Hive.box('settings').get(_scheduledSignatureSettingsKey);
       if (raw is! Map) return;
       raw.forEach((k, v) {
         final id = (k is int) ? k : int.tryParse(k.toString());
-        final ms = (v is int) ? v : int.tryParse(v.toString());
-        if (id == null || ms == null) return;
-        _scheduledFireAt[id] = DateTime.fromMillisecondsSinceEpoch(ms);
+        if (id == null || v is! String || v.isEmpty) return;
+        _scheduledSignature[id] = v;
       });
     } catch (_) {
       // Tests don't open the settings box. Cold start without
@@ -515,20 +574,19 @@ class AlarmSyncService {
     }
   }
 
-  /// Writes the current `_scheduledFireAt` snapshot back to the
+  /// Writes the current `_scheduledSignature` snapshot back to the
   /// `settings` box. Called at the tail of every `_doSync`. One key,
   /// one put — the whole map serialises as a `Map<int, int>` so the
   /// hydrate path can decode it without an adapter.
-  Future<void> _persistScheduledFireAt() async {
+  Future<void> _persistScheduledSignature() async {
     try {
       if (!Hive.isBoxOpen('settings')) return;
-      final encoded = <int, int>{
-        for (final e in _scheduledFireAt.entries)
-          e.key: e.value.millisecondsSinceEpoch,
+      final encoded = <int, String>{
+        for (final e in _scheduledSignature.entries) e.key: e.value,
       };
-      await Hive.box('settings').put(_scheduledFireAtSettingsKey, encoded);
+      await Hive.box('settings').put(_scheduledSignatureSettingsKey, encoded);
     } catch (_) {
-      // Same rationale as _hydrateScheduledFireAt — persistence is
+      // Same rationale as _hydrateScheduledSignature — persistence is
       // best-effort. A failed put just means the next cold start
       // re-issues the platform calls we already issued this run.
     }

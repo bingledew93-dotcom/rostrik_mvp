@@ -248,6 +248,47 @@ user actually owns.
 
 ---
 
+## 2.5 Android: the alarm notification is a dead end
+
+Field report 2026-08-30 (Samsung S25 FE): an alarm fired while the user was in
+Instagram. No full-screen alarm appeared — just a notification that offered no
+way to stop it. He had to open the app manually and tap the notification from
+there.
+
+Most of that is **working as Android intends**. `setFullScreenIntent` launches
+the activity only when the device is locked or the screen is off; on an unlocked,
+in-use phone it is posted as a heads-up notification instead. That is documented
+behaviour and not a bug.
+
+The bug is what the heads-up notification offers: **nothing.**
+`AlarmReceiver` calls no `addAction`, so the notification has no Snooze and no
+Dismiss. The design assumed the full-screen activity would always be there, and
+when it is not the user is stranded with a ringing phone.
+
+Ironically iOS is now ahead here — its lack of any wake surface forced us to
+build notification actions, and Android never needed them until this.
+
+- [ ] Add Snooze and Dismiss actions to the alarm notification, wired to the
+      existing `pending_snoozes` / `pending_dismissals` ledgers exactly as the
+      iOS path does.
+- [ ] Check `NotificationManager.canUseFullScreenIntent()` (API 34+). The
+      permission is app-op gated from Android 14 and is never verified — if it
+      is denied the full-screen alarm silently degrades even on the lock screen,
+      which is the one case that must not fail. Offer
+      `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT` when it is missing.
+- [x] Volume keys during an alarm — `AlarmActivity` now sets
+      `volumeControlStream = STREAM_ALARM`. Partial: only applies while the
+      alarm screen is in front, so the notification actions above are the real
+      fix. **Uncompiled** — see below.
+
+⚠️ **This Mac cannot build Android.** The only JDKs present (system, and Android
+Studio's bundled JBR) are Java 25; Gradle 8.14 refuses it. So no Android change
+made here is compile-verified, and no Android release can be cut from this
+machine. Fix by installing a JDK 21 and pointing Flutter at it
+(`flutter config --jdk-dir=...`), or by moving to Gradle 9.1+.
+
+---
+
 ## 3. Tech debt worth clearing
 
 - [ ] **Reclaim ~3.9 MB from the Android bundle** (IOS_SETUP.md §4.1). Move the

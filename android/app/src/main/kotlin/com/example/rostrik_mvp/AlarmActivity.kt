@@ -188,6 +188,21 @@ class AlarmActivity : Activity(), SensorEventListener {
 
         readFirePayload(intent)
 
+        // Point the hardware volume keys at the stream the alarm is actually
+        // playing on. Without this an Activity defaults to STREAM_MUSIC, so
+        // pressing volume-down during an alarm opens the media slider and moves
+        // a level that has nothing to do with the noise being made — reported
+        // from the field 2026-08-30 as "couldn't turn it down in the normal
+        // Android sounds menu".
+        //
+        // AlarmAudioEngine plays with USAGE_ALARM, so STREAM_ALARM is the
+        // matching stream. Note this only helps while THIS screen is in front:
+        // when the full-screen intent degrades to a heads-up notification (the
+        // normal case on an unlocked, in-use phone) the foreground app still
+        // owns the volume keys. That gap is the notification-actions work, not
+        // this line.
+        volumeControlStream = android.media.AudioManager.STREAM_ALARM
+
         applyLockScreenWindowFlags()
 
         // Resolve the accelerometer BEFORE building the UI so the dismiss control

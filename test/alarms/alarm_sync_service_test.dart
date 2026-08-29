@@ -467,6 +467,103 @@ void main() {
     });
   });
 
+  // Field report, 2026-08-30 (Samsung S25 FE): "I went to change the alarm,
+  // but the sound is still playing the previous one... if I fully delete the
+  // alarm and make a new one it will change."
+  //
+  // The reconcile gate compared only the FIRE TIME, so editing any other
+  // property left the armed OS alarm untouched. Deleting and recreating worked
+  // because a new rule gets a new notification id, which has no prior entry.
+  //
+  // These pin every property that reaches the OS. The gate now compares a
+  // signature of all of them, so a property added to `scheduleAt` without being
+  // added to the signature will fail here rather than silently becoming
+  // uneditable.
+  group('editing an armed alarm actually reaches the OS', () {
+    Future<void> armDayAlarm(AppAlarm alarm) async {
+      await shifts.upsert(
+        mkShift(id: 'd1', date: DateTime(2026, 6, 2), type: ShiftType.day),
+      );
+      await alarms.upsert(alarm);
+      await service.syncAlarms();
+    }
+
+    test('changing the tone re-arms with the new sound — the reported bug',
+        () async {
+      await armDayAlarm(followsRotation(soundKey: 'classic'));
+      expect(scheduler.scheduled.values.single.soundKey, 'classic');
+
+      scheduler.clearLog();
+      await alarms.upsert(followsRotation(soundKey: 'siren'));
+      await service.syncAlarms();
+
+      expect(scheduler.callLog, isNotEmpty,
+          reason: 'a tone change must re-issue the alarm');
+      expect(scheduler.scheduled.values.single.soundKey, 'siren',
+          reason: 'the OS must hold the tone the user chose, not the old one');
+    });
+
+    test('renaming the alarm re-arms with the new title', () async {
+      await armDayAlarm(followsRotation(label: 'Wake Up'));
+      final before = scheduler.scheduled.values.single.title;
+
+      await alarms.upsert(followsRotation(label: 'Start of night shift'));
+      await service.syncAlarms();
+
+      expect(scheduler.scheduled.values.single.title, isNot(before));
+    });
+
+    test('toggling Critical shift re-arms — it changes dismiss mechanics',
+        () async {
+      await armDayAlarm(followsRotation(isCriticalShift: false));
+      scheduler.clearLog();
+
+      await alarms.upsert(followsRotation(isCriticalShift: true));
+      await service.syncAlarms();
+
+      expect(scheduler.callLog, isNotEmpty,
+          reason: 'critical rides the payload, so the alarm must be replaced');
+    });
+
+    test('choosing a custom ringtone re-arms', () async {
+      await armDayAlarm(followsRotation());
+      scheduler.clearLog();
+
+      await alarms.upsert(
+        followsRotation(customRingtoneUri: 'content://media/42'),
+      );
+      await service.syncAlarms();
+
+      expect(scheduler.callLog, isNotEmpty);
+    });
+
+    // Vibration is a GLOBAL setting, not a per-alarm one, and rides the same
+    // payload — so switching it off has to reach alarms that are already armed.
+    test('toggling global vibration re-arms already-armed alarms', () async {
+      await armDayAlarm(followsRotation());
+      scheduler.clearLog();
+
+      await settings.write(const AlarmSettings(
+        leadTime: Duration(minutes: 60),
+        vibrationEnabled: false,
+      ));
+      await service.syncAlarms();
+
+      expect(scheduler.callLog, isNotEmpty);
+    });
+
+    // The property the old gate existed to protect. Widening it must not turn
+    // every reconcile into a re-arm storm — on a dense roster that is 50
+    // platform-channel calls for nothing, which is what the fire-time check was
+    // avoiding in the first place.
+    test('an unchanged alarm still issues no calls', () async {
+      await armDayAlarm(followsRotation());
+      scheduler.clearLog();
+      await service.syncAlarms();
+      expect(scheduler.callLog, isEmpty);
+    });
+  });
+
   group('idempotency + cancel-orphans contract', () {
     test('running sync twice with identical input produces no extra calls',
         () async {
