@@ -279,13 +279,28 @@ build notification actions, and Android never needed them until this.
 - [x] Volume keys during an alarm — `AlarmActivity` now sets
       `volumeControlStream = STREAM_ALARM`. Partial: only applies while the
       alarm screen is in front, so the notification actions above are the real
-      fix. **Uncompiled** — see below.
+      fix. Compile-verified 2026-08-30.
 
-⚠️ **This Mac cannot build Android.** The only JDKs present (system, and Android
-Studio's bundled JBR) are Java 25; Gradle 8.14 refuses it. So no Android change
-made here is compile-verified, and no Android release can be cut from this
-machine. Fix by installing a JDK 21 and pointing Flutter at it
-(`flutter config --jdk-dir=...`), or by moving to Gradle 9.1+.
+### Android toolchain — fixed 2026-08-30
+
+This Mac could not build Android at all: the only JDKs present were Java 25
+(the system stub, and Android Studio's bundled JBR), which Gradle 8.14 refuses.
+Resolved with `brew install openjdk@21` + `flutter config --jdk-dir`. The
+Homebrew *formula* is deliberate over the cask — it installs under
+`/opt/homebrew` and needs no `sudo`, where the cask writes to `/Library` and
+prompts for a password.
+
+Do NOT record the path in `android/gradle.properties` as `org.gradle.java.home`:
+that file is committed and the path is machine-specific, so it would break every
+other machine and CI. `flutter config` keeps it machine-local.
+
+Note `./gradlew` directly does not inherit Flutter's setting — it needs
+`JAVA_HOME` exported. Only `flutter build` picks up `--jdk-dir`.
+
+- [ ] **Kotlin 2.2.20 support is being dropped** — Flutter now warns it wants
+      ≥2.3.20 (`android/settings.gradle.kts`). Not urgent, but it will become a
+      hard failure. Worth doing while there is a device to verify alarms on,
+      since a KGP bump touches every native alarm path.
 
 ---
 
