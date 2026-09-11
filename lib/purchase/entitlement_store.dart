@@ -79,6 +79,36 @@ class EntitlementStore {
     await box.flush();
   }
 
+  /// The keys that record the user's STANDING — trial clock, purchase, and the
+  /// derived gates — as opposed to their data (roster, alarms, preferences).
+  static const List<String> _standingKeys = [
+    trialStartedAtKey,
+    purchasedKey,
+    lockedKey,
+    horizonCapKey,
+  ];
+
+  /// Clears [box] while preserving the user's entitlement standing.
+  ///
+  /// Settings' release-visible "Reset App Data" wipes the whole `settings`
+  /// box. A plain `clear()` also wiped [trialStartedAtKey] — an IN-APP
+  /// unlimited trial reset (two taps, no reinstall, repeatable every 14 days)
+  /// — and [purchasedKey], silently revoking a paying user's unlock until the
+  /// next online restore. A reset deletes the user's DATA, never their
+  /// standing. The derived gate keys ride along so the alarm sync's next read
+  /// stays consistent with the sources without waiting for a refresh; keys
+  /// absent before the clear stay absent after it.
+  static Future<void> clearPreservingStanding(Box box) async {
+    final standing = <String, Object>{};
+    for (final key in _standingKeys) {
+      final v = box.get(key);
+      if (v != null) standing[key] = v as Object;
+    }
+    await box.clear();
+    await box.putAll(standing);
+    await box.flush();
+  }
+
   /// The current entitlement from stored state.
   static Entitlement compute(Box box, DateTime now) => Entitlement(
         purchased: isPurchased(box),

@@ -134,5 +134,44 @@ void main() {
       await EntitlementStore.refreshLock(box, now);
       expect(EntitlementStore.horizonCap(box), isNull);
     });
+
+    group('clearPreservingStanding (in-app "Reset App Data")', () {
+      test('wipes data keys but keeps a purchased user unlocked', () async {
+        EntitlementStore.ensureTrialStarted(box, now);
+        await EntitlementStore.setPurchased(box, true);
+        await EntitlementStore.refreshLock(box, now);
+        await box.put('onboarding_complete', true);
+        await box.put('alarm_sync.scheduled_signature', {'1': 'sig'});
+
+        await EntitlementStore.clearPreservingStanding(box);
+
+        // Data keys are gone…
+        expect(box.get('onboarding_complete'), isNull);
+        expect(box.get('alarm_sync.scheduled_signature'), isNull);
+        // …standing survives: still purchased, still unlocked, still uncapped.
+        expect(EntitlementStore.isPurchased(box), isTrue);
+        expect(EntitlementStore.isLocked(box), isFalse);
+        expect(EntitlementStore.horizonCap(box), isNull);
+        expect(EntitlementStore.trialStartedAt(box), now);
+      });
+
+      test('cannot restart the trial — the leak this helper closes', () async {
+        // Day 13 of 14: the moment a freeloader would tap Reset App Data.
+        final started = now.subtract(const Duration(days: 13));
+        EntitlementStore.ensureTrialStarted(box, started);
+        await EntitlementStore.refreshLock(box, now);
+
+        await EntitlementStore.clearPreservingStanding(box);
+
+        // The trial clock survives the reset…
+        expect(EntitlementStore.trialStartedAt(box), started);
+        // …the horizon cap still pins scheduling to the ORIGINAL trial end…
+        expect(EntitlementStore.horizonCap(box), started.add(kTrialDuration));
+        // …and the next launch's ensureTrialStarted keeps the original start
+        // rather than minting a fresh 14 days.
+        expect(EntitlementStore.ensureTrialStarted(box, now), started);
+        expect(EntitlementStore.compute(box, now).trialDaysLeft, 1);
+      });
+    });
   });
 }

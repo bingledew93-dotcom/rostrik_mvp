@@ -223,10 +223,13 @@ void main() async {
   // trial clock on first launch, writes the lock + horizon-cap gates the alarm
   // sync reads (a locked app fires NO alarms; an in-trial app arms nothing past
   // the trial), schedules the "trial ends tomorrow" nudge on the isolated
-  // reminder channel, and drives Google Play Billing for the unlock.
+  // reminder channel, and drives store billing for the unlock.
   // `onEntitlementChanged` re-runs the reconcile so alarms disarm on lock and
   // restore on purchase. init() runs AFTER syncService.start() so its refresh
-  // re-syncs with the gates applied.
+  // re-syncs with the gates applied. init() is the LOCAL half only (trial
+  // clock + gates + reminder); the billing half is startBilling(), kicked off
+  // after the first frame below so a store round-trip can never gate the
+  // splash on network latency.
   final entitlementService = EntitlementService(
     settingsBox: Hive.box('settings'),
     reminderScheduler: reminderScheduler,
@@ -313,6 +316,13 @@ void main() async {
   // once there is a widget tree. See the function's own doc for why this
   // cannot live in the pre-runApp permission block.
   requestIosNotificationPermission();
+  // Billing wiring rides the first frame too: the purchase-stream subscription
+  // must exist for the whole app lifetime (a purchase must never complete
+  // unheard), but the availability probe / product query / restore are store
+  // round-trips that have no business ahead of first paint.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(entitlementService.startBilling());
+  });
   runApp(AppProviders(
     storage: storage,
     scheduler: scheduler,
