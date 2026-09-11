@@ -12,8 +12,9 @@ library;
 /// How long full access lasts from first launch before a purchase is required.
 const Duration kTrialDuration = Duration(days: 14);
 
-/// Google Play product id for the one-time full-access unlock. MUST match the
-/// managed product created in the Play Console.
+/// Store product id for the one-time full-access unlock. MUST match the
+/// managed product in the Play Console AND the Non-Consumable in App Store
+/// Connect — one id string, created in both consoles (TODO.md §2.4b).
 const String kFullAccessProductId = 'rostrik_full_access';
 
 /// A snapshot of the user's access rights at a given [now].

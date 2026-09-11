@@ -246,6 +246,47 @@ user actually owns.
 - [ ] When enrolled: `DEVELOPMENT_TEAM` changes from `LM6TRKQX8F` to the real
       team id — a one-line `project.pbxproj` commit. (Unrelated to git identity.)
 
+#### 2.4b App Store purchase readiness — audited 2026-09-11
+
+The Dart purchase layer needs **no iOS-specific code changes**. Verified against
+the installed plugin source (`in_app_purchase_storekit 0.4.11`): StoreKit 2 is
+the active path (deployment target 15.5 ≥ its iOS 15 floor, no SK1 fallback
+needed); `restorePurchases()` reads `Transaction.currentEntitlements` — passive,
+never prompts for App Store sign-in — so the automatic restore at launch is
+safe; and the plugin surfaces **only cryptographically verified (JWS)
+transactions**, so on-device receipt verification comes free on iOS (the
+no-verification gap is Android-only). `completePurchase` maps to
+`Transaction.finish()`. Ask to Buy arrives as `pending` (correctly not granted);
+the later approval is caught because the purchase stream is now subscribed for
+the whole app lifetime (2026-09-11 fix).
+
+Console-side, in order, once enrolled — the buy button dead-ends until 1–3 are
+done, which is an App Review guideline 2.1 rejection:
+
+- [ ] 1. Sign the **Paid Applications Agreement** (Agreements, Tax, Banking) —
+      without it products don't resolve even in sandbox.
+- [ ] 2. Create the IAP in App Store Connect: type **Non-Consumable**, product
+      id exactly `rostrik_full_access` (same string as Play), price tier,
+      localized display name, and the required IAP review screenshot.
+- [ ] 3. Attach the IAP to the first app version's submission (a first IAP is
+      reviewed with an app version, not alone).
+- [ ] 4. App description discloses the 14-day trial + one-time unlock (matches
+      the in-app copy; avoids metadata-surprise rejections).
+- [ ] 5. App Privacy questionnaire: purchases are processed by Apple and the
+      app stores nothing off-device — "Data Not Collected" stays accurate.
+- [ ] 6. Sandbox tester account on the SE 3: one end-to-end buy, one restore
+      after delete+reinstall. Optional: a `.storekit` configuration file for
+      simulator testing before the ASC product exists.
+
+Compliance posture, reviewed: hard paywall after trial is allowed (3.1.1 — the
+unlock is IAP, no external purchase links anywhere); Restore is exposed on the
+wall AND in Settings; the wall shows the localized StoreKit price; onboarding
+discloses the trial up front. Reviewers on a fresh install are inside the trial,
+so the whole app is reviewable. Only soft spot: the "trial ends tomorrow" local
+notification is promotional-adjacent (guideline 4.5.4) — single-shot and
+account-state-ish, so low risk, but it is the first thing to soften if a
+reviewer ever objects.
+
 ---
 
 ## 2.5 Android: the alarm notification is a dead end
