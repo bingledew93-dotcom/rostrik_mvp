@@ -73,33 +73,55 @@ class EntitlementService extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription<List<PurchaseDetails>>? _purchaseSub;
   Timer? _lapseTimer;
 
-  /// Records the trial start (once), writes the derived gates, schedules the
-  /// reminder, and wires up billing. Safe to call once at startup.
+  /// Records the trial start (once), writes the derived gates, and schedules
+  /// the reminder. Safe to call once at startup, BEFORE runApp — everything
+  /// here is local (Hive + the notification plugin). Billing, which talks to
+  /// the store over the network, is deliberately NOT wired here: see
+  /// [startBilling].
   Future<void> init() async {
     EntitlementStore.ensureTrialStarted(_box, _clock.now());
     // Re-check on resume: the trial may have lapsed while backgrounded.
     WidgetsBinding.instance.addObserver(this);
     await _refresh();
+  }
 
-    // Billing is best-effort: if the device/account can't reach Play Billing,
-    // the trial + lock logic still governs access.
+  /// Wires up store billing. Called AFTER the first frame (see main()) so the
+  /// store round-trips — availability probe, product query, restore — can
+  /// never hold up cold start. Previously they ran inside [init] ahead of
+  /// runApp, gating the splash on network latency.
+  ///
+  /// The purchase stream is subscribed FIRST and unconditionally:
+  ///   * a purchase must never complete unheard. The old code subscribed only
+  ///     when [InAppPurchase.isAvailable] was true at startup, so billing
+  ///     coming up later meant [buy] could succeed at the store while nobody
+  ///     was listening — the user paid and stayed locked until next launch.
+  ///   * on iOS the plugin's Transaction.updates listener only starts on this
+  ///     stream's FIRST subscription (see registerPlatform in
+  ///     in_app_purchase_storekit), and Apple's guidance is to listen from
+  ///     launch so deferred purchases (Ask to Buy) and out-of-app redemptions
+  ///     are never dropped.
+  ///
+  /// Billing stays best-effort: if the device/account can't reach the store,
+  /// the trial + lock logic still governs access.
+  Future<void> startBilling() async {
+    _purchaseSub ??= _iap.purchaseStream.listen(
+      _onPurchases,
+      onError: (Object e) => debugPrint('[Entitlement] purchase stream: $e'),
+    );
     try {
       _billingAvailable = await _iap.isAvailable();
     } catch (_) {
       _billingAvailable = false;
     }
-    if (_billingAvailable) {
-      _purchaseSub = _iap.purchaseStream.listen(
-        _onPurchases,
-        onError: (Object e) => debugPrint('[Entitlement] purchase stream: $e'),
-      );
-      await _queryProduct();
-      // Pick up a purchase already owned (reinstall / new device).
-      try {
-        await _iap.restorePurchases();
-      } catch (e) {
-        debugPrint('[Entitlement] restore on init failed: $e');
-      }
+    if (!_billingAvailable) return;
+    await _queryProduct();
+    // Pick up a purchase already owned (reinstall / new device). Passive on
+    // both stores — on iOS this reads Transaction.currentEntitlements, which
+    // never prompts for App Store sign-in — so it is safe on every launch.
+    try {
+      await _iap.restorePurchases();
+    } catch (e) {
+      debugPrint('[Entitlement] restore on init failed: $e');
     }
   }
 
@@ -164,12 +186,26 @@ class EntitlementService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Re-probes store availability when the startup snapshot said no — billing
+  /// may have come up since [startBilling] ran (offline cold start, aeroplane
+  /// mode). Cheap and local; keeps the buy/restore buttons honest instead of
+  /// trusting a stale probe for the whole app lifetime.
+  Future<bool> _ensureBillingAvailable() async {
+    if (_billingAvailable) return true;
+    try {
+      _billingAvailable = await _iap.isAvailable();
+    } catch (_) {
+      _billingAvailable = false;
+    }
+    return _billingAvailable;
+  }
+
   /// Starts the purchase flow for the one-time unlock. Returns false when
   /// billing/product isn't ready (the UI can surface a "try again" message).
   Future<bool> buy() async {
-    final product = _product;
-    if (!_billingAvailable || product == null) {
-      // Late-resolve attempt in case billing came up after init.
+    if (!await _ensureBillingAvailable()) return false;
+    if (_product == null) {
+      // Late-resolve attempt in case billing came up after startBilling().
       await _queryProduct();
       if (_product == null) return false;
     }
@@ -184,9 +220,10 @@ class EntitlementService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Restores a previously-bought unlock (Play remembers non-consumables).
+  /// Restores a previously-bought unlock (the store remembers
+  /// non-consumables).
   Future<void> restore() async {
-    if (!_billingAvailable) return;
+    if (!await _ensureBillingAvailable()) return;
     try {
       await _iap.restorePurchases();
     } catch (e) {

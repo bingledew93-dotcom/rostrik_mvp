@@ -19,6 +19,7 @@ import '../legal/legal.dart';
 import '../logic/cycle_service.dart';
 import '../logic/cycle_to_painted.dart' show isCycleEditable;
 import '../purchase/entitlement_service.dart';
+import '../purchase/entitlement_store.dart';
 import '../state/app_preferences.dart';
 import 'custom_builder_screen.dart';
 import 'onboarding/onboarding_flow.dart';
@@ -1471,8 +1472,12 @@ class _FactoryResetSection extends StatelessWidget {
     await storage.reset();
     // 3. Reset the app-prefs box: drops the scheduled-fire cache + snooze
     //    pref, and forces re-onboarding on the next first-launch gate read.
+    //    Entitlement standing (trial clock, purchase, derived gates) is
+    //    preserved — this button deletes the user's DATA, never their 14-day
+    //    trial position or their paid unlock. A plain clear() here was an
+    //    in-app unlimited-trial reset.
     final prefs = Hive.box('settings');
-    await prefs.clear();
+    await EntitlementStore.clearPreservingStanding(prefs);
     await prefs.put(onboardingCompleteKey, false);
     // 4. Clear the whole nav stack back to a fresh onboarding flow.
     navigator.pushAndRemoveUntil(
