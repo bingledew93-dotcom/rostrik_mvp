@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.PowerManager
 import android.util.Log
@@ -171,16 +172,25 @@ class AlarmReceiver : BroadcastReceiver() {
         // 1. Pin the CPU before anything can doze us back to sleep.
         acquireWakeLock(context)
 
+        // Built once and used twice: posted below, and held in the foreground
+        // by the audio service (which makes it impossible to swipe away).
+        val notifId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1).let { if (it >= 0) it else NOTIF_ID }
+        val notification = buildRingNotification(context, intent)
+
         // 2. Start the looping audio in the foreground service. Forward the
         //    sound routing extras verbatim using AlarmAudioService's own keys.
-        startAudioService(context, intent)
+        startAudioService(context, intent, notification)
 
         // 3. Post the full-screen-intent notification that launches the native
-        //    alarm screen over the keyguard.
-        postFullScreenNotification(context, intent)
+        //    alarm screen over the keyguard. Posted here as well as by the
+        //    service so the full-screen launch never waits on the service start.
+        val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // Per-alarm id (audit F4) — a second alarm firing mid-ring posts its
+        // OWN notification instead of replacing the first one's.
+        mgr.notify(notifId, notification)
     }
 
-    private fun startAudioService(context: Context, fireIntent: Intent) {
+    private fun startAudioService(context: Context, fireIntent: Intent, notification: Notification) {
         val serviceIntent = Intent(context, AlarmAudioService::class.java).apply {
             action = AlarmAudioService.ACTION_PLAY
             // The shift/alarm id rides through to the service so its 15-minute
@@ -200,9 +210,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 EXTRA_NOTIFICATION_ID,
                 fireIntent.getIntExtra(EXTRA_NOTIFICATION_ID, -1),
             )
-            // Forward the notification detail so the service's keep-alive
-            // notification reads the same as the full-screen one (label title +
-            // "time · context" text) instead of a generic "Alarm".
+            // The ring notification itself, which the service holds as its
+            // foreground notification under the same id.
+            putExtra(AlarmAudioService.EXTRA_RING_NOTIFICATION, notification)
+            // Forward the notification detail for the legacy keep-alive
+            // notification, used only when no ring notification is passed.
             putExtra(EXTRA_LABEL, fireIntent.getStringExtra(EXTRA_LABEL))
             putExtra(EXTRA_DISPLAY_TIME, fireIntent.getStringExtra(EXTRA_DISPLAY_TIME))
             putExtra(EXTRA_BODY, fireIntent.getStringExtra(EXTRA_BODY))
@@ -230,51 +242,32 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun postFullScreenNotification(context: Context, fireIntent: Intent) {
+    /** The ringing alarm's notification: full-screen intent to [AlarmActivity],
+     *  plus Snooze and — for a normal alarm — Dismiss buttons.
+     *
+     *  The buttons matter because Android launches the full-screen intent only
+     *  when the phone is locked or the screen is off. On an unlocked phone in use
+     *  it shows this notification as a heads-up instead, and before the buttons
+     *  existed that heads-up offered no way to stop the ring. A critical-shift
+     *  alarm gets "Open alarm" in place of Dismiss, so ending it still takes the
+     *  shake on the alarm screen. */
+    private fun buildRingNotification(context: Context, fireIntent: Intent): Notification {
         ensureChannel(context)
 
-        val alarmId = fireIntent.getStringExtra(EXTRA_ALARM_ID)
-        val label = fireIntent.getStringExtra(EXTRA_LABEL) ?: "Alarm"
+        val ring = AlarmRingControl.Ring.from(fireIntent)
         val displayTime = fireIntent.getStringExtra(EXTRA_DISPLAY_TIME)
-        val body = fireIntent.getStringExtra(EXTRA_BODY)
 
-        val activityIntent = Intent(context, AlarmActivity::class.java).apply {
-            // NEW_TASK is required to launch an Activity from this non-activity
-            // context. `singleInstance` in the manifest keeps it the sole
-            // activity in its own task, so a warm re-fire routes through
-            // onNewIntent (not a destroy/recreate) and a dismiss can
-            // finishAndRemoveTask() without disturbing the main app task. Carry
-            // the id/label forward for the dismissal ledger + UI.
+        // NEW_TASK is required to launch an Activity from this non-activity
+        // context. `singleInstance` in the manifest keeps it the sole activity in
+        // its own task, so a warm re-fire routes through onNewIntent (not a
+        // destroy/recreate) and a dismiss can finishAndRemoveTask() without
+        // disturbing the main app task. The ring payload drives the dismissal
+        // ledger, Snooze's re-arm (same notification id + tone at the user's
+        // snooze offset) and the dismiss gesture (shake vs slide); the display
+        // time is carried so a Snooze re-arm keeps the notification detail.
+        val activityIntent = ring.writeTo(Intent(context, AlarmActivity::class.java)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra(EXTRA_ALARM_ID, alarmId)
-            putExtra(EXTRA_LABEL, label)
-            // Carried so a Snooze re-arm keeps the same notification detail (and
-            // re-stamps the time for the new ring) — see AlarmActivity.snoozeAlarm.
             putExtra(EXTRA_DISPLAY_TIME, displayTime)
-            putExtra(EXTRA_BODY, body)
-            // Forwarded so AlarmActivity's Snooze can re-arm the SAME alarm
-            // (same notification id + tone) at the user's snooze offset.
-            putExtra(EXTRA_NOTIFICATION_ID, fireIntent.getIntExtra(EXTRA_NOTIFICATION_ID, -1))
-            putExtra(EXTRA_APP_ALARM_ID, fireIntent.getStringExtra(EXTRA_APP_ALARM_ID))
-            putExtra(EXTRA_SNOOZE_MINUTES, fireIntent.getIntExtra(EXTRA_SNOOZE_MINUTES, 1))
-            // Drives the dismiss gesture (shake vs slide) on the alarm screen.
-            putExtra(
-                EXTRA_REQUIRES_SHAKE,
-                fireIntent.getBooleanExtra(EXTRA_REQUIRES_SHAKE, false),
-            )
-            putExtra(
-                AlarmAudioService.EXTRA_SOURCE,
-                fireIntent.getIntExtra(AlarmAudioService.EXTRA_SOURCE, AlarmAudioEngine.SOURCE_CLASSIC),
-            )
-            putExtra(AlarmAudioService.EXTRA_URI, fireIntent.getStringExtra(AlarmAudioService.EXTRA_URI))
-            putExtra(
-                AlarmAudioService.EXTRA_VIBRATE,
-                fireIntent.getBooleanExtra(AlarmAudioService.EXTRA_VIBRATE, false),
-            )
-            putExtra(
-                AlarmAudioService.EXTRA_BUNDLED_RESOURCE,
-                fireIntent.getStringExtra(AlarmAudioService.EXTRA_BUNDLED_RESOURCE),
-            )
         }
 
         var piFlags = PendingIntent.FLAG_UPDATE_CURRENT
@@ -286,8 +279,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // shiftId-hash key would let UPDATE_CURRENT silently rewrite an
         // earlier notification's tap payload with the newer alarm's extras).
         // Falls back to the shift-id hash for legacy intents without the id.
-        val notifId = fireIntent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
-        val requestCode = if (notifId >= 0) notifId else (alarmId?.hashCode() ?: 0)
+        val requestCode = if (ring.notificationId >= 0) ring.notificationId else (ring.alarmId?.hashCode() ?: 0)
         val fullScreenPi = PendingIntent.getActivity(
             context,
             requestCode,
@@ -295,36 +287,67 @@ class AlarmReceiver : BroadcastReceiver() {
             piFlags,
         )
 
+        // Button PendingIntents share the request code; their distinct actions
+        // keep them from matching each other or the activity intent.
+        fun buttonIntent(action: String): PendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            ring.writeTo(Intent(context, AlarmActionReceiver::class.java).setAction(action)),
+            piFlags,
+        )
+        val icon = Icon.createWithResource(context, R.drawable.ic_stat_alarm)
+        val snooze = Notification.Action.Builder(
+            icon,
+            context.getString(R.string.alarm_action_snooze),
+            buttonIntent(AlarmActionReceiver.ACTION_SNOOZE),
+        ).build()
+        val end = if (ring.requiresShake) {
+            Notification.Action.Builder(icon, context.getString(R.string.alarm_action_open), fullScreenPi).build()
+        } else {
+            Notification.Action.Builder(
+                icon,
+                context.getString(R.string.alarm_action_dismiss),
+                buttonIntent(AlarmActionReceiver.ACTION_DISMISS),
+            ).build()
+        }
+
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(context)
         }
-        val notification = builder
-            .setContentTitle(label)
-            .setContentText(notificationDetail(context, displayTime, body))
+        return builder
+            .setContentTitle(ring.label)
+            .setContentText(notificationDetail(context, displayTime, ring.contextText))
             .setSmallIcon(R.drawable.ic_stat_alarm)
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true)
             .setAutoCancel(false)
+            // Shown in full on the lock screen, buttons included: an alarm must be
+            // stoppable without unlocking, exactly like the alarm screen.
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            // The service re-posts this same notification when it goes
+            // foreground; without this the heads-up would pop a second time.
+            .setOnlyAlertOnce(true)
             // Tapping the heads-up AND the OS-launched full-screen both route to
             // the alarm screen. `true` = launch the FSI even in heads-up-capable
             // foreground states.
             .setContentIntent(fullScreenPi)
             .setFullScreenIntent(fullScreenPi, true)
+            .addAction(snooze)
+            .addAction(end)
             .build()
-
-        val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        // Per-alarm id (audit F4) — a second alarm firing mid-ring posts its
-        // OWN notification instead of replacing the first one's.
-        mgr.notify(if (notifId >= 0) notifId else NOTIF_ID, notification)
     }
 
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
+        if (mgr.relabelChannel(
+            CHANNEL_ID,
+            context.getString(R.string.channel_alarm_name),
+            context.getString(R.string.channel_alarm_description),
+        )) return
         // IMPORTANCE_HIGH is the floor for a full-screen intent to be honoured.
         // Sound/vibration are silenced on the CHANNEL because AlarmAudioService
         // owns the audio + haptics — we must not double up.

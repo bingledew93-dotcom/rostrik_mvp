@@ -3,9 +3,14 @@
     <string name="widget_description">Ca tiếp theo của bạn, xem nhanh</string>
     <string name="alarm_fallback_title">Báo thức</string>
     <string name="alarm_hint_critical">Báo thức quan trọng\nLắc mạnh để tắt</string>
+    <string name="alarm_hint_critical_hold">Báo thức quan trọng\nLắc mạnh, hoặc giữ nút trong %1$d giây</string>
+    <string name="alarm_hold_to_dismiss">Giữ %1$d giây để tắt</string>
     <string name="alarm_hint_slide">Trượt nút bên dưới để tắt</string>
     <string name="alarm_snooze_button">BÁO LẠI (%1$d PHÚT)</string>
     <string name="alarm_slide_to_dismiss">Trượt để tắt</string>
+    <string name="alarm_action_snooze">Báo lại</string>
+    <string name="alarm_action_dismiss">Tắt</string>
+    <string name="alarm_action_open">Mở báo thức</string>
     <string name="channel_alarm_name">Báo thức</string>
     <string name="channel_alarm_description">Hiện báo thức toàn màn hình khi đến giờ báo thức ca.</string>
     <string name="channel_alarm_playback_name">Phát báo thức</string>

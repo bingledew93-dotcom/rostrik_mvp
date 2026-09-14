@@ -65,6 +65,14 @@ class AlarmAudioService : Service() {
         // alarm, preset or custom, plays here, never via FLAG_INSISTENT.
         const val EXTRA_BUNDLED_RESOURCE = "bundledResource"
 
+        // The ringing alarm's own notification (full-screen intent + Snooze /
+        // Dismiss buttons), built by AlarmReceiver. The service posts it as its
+        // foreground notification under the alarm's notification id, which is
+        // what stops the user swiping it away: from Android 14 an ongoing
+        // notification can be dismissed unless a foreground service owns it, and
+        // a swiped-away ring notification left no way to stop the alarm.
+        const val EXTRA_RING_NOTIFICATION = "ringNotification"
+
         // The shift/alarm id, forwarded by AlarmReceiver so the auto-timeout can
         // record the right shift in the dismissal ledger. Same key the fire
         // intent carries (AlarmReceiver.EXTRA_ALARM_ID == "alarm_id").
@@ -94,10 +102,9 @@ class AlarmAudioService : Service() {
         // (same cleanup a manual dismiss does) before it re-projects.
         private const val PENDING_ALARM_DELETES_FILE = "pending_alarm_deletes"
 
-        // Dedicated low-importance channel for the FGS keep-alive notification.
-        // Silent + non-vibrating: the alarm's own FullScreenIntent notification
-        // owns all UX; this one exists only because a foreground service must
-        // post a notification.
+        // Dedicated low-importance channel for the legacy keep-alive
+        // notification, used only when no ring notification is passed (the
+        // MainActivity preview path). Silent + non-vibrating.
         private const val CHANNEL_ID = "rostrik_alarm_playback"
         private const val NOTIF_ID = 0x41554449 // "AUDI"
     }
@@ -126,6 +133,16 @@ class AlarmAudioService : Service() {
     private var displayTime: String? = null
     private var contextText: String? = null
 
+    /** The alarm's ring notification from [EXTRA_RING_NOTIFICATION], held in the
+     *  foreground under [fsiNotificationId]. Null on the legacy preview path,
+     *  which falls back to [buildNotification]. */
+    private var ringNotification: Notification? = null
+
+    /** The ring notification currently held in the foreground, with its id.
+     *  Kept so that when a second alarm takes the foreground over, the first
+     *  one's notification can be put back (see [startForegroundCompat]). */
+    private var foregroundRing: Pair<Int, Notification>? = null
+
     private val timeoutHandler = Handler(Looper.getMainLooper())
     private val autoTimeoutRunnable = Runnable { onAutoTimeout() }
 
@@ -145,6 +162,12 @@ class AlarmAudioService : Service() {
                 intent.getStringExtra(AlarmReceiver.EXTRA_LABEL)?.let { label = it }
                 displayTime = intent.getStringExtra(AlarmReceiver.EXTRA_DISPLAY_TIME)
                 contextText = intent.getStringExtra(AlarmReceiver.EXTRA_BODY)
+                ringNotification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(EXTRA_RING_NOTIFICATION, Notification::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(EXTRA_RING_NOTIFICATION)
+                }
                 // Go foreground (well within the 5s startForeground deadline) so
                 // the process is pinned before anything else.
                 startForegroundCompat()
@@ -299,16 +322,46 @@ class AlarmAudioService : Service() {
     // -----------------------------------------------------------------------
 
     private fun startForegroundCompat() {
-        ensureChannel()
-        val notif = buildNotification()
+        // Prefer the alarm's own ring notification under its own id, so the
+        // notification the user sees is the service-owned, unswipeable one. A
+        // second alarm firing mid-ring moves the foreground onto ITS
+        // notification; the first stays posted as an ordinary notification,
+        // still tappable to reach its alarm screen (audit F4).
+        val ring = ringNotification
+        val (id, notif) = if (ring != null && fsiNotificationId >= 0) {
+            fsiNotificationId to ring
+        } else {
+            ensureChannel()
+            NOTIF_ID to buildNotification()
+        }
+        val superseded = foregroundRing?.takeIf { it.first != id }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
-                NOTIF_ID,
+                id,
                 notif,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
             )
         } else {
-            startForeground(NOTIF_ID, notif)
+            startForeground(id, notif)
+        }
+        foregroundRing = if (ring != null && fsiNotificationId >= 0) id to ring else null
+        if (superseded != null) repostSuperseded(superseded.first, superseded.second)
+    }
+
+    /** Moving the foreground to a new notification id makes Android cancel the
+     *  old one. Put the superseded alarm's notification back as an ordinary one,
+     *  so it can still be snoozed, dismissed or opened (audit F4) — but without
+     *  its full-screen intent, which would otherwise pull the alarm screen onto
+     *  the alarm that is no longer ringing. */
+    private fun repostSuperseded(id: Int, notification: Notification) {
+        try {
+            val stripped = Notification.Builder.recoverBuilder(this, notification)
+                .setFullScreenIntent(null, false)
+                .setOnlyAlertOnce(true)
+                .build()
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(id, stripped)
+        } catch (e: Exception) {
+            Log.w(TAG, "re-posting superseded alarm notification failed", e)
         }
     }
 
@@ -324,7 +377,11 @@ class AlarmAudioService : Service() {
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
+        if (mgr.relabelChannel(
+            CHANNEL_ID,
+            getString(R.string.channel_alarm_playback_name),
+            getString(R.string.channel_alarm_playback_description),
+        )) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.channel_alarm_playback_name),

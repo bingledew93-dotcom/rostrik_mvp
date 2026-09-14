@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:flutter/widgets.dart' show basicLocaleListResolution;
+import 'package:flutter/material.dart' show MaterialApp;
+import 'package:flutter/widgets.dart' show SizedBox, basicLocaleListResolution;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:rostrik_mvp/l10n/l10n.dart';
 
 /// Guards the translation catalogues themselves.
@@ -85,6 +87,33 @@ void main() {
       AppLocalizations.supportedLocales,
     );
     expect(resolved.languageCode, 'en');
+  });
+
+  // Date symbols must come from flutter_localizations, as in the app: its
+  // Arabic data uses Arabic-Indic digits, intl's bundled data does not.
+  testWidgets('dates use the same Western digits as times in every language',
+      (tester) async {
+    useWesternDigitsInDates();
+    // Arabic-Indic, Extended Arabic-Indic and Devanagari digits.
+    final nonWestern = RegExp('[٠-٩۰-۹०-९]');
+    for (final locale in AppLocalizations.supportedLocales) {
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const SizedBox.shrink(),
+        ),
+      );
+      final tag = locale.toString();
+      final date = DateTime(2026, 9, 23);
+      for (final text in [
+        DateFormat.MMMEd(tag).format(date),
+        DateFormat.yMMMM(tag).format(date),
+      ]) {
+        expect(nonWestern.hasMatch(text), isFalse, reason: '[$tag] "$text"');
+      }
+    }
   });
 }
 

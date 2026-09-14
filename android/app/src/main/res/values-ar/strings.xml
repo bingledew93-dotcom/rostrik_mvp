@@ -3,9 +3,14 @@
     <string name="widget_description">ورديتك التالية بنظرة سريعة</string>
     <string name="alarm_fallback_title">منبه</string>
     <string name="alarm_hint_critical">منبه حرج\nهزّ الهاتف بقوة للإيقاف</string>
+    <string name="alarm_hint_critical_hold">منبه حرج\nهزّ الهاتف بقوة، أو اضغط مطولًا على الزر %1$d ثوانٍ</string>
+    <string name="alarm_hold_to_dismiss">اضغط مطولًا %1$d ثوانٍ للإيقاف</string>
     <string name="alarm_hint_slide">اسحب المقبض أدناه للإيقاف</string>
     <string name="alarm_snooze_button">غفوة (%1$d د)</string>
     <string name="alarm_slide_to_dismiss">اسحب للإيقاف</string>
+    <string name="alarm_action_snooze">غفوة</string>
+    <string name="alarm_action_dismiss">إيقاف</string>
+    <string name="alarm_action_open">فتح المنبه</string>
     <string name="channel_alarm_name">المنبه</string>
     <string name="channel_alarm_description">يعرض المنبه بملء الشاشة عند حلول موعد منبه الوردية.</string>
     <string name="channel_alarm_playback_name">تشغيل المنبه</string>

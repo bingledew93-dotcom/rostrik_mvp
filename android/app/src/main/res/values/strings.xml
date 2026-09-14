@@ -6,9 +6,15 @@
     <!-- Full-screen alarm (AlarmActivity). -->
     <string name="alarm_fallback_title">Alarm</string>
     <string name="alarm_hint_critical">Critical alarm\nShake firmly to dismiss</string>
+    <!-- The number is the hold duration, always 3; translations assume it. -->
+    <string name="alarm_hint_critical_hold">Critical alarm\nShake firmly, or hold the button for %1$d seconds</string>
+    <string name="alarm_hold_to_dismiss">Hold for %1$d seconds to dismiss</string>
     <string name="alarm_hint_slide">Slide the handle below to dismiss</string>
     <string name="alarm_snooze_button">SNOOZE (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Slide to dismiss</string>
+    <string name="alarm_action_snooze">Snooze</string>
+    <string name="alarm_action_dismiss">Dismiss</string>
+    <string name="alarm_action_open">Open alarm</string>
 
     <!-- Notification channels (names appear in system notification settings). -->
     <string name="channel_alarm_name">Alarm</string>

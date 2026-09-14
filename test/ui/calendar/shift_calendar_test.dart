@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
 import 'package:rostrik_mvp/ui/calendar/shift_calendar.dart';
@@ -150,5 +151,34 @@ void main() {
     await tapCell(tester, dayInMonth(15));
 
     expect(taps.single.$2.map((x) => x.id), ['early', 'late']);
+  });
+
+  // Found on a Pixel: switching Rostrik from German to Arabic while it was open
+  // left the month title and weekday row in German until the page changed.
+  testWidgets('month title and weekdays follow a live language change',
+      (tester) async {
+    addTearDown(() => Intl.defaultLocale = null);
+    Future<void> pumpIn(Locale locale) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: syncL10nFromContext,
+          home: const Scaffold(body: ShiftCalendarView(shifts: [])),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    final month = DateTime(now.year, now.month);
+    await pumpIn(const Locale('de'));
+    expect(find.text(DateFormat.yMMMM('de').format(month)), findsOneWidget);
+    expect(find.text(DateFormat.E('de').format(dayInMonth(1))), findsOneWidget);
+
+    await pumpIn(const Locale('ar'));
+    expect(find.text(DateFormat.yMMMM('ar').format(month)), findsOneWidget);
+    expect(find.text(DateFormat.E('ar').format(dayInMonth(1))), findsOneWidget);
+    expect(find.text(DateFormat.E('de').format(dayInMonth(1))), findsNothing);
   });
 }

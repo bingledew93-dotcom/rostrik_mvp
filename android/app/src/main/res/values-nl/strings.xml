@@ -3,9 +3,14 @@
     <string name="widget_description">Je volgende dienst in één oogopslag</string>
     <string name="alarm_fallback_title">Wekker</string>
     <string name="alarm_hint_critical">Kritieke wekker\nSchud stevig om te stoppen</string>
+    <string name="alarm_hint_critical_hold">Kritieke wekker\nSchud stevig of houd de knop %1$d seconden ingedrukt</string>
+    <string name="alarm_hold_to_dismiss">Houd %1$d seconden ingedrukt om te stoppen</string>
     <string name="alarm_hint_slide">Schuif de knop hieronder om te stoppen</string>
     <string name="alarm_snooze_button">SLUIMEREN (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Schuif om te stoppen</string>
+    <string name="alarm_action_snooze">Sluimeren</string>
+    <string name="alarm_action_dismiss">Stoppen</string>
+    <string name="alarm_action_open">Wekker openen</string>
     <string name="channel_alarm_name">Wekker</string>
     <string name="channel_alarm_description">Toont de wekker op volledig scherm als een dienstwekker afgaat.</string>
     <string name="channel_alarm_playback_name">Wekker afspelen</string>

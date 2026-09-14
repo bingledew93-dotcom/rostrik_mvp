@@ -1,8 +1,10 @@
 package com.example.rostrik_mvp
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,19 +18,18 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.io.File
-import java.io.FileOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.sqrt
 
 /**
@@ -57,11 +58,13 @@ import kotlin.math.sqrt
  *     left, so a tap landing anywhere on the right of the track is ignored
  *     outright. Mirrors the app's swipe-to-confirm convention.
  *   * Critical-shift alarm → Shake-to-dismiss, and the slide handle is HIDDEN.
- *     A must-not-miss alarm must not be swipeable away half-asleep; only a
+ *     A must-not-miss alarm must not be swipeable away half-asleep; a
  *     deliberate, sustained shake ([SHAKE_THRESHOLD_G], [SHAKE_COUNT_REQUIRED] —
- *     a single bump or dropped phone can never reach it) silences it. A critical
- *     alarm on a device with no accelerometer falls back to the slide handle, so
- *     the user is never locked out.
+ *     a single bump or dropped phone can never reach it) silences it. If the
+ *     alarm is still ringing [HOLD_REVEAL_DELAY_MS] later, a hold-to-dismiss
+ *     button appears as the fallback (a [HOLD_TO_DISMISS_MS] unbroken press).
+ *     A critical alarm on a device with no accelerometer falls back to the
+ *     slide handle, so the user is never locked out.
  *
  * (This is what makes the Dart-side "Critical Shift" toggle meaningful: the
  * dismiss difficulty actually changes with it, rather than shake being hardcoded
@@ -95,34 +98,17 @@ class AlarmActivity : Activity(), SensorEventListener {
         // the user doesn't have to fight the last pixel to the edge.
         private const val DISMISS_SLIDE_FRACTION = 0.9f
 
-        // The dismissal fail-safe ledger. MUST equal
-        // MainActivity.PENDING_DISMISSALS_FILE and `pendingDismissalsFileName`
-        // in lib/alarms/pending_dismissal_guard.dart. Appending an id here is
-        // how this native screen reports "alarm dismissed" back to Dart: the
-        // app's boot/foreground gate reads + replays the ledger into Hive, so
-        // the dismissal survives even if our process is reaped right after.
-        private const val PENDING_DISMISSALS_FILE = "pending_dismissals"
-
-        // Defensive fallback when the snooze-interval extra is absent (e.g. an
-        // alarm armed by an older build). The live value rides the fire intent,
-        // read from the user's `snooze_duration` setting on the Dart side.
-        private const val DEFAULT_SNOOZE_MINUTES = 1
-
-        // The snooze fail-safe ledger — one `<shiftId>|<untilMillis>` line per
-        // snooze. MUST equal `pendingSnoozesFileName` in
-        // lib/alarms/pending_snooze_guard.dart. Dart reads it on resume/boot
-        // and sets `Shift.snoozedUntil` BEFORE its reconcile, so the reconcile
-        // keeps (not cancels) the alarm this screen just re-armed.
-        private const val PENDING_SNOOZES_FILE = "pending_snoozes"
-
-        // The fired-one-time cleanup ledger — one owning `<appAlarmId>` per line.
-        // MUST equal `pendingAlarmDeletesFileName` in
-        // lib/alarms/pending_alarm_delete_guard.dart. Appending the fired alarm's
-        // appAlarmId on dismiss is how this screen tells Dart "this alarm fired";
-        // the Dart drain deletes it BEFORE its reconcile iff it's a one-time rule
-        // (so a spent one-shot can't re-project into a daily cycle). Recurring
-        // alarms also get recorded but Dart no-ops them.
-        private const val PENDING_ALARM_DELETES_FILE = "pending_alarm_deletes"
+        // ---- Hold-to-dismiss fallback (critical alarms) ---------------------
+        // A critical alarm asks for a shake first. If it is still ringing this
+        // long after the screen appears, the hint changes and a hold button
+        // appears — for anyone who cannot shake the phone (on a stand, a hand
+        // that won't cooperate, a shake that never reaches the threshold). The
+        // original Flutter wake screen had this fallback; the native screen
+        // lost it, while the create sheet still promised it.
+        private const val HOLD_REVEAL_DELAY_MS = 3_000L
+        // How long an unbroken press must last to dismiss. The hint and button
+        // strings take this in seconds, and their translations assume 3.
+        private const val HOLD_TO_DISMISS_MS = 3_000L
     }
 
     private var sensorManager: SensorManager? = null
@@ -143,7 +129,7 @@ class AlarmActivity : Activity(), SensorEventListener {
     private var uri: String? = null
     private var vibrate: Boolean = false
     private var bundledResource: String? = null
-    private var snoozeMinutes: Int = DEFAULT_SNOOZE_MINUTES
+    private var snoozeMinutes: Int = AlarmRingControl.DEFAULT_SNOOZE_MINUTES
 
     // Notification copy carried forward so a Snooze re-arm keeps the alarm
     // notification detailed. `contextText` is the time-free shift context; the
@@ -168,15 +154,30 @@ class AlarmActivity : Activity(), SensorEventListener {
      *  double ledger write). Shared by dismiss AND snooze — both are terminal. */
     private var dismissed = false
 
-    /** Receives [AlarmAudioService.ACTION_AUTO_DISMISS] — the service's
-     *  15-minute battery fail-safe. By the time this fires the service has
-     *  ALREADY recorded the dismissal, released the WakeLock, stopped the audio
-     *  and cancelled the notification; the activity's only remaining job is to
-     *  drop its own window so the screen can turn off. Registered NOT_EXPORTED
-     *  for the whole onCreate→onDestroy lifetime so it still lands while the
-     *  screen is occluded by the shade (when the activity is merely paused). */
+    /** The hint under the title; reworded when the hold fallback appears. */
+    private var hintView: TextView? = null
+
+    /** The hold-to-dismiss button, built hidden for a shake-mode alarm. */
+    private var holdTrack: View? = null
+
+    private val holdRevealHandler = Handler(Looper.getMainLooper())
+    private val revealHold = Runnable { showHoldFallback() }
+
+    /** Receives [AlarmAudioService.ACTION_AUTO_DISMISS] — sent by the service's
+     *  15-minute battery fail-safe, and by [AlarmActionReceiver] when the ring
+     *  is ended from the notification's buttons. By the time this fires the
+     *  sender has ALREADY done the ledger writes, released the WakeLock, stopped
+     *  the audio and cancelled the notification; the activity's only remaining
+     *  job is to drop its own window so the screen can turn off. A broadcast
+     *  naming a different alarm's notification id is ignored, so ending a
+     *  superseded alarm from the shade cannot close the screen of the one still
+     *  ringing. Registered NOT_EXPORTED for the whole onCreate→onDestroy lifetime
+     *  so it still lands while the screen is occluded by the shade (when the
+     *  activity is merely paused). */
     private val autoDismissReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            val endedId = intent?.getIntExtra(AlarmReceiver.EXTRA_NOTIFICATION_ID, -1) ?: -1
+            if (endedId >= 0 && notificationId >= 0 && endedId != notificationId) return
             Log.d(TAG, "auto-dismiss broadcast received — finishing alarm screen")
             finishFromServiceTimeout()
         }
@@ -199,8 +200,8 @@ class AlarmActivity : Activity(), SensorEventListener {
         // matching stream. Note this only helps while THIS screen is in front:
         // when the full-screen intent degrades to a heads-up notification (the
         // normal case on an unlocked, in-use phone) the foreground app still
-        // owns the volume keys. That gap is the notification-actions work, not
-        // this line.
+        // owns the volume keys, and the notification's Snooze/Dismiss buttons
+        // ([AlarmActionReceiver]) are the way out.
         volumeControlStream = android.media.AudioManager.STREAM_ALARM
 
         applyLockScreenWindowFlags()
@@ -220,6 +221,7 @@ class AlarmActivity : Activity(), SensorEventListener {
         Log.d(TAG, "dismiss mode: ${if (shakeToDismiss) "shake (critical)" else "slide"}")
 
         setContentView(buildContentView())
+        if (shakeToDismiss) holdRevealHandler.postDelayed(revealHold, HOLD_REVEAL_DELAY_MS)
 
         registerAutoDismissReceiver()
     }
@@ -286,10 +288,11 @@ class AlarmActivity : Activity(), SensorEventListener {
             textSize = 30f
             gravity = Gravity.CENTER
         }
-        val mins = if (snoozeMinutes > 0) snoozeMinutes else DEFAULT_SNOOZE_MINUTES
+        val mins = if (snoozeMinutes > 0) snoozeMinutes else AlarmRingControl.DEFAULT_SNOOZE_MINUTES
         val hint = TextView(this).apply {
             // Critical-shift alarms (shake mode) deliberately offer NO slide
-            // handle — the only way to silence them is a firm, sustained shake.
+            // handle — a firm, sustained shake, or the hold fallback once it
+            // appears (see [showHoldFallback], which rewords this hint).
             text = getString(
                 if (shakeToDismiss) R.string.alarm_hint_critical
                 else R.string.alarm_hint_slide,
@@ -299,6 +302,7 @@ class AlarmActivity : Activity(), SensorEventListener {
             gravity = Gravity.CENTER
             setPadding(0, dp(16), 0, dp(40))
         }
+        hintView = hint
         // Snooze stays the big, obvious tap target (a groggy worker wanting a few
         // more minutes shouldn't have to perform a precise gesture). The label
         // reflects the user's configured interval, not a hardcoded value.
@@ -320,8 +324,104 @@ class AlarmActivity : Activity(), SensorEventListener {
         // with a working accelerometer dismiss by shake only — no handle.
         if (!shakeToDismiss) {
             root.addView(buildSlideToDismissTrack())
+        } else {
+            root.addView(buildHoldToDismissTrack().also { holdTrack = it })
         }
         return root
+    }
+
+    /** Swaps in the hold instruction and shows the hold button. Idempotent. */
+    private fun showHoldFallback() {
+        if (dismissed) return
+        val track = holdTrack ?: return
+        if (track.visibility == View.VISIBLE) return
+        hintView?.text = getString(R.string.alarm_hint_critical_hold, (HOLD_TO_DISMISS_MS / 1000).toInt())
+        track.alpha = 0f
+        track.visibility = View.VISIBLE
+        track.animate().alpha(1f).setDuration(250).start()
+        Log.d(TAG, "critical alarm: hold-to-dismiss fallback shown")
+    }
+
+    /**
+     * The critical-alarm fallback: a button that dismisses once pressed and held
+     * for [HOLD_TO_DISMISS_MS] without lifting. A fill sweeps across while the
+     * finger is down so progress is visible; lifting early drains it back, so a
+     * brush against the screen can never complete. Built hidden and revealed by
+     * [showHoldFallback].
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun buildHoldToDismissTrack(): FrameLayout {
+        val trackHeight = dp(72)
+        val track = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = trackHeight / 2f
+                setColor(Color.parseColor("#16161C"))
+                setStroke(dp(1), Color.parseColor("#2E2E3A"))
+            }
+            clipToOutline = true
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                trackHeight,
+            ).apply { topMargin = dp(20) }
+        }
+        val fill = View(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = trackHeight / 2f
+                setColor(Color.parseColor("#3A3A48"))
+            }
+            pivotX = 0f
+            scaleX = 0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+        }
+        val holdLabel = TextView(this).apply {
+            text = getString(R.string.alarm_hold_to_dismiss, (HOLD_TO_DISMISS_MS / 1000).toInt())
+            setTextColor(Color.parseColor("#E6E6EC"))
+            textSize = 17f
+            gravity = Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+        }
+        track.addView(fill)
+        track.addView(holdLabel)
+
+        var progress: ValueAnimator? = null
+        track.setOnTouchListener { _, ev ->
+            if (dismissed || track.visibility != View.VISIBLE) return@setOnTouchListener false
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    progress?.cancel()
+                    val from = fill.scaleX
+                    progress = ValueAnimator.ofFloat(from, 1f).apply {
+                        duration = (HOLD_TO_DISMISS_MS * (1f - from)).toLong()
+                        interpolator = LinearInterpolator()
+                        addUpdateListener { fill.scaleX = it.animatedValue as Float }
+                        addListener(object : AnimatorListenerAdapter() {
+                            private var cancelled = false
+                            override fun onAnimationCancel(animation: Animator) { cancelled = true }
+                            override fun onAnimationEnd(animation: Animator) {
+                                if (!cancelled) dismissAlarm("hold")
+                            }
+                        })
+                        start()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    progress?.cancel()
+                    progress = null
+                    fill.animate().scaleX(0f).setDuration(200).start()
+                    true
+                }
+                else -> true
+            }
+        }
+        return track
     }
 
     /**
@@ -442,13 +542,6 @@ class AlarmActivity : Activity(), SensorEventListener {
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
-    /** Formats [millis] as a 12-hour `hh:mm AM/PM` clock string for the snooze
-     *  re-arm's notification — mirrors the Dart side's `_formatClock12h` so a
-     *  snoozed alarm's notification reads identically to a freshly-scheduled one
-     *  ("03:05 AM"). */
-    private fun formatClock12h(millis: Long): String =
-        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(millis))
-
     // -----------------------------------------------------------------------
     // Accelerometer lifecycle. Registered while the screen is the foreground
     // alarm UI; unregistered the moment it's backgrounded so we never leak the
@@ -523,185 +616,41 @@ class AlarmActivity : Activity(), SensorEventListener {
     private fun dismissAlarm(reason: String) {
         if (dismissed) return
         dismissed = true
-        Log.d(TAG, "dismiss via '$reason' (id=$alarmId)")
+        // Audio, notification, ledgers and WakeLock — shared with the
+        // notification's Dismiss button so both paths end a ring identically.
+        AlarmRingControl.dismiss(this, currentRing(), reason)
 
-        // 1. Stop the looping audio. stopService routes to the service's
-        //    onDestroy → AlarmAudioEngine.stop() (audio + haptics).
-        stopService(Intent(this, AlarmAudioService::class.java))
-
-        // 2. Cancel the full-screen-intent notification so no stale alarm
-        //    lingers in the shade.
-        cancelAlarmNotification()
-
-        // 3. Report success to the Dart layer durably. Appending
-        //    `<shiftId>|<appAlarmId>` to the native ledger is the
-        //    process-death-proof callback the app already trusts
-        //    (MainActivity.readPendingDismissals + the Dart boot gate replay it
-        //    into Hive). The appAlarmId scopes the dismissal to THIS ring —
-        //    Dart records it per-occurrence so the shift's other alarms keep
-        //    firing. No need to spin up Flutter at 3am.
-        recordDismissal(alarmId, appAlarmId)
-
-        // 3b. Record the fired rule so Dart can delete a spent ONE-TIME alarm
-        //     before its next reconcile re-projects it into a daily cycle.
-        //     Recorded for any alarm with an appAlarmId; Dart no-ops recurring
-        //     rules and only deletes the one-time ones.
-        recordPendingAlarmDelete(appAlarmId)
-
-        // 4. Release the WakeLock AlarmReceiver took at fire time.
-        AlarmReceiver.releaseWakeLock()
-
-        // 5. Drop keep-screen-on and finish, removing the task so no zombie
-        //    alarm screen lingers over the keyguard (the activity is also
-        //    excludeFromRecents in the manifest).
+        // Drop keep-screen-on and finish, removing the task so no zombie
+        // alarm screen lingers over the keyguard (the activity is also
+        // excludeFromRecents in the manifest).
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         finishAndRemoveTask()
-    }
-
-    private fun cancelAlarmNotification() {
-        try {
-            val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            // Per-alarm id (audit F4) — cancel THIS ring's notification only;
-            // a superseded sibling's stays until it is handled. Fallback for
-            // legacy intents without the id extra.
-            mgr.cancel(if (notificationId >= 0) notificationId else AlarmReceiver.NOTIF_ID)
-        } catch (e: Exception) {
-            Log.w(TAG, "notification cancel failed", e)
-        }
     }
 
     /** Snooze: re-arm the SAME alarm at the configured offset and stand the
-     *  screen down.
-     *
-     *  Reusing [notificationId] is the crux of conflict-free reconciliation —
-     *  that id is already in Dart's NativeAlarmScheduler ledger, so a later
-     *  reconcile either REPLACES this alarm in place (same-day → projection
-     *  computes the same id, FLAG_UPDATE_CURRENT) or CANCELS it and re-schedules
-     *  at the identical instant (cross-midnight → projection's new id; this id
-     *  becomes a ledger orphan). Either way the user gets exactly one alarm at
-     *  the snooze instant. The `pending_snoozes` entry is what makes Dart set
-     *  `snoozedUntil` BEFORE that reconcile, so the reconcile keeps the alarm
-     *  instead of seeing an unacknowledged shift with no future ring and
-     *  cancelling it. */
+     *  screen down. See [AlarmRingControl.snooze] for why the id is reused. */
     private fun snoozeAlarm() {
         if (dismissed) return
         dismissed = true
-        val minutes = if (snoozeMinutes > 0) snoozeMinutes else DEFAULT_SNOOZE_MINUTES
-        val snoozeUntil = System.currentTimeMillis() + minutes * 60L * 1000L
-        Log.d(TAG, "snooze id=$notificationId alarmId=$alarmId mins=$minutes until=$snoozeUntil")
-
-        // 1. Re-arm the SAME notification id at the user's snooze offset, with the
-        //    same tone, and carrying the snooze interval forward for the next tap.
-        //    Re-stamp the display time to the SNOOZE instant so the next
-        //    notification shows when it will actually ring; keep the shift
-        //    context as-is.
-        if (notificationId >= 0) {
-            val armed = NativeAlarmScheduling.schedule(
-                applicationContext,
-                id = notificationId,
-                triggerAtMillis = snoozeUntil,
-                alarmId = alarmId,
-                appAlarmId = appAlarmId,
-                label = label,
-                source = source,
-                uri = uri,
-                vibrate = vibrate,
-                bundledResource = bundledResource,
-                snoozeMinutes = minutes,
-                displayTime = formatClock12h(snoozeUntil),
-                body = contextText,
-                requiresShake = requiresShake,
-            )
-            if (!armed) {
-                // Android 12/12L with the exact-alarm permission revoked: the
-                // re-arm was refused (schedule() never throws — an uncaught
-                // SecurityException here would crash the alarm screen on a
-                // snooze tap). The snooze ledger below still records intent;
-                // Dart's reconcile re-arms once permission returns.
-                Log.w(TAG, "snooze: exact-alarm refused — snooze not re-armed natively")
-            }
-        } else {
-            Log.w(TAG, "snooze: missing notification id — cannot re-arm natively")
-        }
-
-        // 2. Record the snooze so Dart sets `snoozedUntil` (shift) or the one-off
-        //    snooze map (shift-less 'NONE', keyed by appAlarmId).
-        recordSnooze(alarmId, appAlarmId, snoozeUntil)
-
-        // 3. Stand down exactly like a dismiss — stop audio, cancel the
-        //    notification, release the WakeLock, finish. (stopService cancels
-        //    the 15-min auto-timeout via the service's onDestroy.)
-        stopService(Intent(this, AlarmAudioService::class.java))
-        cancelAlarmNotification()
-        AlarmReceiver.releaseWakeLock()
+        AlarmRingControl.snooze(this, currentRing())
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         finishAndRemoveTask()
     }
 
-    /** Append `<shiftId>|<appAlarmId>|<untilMillis>` to the snooze ledger,
-     *  flushed + fsync'd so it survives an immediate reap. Dart uses shiftId for
-     *  shift-based alarms (→ `Shift.snoozedUntil`) and appAlarmId for shift-less
-     *  'NONE' alarms (→ the one-off snooze map). Skips a record with neither id. */
-    private fun recordSnooze(shiftId: String?, appAlarmId: String?, untilMillis: Long) {
-        val shift = shiftId ?: ""
-        val app = appAlarmId ?: ""
-        if (shift.isEmpty() && app.isEmpty()) return
-        try {
-            val file = File(filesDir, PENDING_SNOOZES_FILE)
-            FileOutputStream(file, /* append = */ true).use { out ->
-                out.write("$shift|$app|$untilMillis\n".toByteArray(Charsets.UTF_8))
-                out.flush()
-                out.fd.sync()
-            }
-            Log.d(TAG, "recorded snooze shift=$shift app=$app until=$untilMillis")
-        } catch (e: Exception) {
-            Log.w(TAG, "recordSnooze failed shift=$shift app=$app", e)
-        }
-    }
-
-    /** Append `<shiftId>|<appAlarmId>` to the native ledger, flushed + fsync'd
-     *  so it survives the OS reaping us immediately after. The appAlarmId is
-     *  what lets Dart resolve the dismissal to ONE ring (a shift can carry
-     *  several alarms; dismissing the first must never disarm the rest). When
-     *  it is absent (a fire intent armed by an older build) the bare shiftId
-     *  is written and Dart falls back to the legacy whole-shift ack. De-dup is
-     *  the reader's job (a double-tap appends twice; the Hive replay acks
-     *  once). */
-    private fun recordDismissal(shiftId: String?, appAlarmId: String?) {
-        if (shiftId.isNullOrEmpty()) return
-        val line = if (appAlarmId.isNullOrEmpty()) shiftId else "$shiftId|$appAlarmId"
-        try {
-            val file = File(filesDir, PENDING_DISMISSALS_FILE)
-            FileOutputStream(file, /* append = */ true).use { out ->
-                out.write((line + "\n").toByteArray(Charsets.UTF_8))
-                out.flush()
-                out.fd.sync() // kernel-sync — the whole point of the fail-safe
-            }
-            Log.d(TAG, "recorded dismissal $line")
-        } catch (e: Exception) {
-            Log.w(TAG, "recordDismissal failed for $line", e)
-        }
-    }
-
-    /** Append the fired alarm's owning [appAlarmId] to the cleanup ledger,
-     *  flushed + fsync'd so it survives an immediate reap. Dart resolves each id
-     *  to its AppAlarm on the next boot/resume and deletes the ONE-TIME ones
-     *  (recurring rules are a no-op there), so a spent one-shot can't re-project
-     *  into a daily cycle. Skips an empty id (nothing to resolve). */
-    private fun recordPendingAlarmDelete(appAlarmId: String?) {
-        if (appAlarmId.isNullOrEmpty()) return
-        try {
-            val file = File(filesDir, PENDING_ALARM_DELETES_FILE)
-            FileOutputStream(file, /* append = */ true).use { out ->
-                out.write((appAlarmId + "\n").toByteArray(Charsets.UTF_8))
-                out.flush()
-                out.fd.sync() // kernel-sync — survives an immediate process reap
-            }
-            Log.d(TAG, "recorded pending alarm-delete appAlarmId=$appAlarmId")
-        } catch (e: Exception) {
-            Log.w(TAG, "recordPendingAlarmDelete failed for id=$appAlarmId", e)
-        }
-    }
+    /** The ringing alarm as the shared tear-down sees it. */
+    private fun currentRing() = AlarmRingControl.Ring(
+        alarmId = alarmId,
+        appAlarmId = appAlarmId,
+        notificationId = notificationId,
+        label = label,
+        contextText = contextText,
+        requiresShake = requiresShake,
+        snoozeMinutes = snoozeMinutes,
+        source = source,
+        uri = uri,
+        vibrate = vibrate,
+        bundledResource = bundledResource,
+    )
 
     private fun registerAutoDismissReceiver() {
         val filter = IntentFilter(AlarmAudioService.ACTION_AUTO_DISMISS)
@@ -729,6 +678,7 @@ class AlarmActivity : Activity(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        holdRevealHandler.removeCallbacks(revealHold)
         if (autoDismissReceiverRegistered) {
             try {
                 unregisterReceiver(autoDismissReceiver)

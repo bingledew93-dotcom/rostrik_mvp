@@ -109,7 +109,7 @@ class _SectionHeader extends StatelessWidget {
       style: theme.textTheme.labelMedium?.copyWith(
         color: theme.colorScheme.primary,
         fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
+        letterSpacing: labelTracking(context, 1.2),
       ),
     );
   }

@@ -3,9 +3,14 @@
     <string name="widget_description">다음 근무를 한눈에</string>
     <string name="alarm_fallback_title">알람</string>
     <string name="alarm_hint_critical">중요 알람\n세게 흔들어서 끄세요</string>
+    <string name="alarm_hint_critical_hold">중요 알람\n세게 흔들거나 버튼을 %1$d초 동안 누르고 있으세요</string>
+    <string name="alarm_hold_to_dismiss">%1$d초 동안 눌러서 끄기</string>
     <string name="alarm_hint_slide">아래 손잡이를 밀어서 끄세요</string>
     <string name="alarm_snooze_button">다시 알림 (%1$d분)</string>
     <string name="alarm_slide_to_dismiss">밀어서 끄기</string>
+    <string name="alarm_action_snooze">다시 알림</string>
+    <string name="alarm_action_dismiss">끄기</string>
+    <string name="alarm_action_open">알람 열기</string>
     <string name="channel_alarm_name">알람</string>
     <string name="channel_alarm_description">근무 알람 시각이 되면 전체 화면 알람을 표시해요.</string>
     <string name="channel_alarm_playback_name">알람 재생</string>

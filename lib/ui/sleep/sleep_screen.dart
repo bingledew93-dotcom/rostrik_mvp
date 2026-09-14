@@ -148,7 +148,7 @@ class _SectionHeader extends StatelessWidget {
       style: theme.textTheme.labelMedium?.copyWith(
         color: theme.colorScheme.primary,
         fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
+        letterSpacing: labelTracking(context, 1.2),
       ),
     );
   }
@@ -278,7 +278,7 @@ class _NightTransitionContent extends StatelessWidget {
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 1.4,
+                letterSpacing: labelTracking(context, 1.4),
               ),
             ),
           ],
@@ -325,7 +325,7 @@ class _RestRecoveryContent extends StatelessWidget {
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 1.4,
+                letterSpacing: labelTracking(context, 1.4),
               ),
             ),
           ],
@@ -373,7 +373,7 @@ class _ActiveTargetContent extends StatelessWidget {
           style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.primary,
             fontWeight: FontWeight.w700,
-            letterSpacing: 1.4,
+            letterSpacing: labelTracking(context, 1.4),
           ),
         ),
         const SizedBox(height: 14),
