@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">बंद करने के लिए नीचे का हैंडल खिसकाएँ</string>
     <string name="alarm_snooze_button">स्नूज़ (%1$d मिनट)</string>
     <string name="alarm_slide_to_dismiss">बंद करने के लिए खिसकाएँ</string>
+    <string name="alarm_action_snooze">स्नूज़</string>
+    <string name="alarm_action_dismiss">बंद करें</string>
+    <string name="alarm_action_open">अलार्म खोलें</string>
     <string name="channel_alarm_name">अलार्म</string>
     <string name="channel_alarm_description">शिफ्ट अलार्म का समय होने पर पूरी स्क्रीन पर अलार्म दिखाता है।</string>
     <string name="channel_alarm_playback_name">अलार्म प्लेबैक</string>

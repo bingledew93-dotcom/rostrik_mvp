@@ -9,6 +9,9 @@
     <string name="alarm_hint_slide">Slide the handle below to dismiss</string>
     <string name="alarm_snooze_button">SNOOZE (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Slide to dismiss</string>
+    <string name="alarm_action_snooze">Snooze</string>
+    <string name="alarm_action_dismiss">Dismiss</string>
+    <string name="alarm_action_open">Open alarm</string>
 
     <!-- Notification channels (names appear in system notification settings). -->
     <string name="channel_alarm_name">Alarm</string>

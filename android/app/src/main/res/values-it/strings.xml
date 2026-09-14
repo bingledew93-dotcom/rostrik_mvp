@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">Scorri la maniglia qui sotto per spegnere</string>
     <string name="alarm_snooze_button">POSTICIPA (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Scorri per spegnere</string>
+    <string name="alarm_action_snooze">Posticipa</string>
+    <string name="alarm_action_dismiss">Spegni</string>
+    <string name="alarm_action_open">Apri sveglia</string>
     <string name="channel_alarm_name">Sveglia</string>
     <string name="channel_alarm_description">Mostra la sveglia a schermo intero quando arriva una sveglia di turno.</string>
     <string name="channel_alarm_playback_name">Riproduzione sveglia</string>

@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">Schuif de knop hieronder om te stoppen</string>
     <string name="alarm_snooze_button">SLUIMEREN (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Schuif om te stoppen</string>
+    <string name="alarm_action_snooze">Sluimeren</string>
+    <string name="alarm_action_dismiss">Stoppen</string>
+    <string name="alarm_action_open">Wekker openen</string>
     <string name="channel_alarm_name">Wekker</string>
     <string name="channel_alarm_description">Toont de wekker op volledig scherm als een dienstwekker afgaat.</string>
     <string name="channel_alarm_playback_name">Wekker afspelen</string>

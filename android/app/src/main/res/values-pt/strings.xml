@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">Deslize o controle abaixo para desligar</string>
     <string name="alarm_snooze_button">SONECA (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Deslize para desligar</string>
+    <string name="alarm_action_snooze">Soneca</string>
+    <string name="alarm_action_dismiss">Desligar</string>
+    <string name="alarm_action_open">Abrir alarme</string>
     <string name="channel_alarm_name">Alarme</string>
     <string name="channel_alarm_description">Mostra o alarme em tela cheia quando chega a hora de um alarme de turno.</string>
     <string name="channel_alarm_playback_name">Reprodução do alarme</string>

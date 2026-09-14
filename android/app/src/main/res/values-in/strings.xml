@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">Geser tuas di bawah untuk mematikan</string>
     <string name="alarm_snooze_button">TUNDA (%1$d MNT)</string>
     <string name="alarm_slide_to_dismiss">Geser untuk mematikan</string>
+    <string name="alarm_action_snooze">Tunda</string>
+    <string name="alarm_action_dismiss">Matikan</string>
+    <string name="alarm_action_open">Buka alarm</string>
     <string name="channel_alarm_name">Alarm</string>
     <string name="channel_alarm_description">Menampilkan alarm layar penuh saat alarm shift tiba.</string>
     <string name="channel_alarm_playback_name">Pemutaran alarm</string>

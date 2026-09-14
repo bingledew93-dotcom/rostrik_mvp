@@ -325,16 +325,28 @@ heads-up appeared. The user tried to stop it and could not. Findings:
 - Fix direction: make the ringing notification the service's foreground
   notification (non-dismissible; `startForeground` with the fire notification's
   id, `setOnlyAlertOnce`), and give it action buttons.
-- **Decision needed:** for critical shifts (shake to dismiss), should the
-  notification offer Dismiss at all? A one-tap button bypasses the shake. One
-  option is Snooze + "Open alarm" for critical shifts, Snooze + Dismiss otherwise.
+- **Decided 2026-09-15:** normal alarms get Snooze + Dismiss; critical shifts
+  get Snooze + "Open alarm", so dismissing a critical alarm still takes the
+  shake.
 
-- [ ] Add Snooze and Dismiss actions to the alarm notification, wired to the
-      existing `pending_snoozes` / `pending_dismissals` ledgers exactly as the
-      iOS path does.
-- [ ] Make the ringing notification non-dismissible (owned by
-      `AlarmAudioService`), or give the playback notification a content intent
-      to `AlarmActivity`.
+- [x] Snooze and Dismiss (or Open alarm) buttons on the ring notification —
+      `AlarmActionReceiver`, sharing `AlarmRingControl` with `AlarmActivity` so
+      both write the same ledgers, then nudging a running app to drain them
+      (`onSpentAlarmRecorded`, as iOS does). Device-verified 2026-09-15 on the
+      Pixel, phone unlocked: Snooze re-armed at +5 min and the snoozed ring came
+      back; Dismiss stopped the ring and retired the one-time alarm with no app
+      resume; a critical alarm showed Snooze + Wecker öffnen, and Snooze from the
+      shade closed the open alarm screen.
+- [x] Ring notification is non-dismissible: `AlarmAudioService` holds it as its
+      foreground notification (`NO_CLEAR|FOREGROUND_SERVICE` on device). When a
+      second alarm takes over mid-ring, the first alarm's notification is
+      re-posted without its full-screen intent (audit F4). The superseded case is
+      compile-verified only.
+- [ ] Critical-shift copy promises a fallback the Android alarm screen lacks:
+      the create sheet says "Shake to dismiss · hold 3s as fallback", but
+      `AlarmActivity` has no hold-to-dismiss (`HoldToDismiss` exists only in the
+      onboarding walkthrough). Either add the hold to `AlarmActivity` or change
+      the copy — a user who cannot shake is currently left with Snooze only.
 - [ ] Check `NotificationManager.canUseFullScreenIntent()` (API 34+). The
       permission is app-op gated from Android 14 and is never verified — if it
       is denied the full-screen alarm silently degrades even on the lock screen,
@@ -403,11 +415,12 @@ Follow-ups:
       device-language change until the next reconcile (next app open, or boot).
 - [ ] Adding a string: add it to `app_en.arb` AND all 14 other ARBs, or the
       completeness test fails. Same idea for native strings.
-- [ ] Notification channel names never update for existing installs: every
-      `ensureChannel` (AlarmReceiver, AlarmAudioService, SleepSoundService,
-      ReminderReceiver) returns early when the channel exists, so the Pixel
-      still shows "Alarm playback" / "Reminders" in English. Update
-      name/description on the existing channel instead of returning.
+- [x] Notification channel names never updated for existing installs (every
+      `ensureChannel` returned early when the channel existed). Now relabelled
+      in the current language each time the channel is used
+      (`relabelChannel`); verified on the Pixel ("Alarm" → "Wecker"). A channel
+      nothing uses any more, like the legacy "Alarm playback", keeps its old
+      label.
 - [ ] Ringtone row reads "Default (Fresh Start)" in English on every language
       (create-alarm sheet).
 - [ ] Dashboard settings gear stays top-right in Arabic; other screens mirror it.

@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">Przesuń uchwyt poniżej, aby wyłączyć</string>
     <string name="alarm_snooze_button">DRZEMKA (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Przesuń, aby wyłączyć</string>
+    <string name="alarm_action_snooze">Drzemka</string>
+    <string name="alarm_action_dismiss">Wyłącz</string>
+    <string name="alarm_action_open">Otwórz alarm</string>
     <string name="channel_alarm_name">Budzik</string>
     <string name="channel_alarm_description">Pokazuje budzik na pełnym ekranie, gdy nadchodzi budzik zmiany.</string>
     <string name="channel_alarm_playback_name">Odtwarzanie budzika</string>

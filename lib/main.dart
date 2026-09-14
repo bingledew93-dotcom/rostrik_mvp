@@ -308,8 +308,10 @@ void main() async {
 
   // iOS: a fired alarm is only knowable from the notification response, which
   // iOS delivers AFTER the app is already active — i.e. after the resume drain
-  // above has run. This nudge closes that window, retiring a spent one-time
-  // alarm immediately instead of leaving it to be re-projected to tomorrow.
+  // above has run. Android: the alarm notification's Snooze/Dismiss buttons
+  // write the ledgers with no resume at all. This nudge closes both windows,
+  // retiring a spent one-time alarm immediately instead of leaving it to be
+  // re-projected to tomorrow.
   scheduler.setSpentAlarmListener(() {
     unawaited(drainNativeLedgers(
       shifts: storage.shifts,

@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">اسحب المقبض أدناه للإيقاف</string>
     <string name="alarm_snooze_button">غفوة (%1$d د)</string>
     <string name="alarm_slide_to_dismiss">اسحب للإيقاف</string>
+    <string name="alarm_action_snooze">غفوة</string>
+    <string name="alarm_action_dismiss">إيقاف</string>
+    <string name="alarm_action_open">فتح المنبه</string>
     <string name="channel_alarm_name">المنبه</string>
     <string name="channel_alarm_description">يعرض المنبه بملء الشاشة عند حلول موعد منبه الوردية.</string>
     <string name="channel_alarm_playback_name">تشغيل المنبه</string>

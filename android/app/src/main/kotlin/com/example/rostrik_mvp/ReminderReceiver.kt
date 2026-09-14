@@ -98,7 +98,11 @@ class ReminderReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE)
             as NotificationManager
-        if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
+        if (mgr.relabelChannel(
+            CHANNEL_ID,
+            context.getString(R.string.channel_reminders_name),
+            context.getString(R.string.channel_reminders_description),
+        )) return
         // IMPORTANCE_DEFAULT: a normal, dismissible reminder — makes a sound and
         // may peek, but never takes over the screen the way the alarm channel
         // (IMPORTANCE_HIGH + full-screen intent) does. No DND bypass: a reminder

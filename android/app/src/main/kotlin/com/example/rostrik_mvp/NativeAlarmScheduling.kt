@@ -59,6 +59,25 @@ object NativeAlarmScheduling {
      *  no-show. Older entries are pruned. */
     private const val BOOT_REARM_GRACE_MS = 30L * 60L * 1000L
 
+    /** The UI engine's channel, set by [MainActivity] for as long as its engine
+     *  is attached. Deliberately not the headless [AlarmSyncWorker] engine's:
+     *  only the UI isolate drains the ledgers in response to a nudge. */
+    @Volatile
+    var uiChannel: MethodChannel? = null
+
+    /** Tells a running app that native code just wrote to the dismissal, snooze
+     *  or alarm-delete ledgers, so it drains them now (`drainNativeLedgers` in
+     *  lib/main.dart, via `setSpentAlarmListener`). The same nudge the iOS
+     *  plugin sends; a no-op when the app is not running, since every launch
+     *  drains anyway. Main thread only, like every MethodChannel call. */
+    fun notifyLedgersChanged() {
+        try {
+            uiChannel?.invokeMethod("onSpentAlarmRecorded", null)
+        } catch (e: Exception) {
+            Log.w(TAG, "ledger nudge to Dart failed", e)
+        }
+    }
+
     /** Wires the channel onto [messenger], servicing calls with [context]'s
      *  application context. Returns the channel so the caller can retain it for
      *  the engine's lifetime. */

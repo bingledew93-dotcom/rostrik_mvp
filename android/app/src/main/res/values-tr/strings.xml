@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">Kapatmak için aşağıdaki tutamacı kaydır</string>
     <string name="alarm_snooze_button">ERTELE (%1$d DK)</string>
     <string name="alarm_slide_to_dismiss">Kapatmak için kaydır</string>
+    <string name="alarm_action_snooze">Ertele</string>
+    <string name="alarm_action_dismiss">Kapat</string>
+    <string name="alarm_action_open">Alarmı aç</string>
     <string name="channel_alarm_name">Alarm</string>
     <string name="channel_alarm_description">Vardiya alarmı zamanı geldiğinde tam ekran alarmı gösterir.</string>
     <string name="channel_alarm_playback_name">Alarm çalma</string>

@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">Faites glisser la poignée ci-dessous pour arrêter</string>
     <string name="alarm_snooze_button">RÉPÉTER (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Glissez pour arrêter</string>
+    <string name="alarm_action_snooze">Répéter</string>
+    <string name="alarm_action_dismiss">Arrêter</string>
+    <string name="alarm_action_open">Ouvrir l\'alarme</string>
     <string name="channel_alarm_name">Alarme</string>
     <string name="channel_alarm_description">Affiche l\'alarme en plein écran quand une alarme de poste arrive.</string>
     <string name="channel_alarm_playback_name">Lecture de l\'alarme</string>

@@ -289,7 +289,11 @@ class SleepSoundService : Service() {
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
+        if (mgr.relabelChannel(
+            CHANNEL_ID,
+            getString(R.string.channel_sleep_name),
+            getString(R.string.channel_sleep_description),
+        )) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.channel_sleep_name),

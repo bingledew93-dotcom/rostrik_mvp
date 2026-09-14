@@ -154,6 +154,9 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             applicationContext,
         )
+        // The notification's Snooze/Dismiss buttons nudge this engine to drain
+        // the ledgers they write — no app resume follows a notification button.
+        NativeAlarmScheduling.uiChannel = nativeAlarmsChannel
 
         // Phase-3 optional ACTIVITY REMINDERS — a fully separate, lightweight
         // channel (plain notification, its own receiver, AllowWhileIdle alarm,
@@ -254,6 +257,13 @@ class MainActivity : FlutterActivity() {
         }
         sleepStoppedReceiver = null
         super.onDestroy()
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        if (NativeAlarmScheduling.uiChannel === nativeAlarmsChannel) {
+            NativeAlarmScheduling.uiChannel = null
+        }
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     // ---------------------------------------------------------------------

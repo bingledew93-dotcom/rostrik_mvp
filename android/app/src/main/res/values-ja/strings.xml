@@ -6,6 +6,9 @@
     <string name="alarm_hint_slide">下のつまみをスライドして止めます</string>
     <string name="alarm_snooze_button">スヌーズ（%1$d 分）</string>
     <string name="alarm_slide_to_dismiss">スライドして止める</string>
+    <string name="alarm_action_snooze">スヌーズ</string>
+    <string name="alarm_action_dismiss">止める</string>
+    <string name="alarm_action_open">アラームを開く</string>
     <string name="channel_alarm_name">アラーム</string>
     <string name="channel_alarm_description">シフトのアラーム時刻になると全画面でアラームを表示します。</string>
     <string name="channel_alarm_playback_name">アラーム再生</string>
