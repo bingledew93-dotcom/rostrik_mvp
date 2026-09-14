@@ -309,9 +309,32 @@ when it is not the user is stranded with a ringing phone.
 Ironically iOS is now ahead here — its lack of any wake surface forced us to
 build notification actions, and Android never needed them until this.
 
+**Reproduced 2026-09-15 on the Pixel 9 Pro XL (Android 17).** With the phone
+unlocked, `appops` logged the full-screen intent as rejected at fire time and a
+heads-up appeared. The user tried to stop it and could not. Findings:
+
+- **The notification can be swiped away, and then nothing stops the ring.**
+  Android 14+ lets users dismiss `setOngoing` notifications unless a foreground
+  service owns them. `AlarmReceiver` posts its own notification, so a swipe
+  removes the only route to `AlarmActivity`. The foreground-service
+  notification that remains (`rostrik_alarm_playback`) has no content intent.
+  The audio kept ringing until the app was force-stopped; the 15-minute
+  auto-timeout was the only other exit.
+- Left untouched, the heads-up stays in the shade, and tapping it does open
+  `AlarmActivity` — so the one-tap route exists but nobody finds it.
+- Fix direction: make the ringing notification the service's foreground
+  notification (non-dismissible; `startForeground` with the fire notification's
+  id, `setOnlyAlertOnce`), and give it action buttons.
+- **Decision needed:** for critical shifts (shake to dismiss), should the
+  notification offer Dismiss at all? A one-tap button bypasses the shake. One
+  option is Snooze + "Open alarm" for critical shifts, Snooze + Dismiss otherwise.
+
 - [ ] Add Snooze and Dismiss actions to the alarm notification, wired to the
       existing `pending_snoozes` / `pending_dismissals` ledgers exactly as the
       iOS path does.
+- [ ] Make the ringing notification non-dismissible (owned by
+      `AlarmAudioService`), or give the playback notification a content intent
+      to `AlarmActivity`.
 - [ ] Check `NotificationManager.canUseFullScreenIntent()` (API 34+). The
       permission is app-op gated from Android 14 and is never verified — if it
       is denied the full-screen alarm silently degrades even on the lock screen,
@@ -380,6 +403,23 @@ Follow-ups:
       device-language change until the next reconcile (next app open, or boot).
 - [ ] Adding a string: add it to `app_en.arb` AND all 14 other ARBs, or the
       completeness test fails. Same idea for native strings.
+- [ ] Notification channel names never update for existing installs: every
+      `ensureChannel` (AlarmReceiver, AlarmAudioService, SleepSoundService,
+      ReminderReceiver) returns early when the channel exists, so the Pixel
+      still shows "Alarm playback" / "Reminders" in English. Update
+      name/description on the existing channel instead of returning.
+- [ ] Ringtone row reads "Default (Fresh Start)" in English on every language
+      (create-alarm sheet).
+- [ ] Dashboard settings gear stays top-right in Arabic; other screens mirror it.
+
+Verified on the Pixel 9 Pro XL 2026-09-15 (de, ar, hi, ja; es for alarm text):
+all tabs, Settings, the Schedule month and list views, the native alarm screen
+(de), and alarm text re-arming on a language switch. Fixed there: live language
+switch leaving the calendar in the old language, Arabic dates in Arabic-Indic
+digits beside Western-digit times, and letter spacing splitting Hindi words.
+
+Not i18n, seen during that pass: in the Schedule list view the pinned month
+headers stack (JULI / AUGUST / SEPTEMBER 2026) and cover the first card.
 
 ---
 
