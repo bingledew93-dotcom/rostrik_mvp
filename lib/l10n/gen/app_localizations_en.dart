@@ -1880,4 +1880,92 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get draftConfirmSave => 'Confirm & Save';
+
+  @override
+  String notifBeforeYourShift(String type) {
+    return 'Before your $type shift';
+  }
+
+  @override
+  String notifActivityAt(String kind, String time) {
+    return '$kind at $time';
+  }
+
+  @override
+  String get notifWindDownTitle => 'Time to wind down 🌙';
+
+  @override
+  String notifWindDownBodyTarget(String time) {
+    return 'Ease off the screens — target bedtime is $time.';
+  }
+
+  @override
+  String get notifWindDownBody =>
+      'Ease off the screens and start winding down for the night.';
+
+  @override
+  String get notifBedtimeTitle => 'Bedtime 😴';
+
+  @override
+  String notifBedtimeBodyWake(int hours, String shift, String time) {
+    return 'Head to bed for ~${hours}h before your $shift — wake-up at $time.';
+  }
+
+  @override
+  String notifBedtimeBody(int hours) {
+    return 'Head to bed to hit your ${hours}h sleep goal.';
+  }
+
+  @override
+  String get notifShiftDay => 'day shift';
+
+  @override
+  String get notifShiftAfternoon => 'afternoon shift';
+
+  @override
+  String get notifShiftNight => 'night shift';
+
+  @override
+  String get notifShiftGeneric => 'shift';
+
+  @override
+  String get notifTrialEndsTitle => 'Your Rostrik trial ends tomorrow';
+
+  @override
+  String get notifTrialEndsBody =>
+      'Unlock full access to keep your shift alarms firing.';
+
+  @override
+  String seedWakeUpLabel(String type) {
+    return '$type wake-up';
+  }
+
+  @override
+  String get seedShiftGeneric => 'Shift';
+
+  @override
+  String commonListAnd(String items, String last) {
+    return '$items & $last';
+  }
+
+  @override
+  String get soundClassic => 'Classic';
+
+  @override
+  String get soundSiren => 'Siren';
+
+  @override
+  String get soundDigital => 'Digital';
+
+  @override
+  String get soundChime => 'Chime';
+
+  @override
+  String get patternFirstResponder => 'First Responder Standard';
+
+  @override
+  String get ocrCropTitle => 'Crop to YOUR row only — not the whole team';
+
+  @override
+  String get draftNameHint => 'e.g. May roster';
 }

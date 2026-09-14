@@ -212,7 +212,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   ListTile(
                     key: ValueKey('ringtone-tone-${s.key}'),
                     leading: const Icon(Icons.music_note_outlined),
-                    title: Text(s.label),
+                    title: Text(alarmSoundLabel(s)),
                     trailing: (!hasCustom && _soundKey == s.key)
                         ? Icon(Icons.check, color: accent)
                         : null,
@@ -685,7 +685,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     // discriminator, so a custom selection always wins the label.
     final hasCustomRingtone = _customRingtoneName != null;
     final ringtoneName =
-        _customRingtoneName ?? resolveAlarmSound(_soundKey).label;
+        _customRingtoneName ?? alarmSoundLabel(resolveAlarmSound(_soundKey));
     // Roster shifts (streamed app-wide) let the hero show the REAL firing clock
     // time for the linked shift, not the bare offset. Empty/absent-of-type →
     // falls back to a per-type default so a clock always renders.

@@ -9,6 +9,7 @@ import '../data/models/shift_type.dart';
 import 'ocr_text_sanitizer.dart';
 import 'ocr_time_parser.dart';
 import 'shift_block.dart';
+import '../l10n/l10n.dart';
 
 /// The longest-edge pixel cap applied to every image entering the OCR
 /// pipeline — the app's single most important memory-safety lever.
@@ -172,7 +173,7 @@ class OcrScannerService {
         maxHeight: kMaxScanEdgePx,
         uiSettings: [
           AndroidUiSettings(
-            toolbarTitle: 'Crop to YOUR row only — not the whole team',
+            toolbarTitle: currentL10n.ocrCropTitle,
             lockAspectRatio: false,
             hideBottomControls: false,
             // Free-form crop, seeded at the original ratio so the user starts
@@ -180,7 +181,7 @@ class OcrScannerService {
             initAspectRatio: CropAspectRatioPreset.original,
           ),
           IOSUiSettings(
-            title: 'Crop to YOUR row only — not the whole team',
+            title: currentL10n.ocrCropTitle,
             aspectRatioLockEnabled: false,
             resetAspectRatioEnabled: true,
           ),

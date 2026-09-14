@@ -170,7 +170,10 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
     if (_workTypes.isEmpty) return '';
     final labels = _workTypes.map(defaultAlarmLabelFor).toList();
     if (labels.length == 1) return labels.single;
-    return '${labels.sublist(0, labels.length - 1).join(', ')} & ${labels.last}';
+    return currentL10n.commonListAnd(
+      labels.sublist(0, labels.length - 1).join(', '),
+      labels.last,
+    );
   }
 
   @override

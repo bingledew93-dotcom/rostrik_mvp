@@ -512,7 +512,9 @@ class _PresetTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      pattern.label,
+                      pattern.id == 'rot-first-responder'
+                          ? context.l10n.patternFirstResponder
+                          : pattern.label,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),

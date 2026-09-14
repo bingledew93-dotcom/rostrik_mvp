@@ -179,9 +179,9 @@ class _DraftRosterReviewViewState extends State<_DraftRosterReviewView> {
                   TextField(
                     controller: _nameController,
                     textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'e.g. May roster',
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      hintText: context.l10n.draftNameHint,
                     ),
                     onChanged: controller.setLabel,
                   ),

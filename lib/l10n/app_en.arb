@@ -1054,5 +1054,90 @@
   "draftNoEndTime": "Scanned without an end time — set it to enable Save.",
   "draftTime": "Time",
   "draftSetEnd": "Set end",
-  "draftConfirmSave": "Confirm & Save"
+  "draftConfirmSave": "Confirm & Save",
+  "notifBeforeYourShift": "Before your {type} shift",
+  "@notifBeforeYourShift": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "notifActivityAt": "{kind} at {time}",
+  "@notifActivityAt": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "notifWindDownTitle": "Time to wind down 🌙",
+  "notifWindDownBodyTarget": "Ease off the screens — target bedtime is {time}.",
+  "@notifWindDownBodyTarget": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "notifWindDownBody": "Ease off the screens and start winding down for the night.",
+  "notifBedtimeTitle": "Bedtime 😴",
+  "notifBedtimeBodyWake": "Head to bed for ~{hours}h before your {shift} — wake-up at {time}.",
+  "@notifBedtimeBodyWake": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "shift": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "notifBedtimeBody": "Head to bed to hit your {hours}h sleep goal.",
+  "@notifBedtimeBody": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "notifShiftDay": "day shift",
+  "notifShiftAfternoon": "afternoon shift",
+  "notifShiftNight": "night shift",
+  "notifShiftGeneric": "shift",
+  "notifTrialEndsTitle": "Your Rostrik trial ends tomorrow",
+  "notifTrialEndsBody": "Unlock full access to keep your shift alarms firing.",
+  "seedWakeUpLabel": "{type} wake-up",
+  "@seedWakeUpLabel": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "seedShiftGeneric": "Shift",
+  "commonListAnd": "{items} & {last}",
+  "@commonListAnd": {
+    "placeholders": {
+      "items": {
+        "type": "String"
+      },
+      "last": {
+        "type": "String"
+      }
+    }
+  },
+  "soundClassic": "Classic",
+  "soundSiren": "Siren",
+  "soundDigital": "Digital",
+  "soundChime": "Chime",
+  "patternFirstResponder": "First Responder Standard",
+  "ocrCropTitle": "Crop to YOUR row only — not the whole team",
+  "draftNameHint": "e.g. May roster"
 }

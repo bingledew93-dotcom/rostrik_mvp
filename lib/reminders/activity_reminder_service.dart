@@ -8,6 +8,7 @@ import '../data/repositories/calendar_activity_repository.dart';
 import '../util/clock.dart';
 import 'activity_reminder_scheduler.dart';
 import 'reminder_id.dart';
+import '../l10n/l10n.dart';
 
 /// Keeps the OS's set of **activity reminders** in sync with the activity box —
 /// the reminder analogue of `AlarmSyncService`, but deliberately tiny and fully
@@ -120,18 +121,19 @@ class ActivityReminderService {
   /// Notification title — the activity's own title, or a sensible default if a
   /// (malformed) empty title ever slips through.
   static String _title(CalendarActivity a) =>
-      a.title.trim().isEmpty ? 'Reminder' : a.title.trim();
+      a.title.trim().isEmpty ? currentL10n.dayReminder : a.title.trim();
 
   /// Notification body — a short `Kind at time` / `Kind` context line.
   static String _body(CalendarActivity a) {
+    final l10n = currentL10n;
     final kind = switch (a.kind) {
-      ActivityKind.event => 'Event',
-      ActivityKind.task => 'Task',
-      ActivityKind.birthday => 'Birthday',
+      ActivityKind.event => l10n.actEvent,
+      ActivityKind.task => l10n.actTask,
+      ActivityKind.birthday => l10n.actBirthday,
     };
     final minutes = a.timeMinutes;
     if (minutes == null) return kind;
-    return '$kind at ${_formatClock12h(minutes)}';
+    return l10n.notifActivityAt(kind, _formatClock12h(minutes));
   }
 
   /// Formats a minute-of-day as a 12-hour `h:mm AM/PM` string. Self-contained

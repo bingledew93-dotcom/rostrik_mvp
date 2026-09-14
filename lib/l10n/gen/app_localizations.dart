@@ -3135,6 +3135,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm & Save'**
   String get draftConfirmSave;
+
+  /// No description provided for @notifBeforeYourShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Before your {type} shift'**
+  String notifBeforeYourShift(String type);
+
+  /// No description provided for @notifActivityAt.
+  ///
+  /// In en, this message translates to:
+  /// **'{kind} at {time}'**
+  String notifActivityAt(String kind, String time);
+
+  /// No description provided for @notifWindDownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to wind down 🌙'**
+  String get notifWindDownTitle;
+
+  /// No description provided for @notifWindDownBodyTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Ease off the screens — target bedtime is {time}.'**
+  String notifWindDownBodyTarget(String time);
+
+  /// No description provided for @notifWindDownBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Ease off the screens and start winding down for the night.'**
+  String get notifWindDownBody;
+
+  /// No description provided for @notifBedtimeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bedtime 😴'**
+  String get notifBedtimeTitle;
+
+  /// No description provided for @notifBedtimeBodyWake.
+  ///
+  /// In en, this message translates to:
+  /// **'Head to bed for ~{hours}h before your {shift} — wake-up at {time}.'**
+  String notifBedtimeBodyWake(int hours, String shift, String time);
+
+  /// No description provided for @notifBedtimeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Head to bed to hit your {hours}h sleep goal.'**
+  String notifBedtimeBody(int hours);
+
+  /// No description provided for @notifShiftDay.
+  ///
+  /// In en, this message translates to:
+  /// **'day shift'**
+  String get notifShiftDay;
+
+  /// No description provided for @notifShiftAfternoon.
+  ///
+  /// In en, this message translates to:
+  /// **'afternoon shift'**
+  String get notifShiftAfternoon;
+
+  /// No description provided for @notifShiftNight.
+  ///
+  /// In en, this message translates to:
+  /// **'night shift'**
+  String get notifShiftNight;
+
+  /// No description provided for @notifShiftGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'shift'**
+  String get notifShiftGeneric;
+
+  /// No description provided for @notifTrialEndsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Rostrik trial ends tomorrow'**
+  String get notifTrialEndsTitle;
+
+  /// No description provided for @notifTrialEndsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock full access to keep your shift alarms firing.'**
+  String get notifTrialEndsBody;
+
+  /// No description provided for @seedWakeUpLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{type} wake-up'**
+  String seedWakeUpLabel(String type);
+
+  /// No description provided for @seedShiftGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift'**
+  String get seedShiftGeneric;
+
+  /// No description provided for @commonListAnd.
+  ///
+  /// In en, this message translates to:
+  /// **'{items} & {last}'**
+  String commonListAnd(String items, String last);
+
+  /// No description provided for @soundClassic.
+  ///
+  /// In en, this message translates to:
+  /// **'Classic'**
+  String get soundClassic;
+
+  /// No description provided for @soundSiren.
+  ///
+  /// In en, this message translates to:
+  /// **'Siren'**
+  String get soundSiren;
+
+  /// No description provided for @soundDigital.
+  ///
+  /// In en, this message translates to:
+  /// **'Digital'**
+  String get soundDigital;
+
+  /// No description provided for @soundChime.
+  ///
+  /// In en, this message translates to:
+  /// **'Chime'**
+  String get soundChime;
+
+  /// No description provided for @patternFirstResponder.
+  ///
+  /// In en, this message translates to:
+  /// **'First Responder Standard'**
+  String get patternFirstResponder;
+
+  /// No description provided for @ocrCropTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Crop to YOUR row only — not the whole team'**
+  String get ocrCropTitle;
+
+  /// No description provided for @draftNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. May roster'**
+  String get draftNameHint;
 }
 
 class _AppLocalizationsDelegate
