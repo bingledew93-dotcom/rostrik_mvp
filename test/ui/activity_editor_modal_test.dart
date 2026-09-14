@@ -6,6 +6,7 @@ import 'package:rostrik_mvp/data/repositories/calendar_activity_repository.dart'
 import 'package:rostrik_mvp/ui/activity_editor_modal.dart';
 
 import '../reminders/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   late FakeCalendarActivityRepository repo;
@@ -29,6 +30,8 @@ void main() {
       Provider<CalendarActivityRepository>.value(
         value: repo,
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Builder(
               builder: (context) => Center(

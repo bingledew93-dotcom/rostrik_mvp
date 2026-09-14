@@ -10,6 +10,7 @@ import 'package:rostrik_mvp/ui/pattern_picker_screen.dart';
 import 'package:rostrik_mvp/ui/shift_editor_modal.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   Future<FakeShiftRepository> pumpManage(WidgetTester tester) async {
@@ -31,7 +32,9 @@ void main() {
             value: const AlarmSettings(leadTime: Duration(hours: 1)),
           ),
         ],
-        child: const MaterialApp(home: ManageScreen()),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: ManageScreen()),
       ),
     );
     await tester.pump();
@@ -153,6 +156,8 @@ void main() {
       MultiProvider(
         providers: [Provider<ShiftRepository>.value(value: repo)],
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(body: ShiftEditorModal(initialDate: pastDate)),
         ),
       ),

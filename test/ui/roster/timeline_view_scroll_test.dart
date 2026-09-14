@@ -8,6 +8,7 @@ import 'package:rostrik_mvp/ui/roster/shift_filter.dart';
 import 'package:rostrik_mvp/ui/roster/timeline_view.dart';
 
 import '../../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   Shift shiftOnOffset(int dayOffset) {
@@ -32,6 +33,8 @@ void main() {
       Provider<ShiftRepository>.value(
         value: FakeShiftRepository(),
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               height: 500,

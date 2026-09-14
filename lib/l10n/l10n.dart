@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
+import 'package:intl/intl.dart';
 
 import 'gen/app_localizations.dart';
 
@@ -29,4 +30,25 @@ AppLocalizations resolveL10n() {
     AppLocalizations.supportedLocales,
   );
   return lookupAppLocalizations(locale);
+}
+
+AppLocalizations? _fromWidgetTree;
+
+/// The l10n bundle for code that composes strings OUTSIDE a widget build —
+/// the shared formatters in `shift_format.dart` in particular, whose
+/// signatures predate i18n and are called from dozens of sites without a
+/// BuildContext. Tracks the widget tree's resolved locale once the app is up
+/// (see [syncL10nFromContext]); before that — services at startup, pure Dart
+/// tests — it falls back to device-locale resolution.
+AppLocalizations get currentL10n => _fromWidgetTree ?? resolveL10n();
+
+/// MaterialApp `builder` hook: keeps [currentL10n] and `Intl.defaultLocale`
+/// (which drives every bare `DateFormat`) in lock-step with the locale the
+/// widget tree actually resolved. Date symbols for that locale are loaded by
+/// GlobalMaterialLocalizations before this runs, so bare DateFormat use is
+/// safe anywhere below.
+Widget syncL10nFromContext(BuildContext context, Widget? child) {
+  _fromWidgetTree = AppLocalizations.of(context);
+  Intl.defaultLocale = Localizations.localeOf(context).toString();
+  return child ?? const SizedBox.shrink();
 }

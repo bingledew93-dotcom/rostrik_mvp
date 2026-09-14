@@ -1,48 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/models/shift_type.dart';
+import '../l10n/l10n.dart';
 import '../util/weekday_mask.dart';
 
-const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
+/// Shared, locale-aware formatting hub. These functions deliberately keep
+/// their pre-i18n context-free signatures (dozens of call sites): dates ride
+/// the ambient `Intl.defaultLocale` and labels read [currentL10n], both kept
+/// in lock-step with the widget tree by [syncL10nFromContext]. In pure Dart
+/// tests neither is set, so everything below resolves to English — which is
+/// exactly what the output-pinning tests expect.
 
-/// "Mon, May 4". DateTime.weekday is 1=Mon..7=Sun.
-String formatShiftDate(DateTime date) =>
-    '${_weekdays[date.weekday - 1]}, ${_months[date.month - 1]} ${date.day}';
-
-const _monthsFull = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+/// "Mon, May 4" (en) — abbreviated weekday + month + day, per locale.
+String formatShiftDate(DateTime date) => DateFormat.MMMEd().format(date);
 
 /// "JUNE 2026" — the upper-cased month + year used as the Timeline list's
 /// sticky section header.
 String formatMonthYearHeader(DateTime date) =>
-    '${_monthsFull[date.month - 1].toUpperCase()} ${date.year}';
-
-const _weekdaysFull = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-];
+    DateFormat.yMMMM().format(date).toUpperCase();
 
 /// "Monday, 9 March 2026" — the long form on the roster builder's start-date
 /// field (matches the New Shift Roster design).
 String formatFullDate(DateTime date) =>
-    '${_weekdaysFull[date.weekday - 1]}, ${date.day} '
-    '${_monthsFull[date.month - 1]} ${date.year}';
+    DateFormat('EEEE, d MMMM y').format(date);
 
 /// Human alarm lead-time label: "0 min" / "45 min" / "1 h" / "1 h 30 min".
 /// Single source for both the Settings slider and the onboarding lead-time
 /// dropdown so the two surfaces can never phrase the same duration differently.
 String formatLeadTime(int totalMinutes) {
-  if (totalMinutes == 0) return '0 min';
+  final l10n = currentL10n;
+  if (totalMinutes == 0) return l10n.durationMin(0);
   final h = totalMinutes ~/ 60;
   final m = totalMinutes % 60;
-  if (h == 0) return '$m min';
-  if (m == 0) return '$h h';
-  return '$h h $m min';
+  if (h == 0) return l10n.durationMin(m);
+  if (m == 0) return l10n.durationH(h);
+  return l10n.durationHMin(h, m);
 }
 
 /// 24-hour zero-padded — matches roster card subtitle for consistency.
@@ -71,6 +64,10 @@ String formatClockOfDay(TimeOfDay t, {required bool use24Hour}) =>
 /// hero text, where the calculated firing time (not the lead offset) is the
 /// headline. Input is wrapped to 0..1439 so a midnight-crossing fire time
 /// (start − lead < 0) formats correctly.
+///
+/// Deliberately NOT localized: the numerals-plus-AM/PM shape is a design
+/// element of the hero cards and reads universally; users who prefer local
+/// conventions have the 24-hour toggle.
 String formatClock12h(int minutesOfDay) {
   final total = ((minutesOfDay % 1440) + 1440) % 1440;
   final h24 = total ~/ 60;
@@ -85,25 +82,32 @@ String formatClock12h(int minutesOfDay) {
 /// Unsigned — callers add their own framing ("- " on the create sheet,
 /// "before shift" on the alarm card).
 String formatLeadOffset(int minutes) {
+  final l10n = currentL10n;
   final h = minutes ~/ 60;
   final m = minutes % 60;
-  if (h == 0) return '${m}m';
-  if (m == 0) return '${h}h';
-  return '${h}h ${m}m';
+  if (h == 0) return l10n.durationMinShort(m);
+  if (m == 0) return l10n.durationHShort(h);
+  return l10n.durationHMinShort(h, m);
 }
 
 String shiftTypeLabel(ShiftType type) {
+  final l10n = currentL10n;
   switch (type) {
     case ShiftType.day:
-      return 'Day';
+      return l10n.shiftTypeDay;
     case ShiftType.afternoon:
-      return 'Afternoon';
+      return l10n.shiftTypeAfternoon;
     case ShiftType.night:
-      return 'Night';
+      return l10n.shiftTypeNight;
     case ShiftType.off:
-      return 'Off';
+      return l10n.shiftTypeOff;
   }
 }
+
+/// Localized abbreviated weekday name for a `DateTime.weekday` index
+/// (1=Mon..7=Sun): "Mon" (en). Anchored to 2024-01-01, a Monday.
+String weekdayShort(int weekday) =>
+    DateFormat.E().format(DateTime(2024, 1, weekday));
 
 /// Human-readable weekday set for a weekly alarm, from its packed
 /// `weekdaysBitmask`. Collapses the common runs into idiomatic copy — all seven
@@ -113,13 +117,14 @@ String shiftTypeLabel(ShiftType type) {
 /// only a defensive fallback). Used as the demoted subtitle on weekly alarm
 /// cards and the create-sheet caption.
 String formatWeekdays(int mask) {
+  final l10n = currentL10n;
   final days = weekdaysFromMask(mask);
-  if (days.isEmpty) return 'No days';
-  if (days.length == 7) return 'Every day';
+  if (days.isEmpty) return l10n.weekdaysNone;
+  if (days.length == 7) return l10n.weekdaysEveryDay;
   const weekdaySet = {1, 2, 3, 4, 5};
   const weekendSet = {6, 7};
   final set = days.toSet();
-  if (set.length == 5 && set.containsAll(weekdaySet)) return 'Weekdays';
-  if (set.length == 2 && set.containsAll(weekendSet)) return 'Weekends';
-  return days.map((d) => _weekdays[d - 1]).join(', ');
+  if (set.length == 5 && set.containsAll(weekdaySet)) return l10n.weekdaysWeekdays;
+  if (set.length == 2 && set.containsAll(weekendSet)) return l10n.weekdaysWeekends;
+  return days.map(weekdayShort).join(', ');
 }

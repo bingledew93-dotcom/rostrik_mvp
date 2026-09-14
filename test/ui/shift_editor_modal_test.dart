@@ -7,6 +7,7 @@ import 'package:rostrik_mvp/data/repositories/shift_repository.dart';
 import 'package:rostrik_mvp/ui/shift_editor_modal.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   Future<FakeShiftRepository> pumpEditor(
@@ -28,6 +29,8 @@ void main() {
       MultiProvider(
         providers: [Provider<ShiftRepository>.value(value: repo)],
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ShiftEditorModal(existing: existing, initialDate: initialDate),
           ),

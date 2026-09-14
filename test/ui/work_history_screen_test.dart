@@ -8,6 +8,7 @@ import 'package:rostrik_mvp/logic/work_history.dart';
 import 'package:rostrik_mvp/ui/work_history_screen.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   // Dates well clear of the real wall clock so the completed/future split is
@@ -45,7 +46,9 @@ void main() {
     await tester.pumpWidget(
       Provider<ShiftRepository>.value(
         value: repo,
-        child: MaterialApp(home: WorkHistoryScreen(exporter: exporter)),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: WorkHistoryScreen(exporter: exporter)),
       ),
     );
     await tester.pumpAndSettle();

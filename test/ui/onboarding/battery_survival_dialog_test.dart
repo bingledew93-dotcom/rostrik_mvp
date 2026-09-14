@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rostrik_mvp/ui/onboarding/battery_survival_dialog.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   // permission_handler routes openAppSettings() through this channel.
@@ -11,6 +12,8 @@ void main() {
   Future<void> openDialog(WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Builder(
             builder: (context) => ElevatedButton(

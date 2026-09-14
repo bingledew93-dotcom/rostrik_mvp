@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rostrik_mvp/ui/critical_dismiss_controls.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   Widget host(Widget child) =>
-      MaterialApp(home: Scaffold(body: Center(child: child)));
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: Scaffold(body: Center(child: child)));
 
   group('HoldToDismiss', () {
     testWidgets('holding for the full duration dismisses', (tester) async {

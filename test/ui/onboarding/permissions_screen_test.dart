@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rostrik_mvp/ui/onboarding/permissions_screen.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   const permChannel = MethodChannel('flutter.baseflow.com/permissions/methods');
@@ -50,6 +51,8 @@ void main() {
   Future<void> pumpPermissions(WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: PermissionsScreen(onBack: () {}, onContinue: () {}),
       ),
     );

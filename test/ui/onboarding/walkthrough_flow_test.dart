@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rostrik_mvp/alarms/alarm_capabilities.dart';
 import 'package:rostrik_mvp/ui/critical_dismiss_controls.dart';
 import 'package:rostrik_mvp/ui/onboarding/walkthrough_flow.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   late StreamController<double> shake;
@@ -30,6 +31,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: WalkthroughFlow(
           onFinish: () => finished++,
           shakeMagnitudeStream: shake.stream,

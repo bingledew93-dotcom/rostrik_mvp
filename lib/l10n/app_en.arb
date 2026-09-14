@@ -10,5 +10,139 @@
   "legalConsentCheckbox": "I understand the operating system can affect any alarm app, and I accept the Privacy Policy and Terms of Use.",
   "legalAgreeContinue": "Agree & Continue",
   "commonSaving": "Saving…",
-  "commonCouldNotOpenLink": "Could not open the link."
+  "commonCouldNotOpenLink": "Could not open the link.",
+  "welcomeTagline": "The smart alarm clock built for shift workers.",
+  "welcomeSubTagline": "Alarms that follow your rotating roster — not just weekdays.",
+  "welcomeTrialTitle": "{days}-day free trial",
+  "@welcomeTrialTitle": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "welcomeTrialBody": "Full access to every feature — no card needed. Just a one-time purchase after, never a subscription.",
+  "welcomeGetStarted": "Get Started",
+  "welcomeSkip": "Skip / Set up later",
+  "welcomeTimeFormat": "Time format",
+  "welcomeWeekStarts": "Week starts",
+  "common12h": "12h",
+  "common24h": "24h",
+  "commonSundayShort": "Sun",
+  "commonMondayShort": "Mon",
+  "rosterTypeTitle": "Choose a roster type",
+  "rosterTypeQuestion": "What does your roster look like?",
+  "rosterTypeDay": "Day Shifts",
+  "rosterTypeNight": "Night Shifts",
+  "rosterTypeRotating": "Rotating",
+  "rosterTypeCustom": "Custom",
+  "commonContinue": "Continue",
+  "commonComingSoon": "Coming soon",
+  "permsTitle": "Permissions",
+  "permsIntro": "Rostrik needs a few permissions to fire alarms reliably. You can change these later in system settings.",
+  "permsNotifications": "Notifications",
+  "permsNotificationsSub": "Required to show the wake-up screen.",
+  "permsExactAlarms": "Exact Alarms",
+  "permsExactAlarmsSub": "Lets alarms fire at the exact scheduled time.",
+  "permsBatteryUnrestricted": "Battery Unrestricted",
+  "permsBatteryGrantedSub": "Alarms are protected from battery optimisation.",
+  "permsBatteryDeniedSub": "Some phones kill background apps. Tap to fix.",
+  "permsUnrestrictedBadge": "Unrestricted",
+  "batteryDialogTitle": "Keep alarms alive",
+  "batteryDialogIntro": "Some phones (Samsung, Xiaomi, Oppo, Huawei) aggressively shut down background apps to save battery. If that happens to Rostrik, an alarm can be silenced before it fires.",
+  "batteryDialogMarkUnrestricted": "Mark Rostrik as Unrestricted to stop this:",
+  "batteryStep1": "Open this app’s settings (button below).",
+  "batteryStep2": "Tap Battery (or \"App battery usage\").",
+  "batteryStep3": "Choose Unrestricted (not \"Optimised\" or \"Restricted\").",
+  "batteryStep4": "If you see \"Allow background activity\", switch it on too.",
+  "batteryStep5": "Turn OFF \"Pause app activity if unused\" (or \"Remove permissions if app is unused\") so Android can’t revoke alarm permissions while you’re away.",
+  "commonNotNow": "Not now",
+  "batteryGoToSettings": "Go to Settings",
+  "armEngineTitle": "Arm your alarms",
+  "armEngineRosterReady": "Your roster is ready",
+  "armEngineCycleStarts": "{label} · starts {date}",
+  "@armEngineCycleStarts": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "armEngineSwitchOn": "We'll switch on {summary} wake-up alarms before every matching shift.",
+  "@armEngineSwitchOn": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "armEngineArming": "Arming…",
+  "armEngineCta": "Automate My Alarms",
+  "armEngineLeadTimeLabel": "Alarm lead time",
+  "armEngineLeadTimeHelper": "How early the alarm rings before a shift starts.",
+  "shiftTypeDay": "Day",
+  "shiftTypeAfternoon": "Afternoon",
+  "shiftTypeNight": "Night",
+  "shiftTypeOff": "Off",
+  "weekdaysNone": "No days",
+  "weekdaysEveryDay": "Every day",
+  "weekdaysWeekdays": "Weekdays",
+  "weekdaysWeekends": "Weekends",
+  "durationMin": "{m} min",
+  "@durationMin": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "durationH": "{h} h",
+  "@durationH": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHMin": "{h} h {m} min",
+  "@durationHMin": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "durationMinShort": "{m}m",
+  "@durationMinShort": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHShort": "{h}h",
+  "@durationHShort": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHMinShort": "{h}h {m}m",
+  "@durationHMinShort": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
+    }
+  }
 }

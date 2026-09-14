@@ -159,6 +159,378 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not open the link.'**
   String get commonCouldNotOpenLink;
+
+  /// No description provided for @welcomeTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'The smart alarm clock built for shift workers.'**
+  String get welcomeTagline;
+
+  /// No description provided for @welcomeSubTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms that follow your rotating roster — not just weekdays.'**
+  String get welcomeSubTagline;
+
+  /// No description provided for @welcomeTrialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{days}-day free trial'**
+  String welcomeTrialTitle(int days);
+
+  /// No description provided for @welcomeTrialBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access to every feature — no card needed. Just a one-time purchase after, never a subscription.'**
+  String get welcomeTrialBody;
+
+  /// No description provided for @welcomeGetStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Get Started'**
+  String get welcomeGetStarted;
+
+  /// No description provided for @welcomeSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip / Set up later'**
+  String get welcomeSkip;
+
+  /// No description provided for @welcomeTimeFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Time format'**
+  String get welcomeTimeFormat;
+
+  /// No description provided for @welcomeWeekStarts.
+  ///
+  /// In en, this message translates to:
+  /// **'Week starts'**
+  String get welcomeWeekStarts;
+
+  /// No description provided for @common12h.
+  ///
+  /// In en, this message translates to:
+  /// **'12h'**
+  String get common12h;
+
+  /// No description provided for @common24h.
+  ///
+  /// In en, this message translates to:
+  /// **'24h'**
+  String get common24h;
+
+  /// No description provided for @commonSundayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sun'**
+  String get commonSundayShort;
+
+  /// No description provided for @commonMondayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Mon'**
+  String get commonMondayShort;
+
+  /// No description provided for @rosterTypeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a roster type'**
+  String get rosterTypeTitle;
+
+  /// No description provided for @rosterTypeQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'What does your roster look like?'**
+  String get rosterTypeQuestion;
+
+  /// No description provided for @rosterTypeDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day Shifts'**
+  String get rosterTypeDay;
+
+  /// No description provided for @rosterTypeNight.
+  ///
+  /// In en, this message translates to:
+  /// **'Night Shifts'**
+  String get rosterTypeNight;
+
+  /// No description provided for @rosterTypeRotating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotating'**
+  String get rosterTypeRotating;
+
+  /// No description provided for @rosterTypeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get rosterTypeCustom;
+
+  /// No description provided for @commonContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get commonContinue;
+
+  /// No description provided for @commonComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming soon'**
+  String get commonComingSoon;
+
+  /// No description provided for @permsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get permsTitle;
+
+  /// No description provided for @permsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Rostrik needs a few permissions to fire alarms reliably. You can change these later in system settings.'**
+  String get permsIntro;
+
+  /// No description provided for @permsNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get permsNotifications;
+
+  /// No description provided for @permsNotificationsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Required to show the wake-up screen.'**
+  String get permsNotificationsSub;
+
+  /// No description provided for @permsExactAlarms.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact Alarms'**
+  String get permsExactAlarms;
+
+  /// No description provided for @permsExactAlarmsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Lets alarms fire at the exact scheduled time.'**
+  String get permsExactAlarmsSub;
+
+  /// No description provided for @permsBatteryUnrestricted.
+  ///
+  /// In en, this message translates to:
+  /// **'Battery Unrestricted'**
+  String get permsBatteryUnrestricted;
+
+  /// No description provided for @permsBatteryGrantedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms are protected from battery optimisation.'**
+  String get permsBatteryGrantedSub;
+
+  /// No description provided for @permsBatteryDeniedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Some phones kill background apps. Tap to fix.'**
+  String get permsBatteryDeniedSub;
+
+  /// No description provided for @permsUnrestrictedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrestricted'**
+  String get permsUnrestrictedBadge;
+
+  /// No description provided for @batteryDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep alarms alive'**
+  String get batteryDialogTitle;
+
+  /// No description provided for @batteryDialogIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Some phones (Samsung, Xiaomi, Oppo, Huawei) aggressively shut down background apps to save battery. If that happens to Rostrik, an alarm can be silenced before it fires.'**
+  String get batteryDialogIntro;
+
+  /// No description provided for @batteryDialogMarkUnrestricted.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark Rostrik as Unrestricted to stop this:'**
+  String get batteryDialogMarkUnrestricted;
+
+  /// No description provided for @batteryStep1.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this app’s settings (button below).'**
+  String get batteryStep1;
+
+  /// No description provided for @batteryStep2.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Battery (or \"App battery usage\").'**
+  String get batteryStep2;
+
+  /// No description provided for @batteryStep3.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Unrestricted (not \"Optimised\" or \"Restricted\").'**
+  String get batteryStep3;
+
+  /// No description provided for @batteryStep4.
+  ///
+  /// In en, this message translates to:
+  /// **'If you see \"Allow background activity\", switch it on too.'**
+  String get batteryStep4;
+
+  /// No description provided for @batteryStep5.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn OFF \"Pause app activity if unused\" (or \"Remove permissions if app is unused\") so Android can’t revoke alarm permissions while you’re away.'**
+  String get batteryStep5;
+
+  /// No description provided for @commonNotNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get commonNotNow;
+
+  /// No description provided for @batteryGoToSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Settings'**
+  String get batteryGoToSettings;
+
+  /// No description provided for @armEngineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Arm your alarms'**
+  String get armEngineTitle;
+
+  /// No description provided for @armEngineRosterReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Your roster is ready'**
+  String get armEngineRosterReady;
+
+  /// No description provided for @armEngineCycleStarts.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} · starts {date}'**
+  String armEngineCycleStarts(String label, String date);
+
+  /// No description provided for @armEngineSwitchOn.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll switch on {summary} wake-up alarms before every matching shift.'**
+  String armEngineSwitchOn(String summary);
+
+  /// No description provided for @armEngineArming.
+  ///
+  /// In en, this message translates to:
+  /// **'Arming…'**
+  String get armEngineArming;
+
+  /// No description provided for @armEngineCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Automate My Alarms'**
+  String get armEngineCta;
+
+  /// No description provided for @armEngineLeadTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarm lead time'**
+  String get armEngineLeadTimeLabel;
+
+  /// No description provided for @armEngineLeadTimeHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'How early the alarm rings before a shift starts.'**
+  String get armEngineLeadTimeHelper;
+
+  /// No description provided for @shiftTypeDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get shiftTypeDay;
+
+  /// No description provided for @shiftTypeAfternoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Afternoon'**
+  String get shiftTypeAfternoon;
+
+  /// No description provided for @shiftTypeNight.
+  ///
+  /// In en, this message translates to:
+  /// **'Night'**
+  String get shiftTypeNight;
+
+  /// No description provided for @shiftTypeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get shiftTypeOff;
+
+  /// No description provided for @weekdaysNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No days'**
+  String get weekdaysNone;
+
+  /// No description provided for @weekdaysEveryDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Every day'**
+  String get weekdaysEveryDay;
+
+  /// No description provided for @weekdaysWeekdays.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekdays'**
+  String get weekdaysWeekdays;
+
+  /// No description provided for @weekdaysWeekends.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekends'**
+  String get weekdaysWeekends;
+
+  /// No description provided for @durationMin.
+  ///
+  /// In en, this message translates to:
+  /// **'{m} min'**
+  String durationMin(int m);
+
+  /// No description provided for @durationH.
+  ///
+  /// In en, this message translates to:
+  /// **'{h} h'**
+  String durationH(int h);
+
+  /// No description provided for @durationHMin.
+  ///
+  /// In en, this message translates to:
+  /// **'{h} h {m} min'**
+  String durationHMin(int h, int m);
+
+  /// No description provided for @durationMinShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{m}m'**
+  String durationMinShort(int m);
+
+  /// No description provided for @durationHShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{h}h'**
+  String durationHShort(int h);
+
+  /// No description provided for @durationHMinShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{h}h {m}m'**
+  String durationHMinShort(int h, int m);
 }
 
 class _AppLocalizationsDelegate

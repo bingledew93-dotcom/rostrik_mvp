@@ -9,6 +9,7 @@ import 'package:rostrik_mvp/data/repositories/app_alarm_repository.dart';
 import 'package:rostrik_mvp/ui/alarms_screen.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   Future<FakeAppAlarmRepository> pumpAlarms(
@@ -41,7 +42,9 @@ void main() {
             initialData: seed,
           ),
         ],
-        child: const MaterialApp(home: AlarmsScreen()),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: AlarmsScreen()),
       ),
     );
     await tester.pump();

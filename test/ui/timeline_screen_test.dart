@@ -14,6 +14,7 @@ import 'package:rostrik_mvp/ui/timeline/timeline_screen.dart';
 
 import '../alarms/fakes.dart';
 import '../reminders/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   // Far-future date keeps shifts "upcoming" independent of wall-clock time.
@@ -49,7 +50,9 @@ void main() {
           // Month view watches this to paint activity markers + feed the chooser.
           Provider<List<CalendarActivity>>.value(value: activities),
         ],
-        child: const MaterialApp(home: TimelineScreen()),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: TimelineScreen()),
       ),
     );
     await tester.pump();

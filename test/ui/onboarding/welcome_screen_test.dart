@@ -6,6 +6,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:rostrik_mvp/state/app_preferences.dart';
 import 'package:rostrik_mvp/ui/onboarding/welcome_screen.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   late Directory tempDir;
@@ -50,6 +51,8 @@ void main() {
       ChangeNotifierProvider<AppPreferences>.value(
         value: prefs,
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: WelcomeScreen(
             onContinue: onContinue ?? () {},
             onSkip: onSkip ?? () {},

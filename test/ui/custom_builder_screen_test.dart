@@ -6,6 +6,7 @@ import 'package:rostrik_mvp/logic/shift_generator.dart';
 import 'package:rostrik_mvp/ui/custom_builder_screen.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   late FakeShiftRepository shifts;
@@ -34,7 +35,9 @@ void main() {
     await tester.pumpWidget(
       Provider<ShiftGenerator>.value(
         value: generator,
-        child: const MaterialApp(home: CustomBuilderScreen()),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,home: CustomBuilderScreen()),
       ),
     );
     await tester.pumpAndSettle();

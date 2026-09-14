@@ -10,6 +10,7 @@ import 'package:rostrik_mvp/data/repositories/app_alarm_repository.dart';
 import 'package:rostrik_mvp/ui/create_alarm_sheet.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   Future<FakeAppAlarmRepository> pumpSheet(
@@ -42,6 +43,8 @@ void main() {
           Provider<List<Shift>>.value(value: shifts),
         ],
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: CreateAlarmSheet(initial: initial),
           ),

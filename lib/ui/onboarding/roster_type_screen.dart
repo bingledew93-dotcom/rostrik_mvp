@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/shift_type.dart';
+import '../../l10n/l10n.dart';
 import '../roster/shift_visuals.dart';
 import 'onboarding_progress.dart';
 import 'onboarding_state.dart';
@@ -41,7 +42,7 @@ class RosterTypeScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: onBack,
         ),
-        title: const Text('Choose a roster type'),
+        title: Text(context.l10n.rosterTypeTitle),
         bottom: const OnboardingProgressBar(step: 1),
       ),
       body: SafeArea(
@@ -54,7 +55,7 @@ class RosterTypeScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                 child: Text(
-                  'What does your roster look like?',
+                  context.l10n.rosterTypeQuestion,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -73,7 +74,7 @@ class RosterTypeScreen extends StatelessWidget {
                   // timeline use (`visualFor`): Day = amber, Night = indigo.
                   _RosterTypeCard(
                     icon: Icons.wb_sunny_outlined,
-                    label: 'Day Shifts',
+                    label: context.l10n.rosterTypeDay,
                     enabled: true,
                     accent: visualFor(ShiftType.day).color,
                     selected: selected == RosterType.day,
@@ -81,7 +82,7 @@ class RosterTypeScreen extends StatelessWidget {
                   ),
                   _RosterTypeCard(
                     icon: Icons.nightlight_outlined,
-                    label: 'Night Shifts',
+                    label: context.l10n.rosterTypeNight,
                     enabled: true,
                     accent: visualFor(ShiftType.night).color,
                     selected: selected == RosterType.night,
@@ -89,7 +90,7 @@ class RosterTypeScreen extends StatelessWidget {
                   ),
                   _RosterTypeCard(
                     icon: Icons.sync_outlined,
-                    label: 'Rotating',
+                    label: context.l10n.rosterTypeRotating,
                     enabled: true,
                     // Rotating mixes Day + Night, so its accent alternates the
                     // two via a gradient.
@@ -103,7 +104,7 @@ class RosterTypeScreen extends StatelessWidget {
                   ),
                   _RosterTypeCard(
                     icon: Icons.tune_outlined,
-                    label: 'Custom',
+                    label: context.l10n.rosterTypeCustom,
                     enabled: true,
                     // Custom isn't a shift type — keep the brand accent.
                     accent: theme.colorScheme.primary,
@@ -138,7 +139,7 @@ class RosterTypeScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: const Text('Continue'),
+                  child: Text(context.l10n.commonContinue),
                 ),
               ),
               const SizedBox(height: 8),
@@ -233,7 +234,7 @@ class _RosterTypeCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      'Coming soon',
+                      context.l10n.commonComingSoon,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,

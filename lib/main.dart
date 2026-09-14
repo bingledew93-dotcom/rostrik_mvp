@@ -545,6 +545,9 @@ class RostrikApp extends StatelessWidget {
       // resolution for notification text.
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // Mirrors the resolved locale into currentL10n + Intl.defaultLocale for
+      // the context-free formatters (shift_format.dart) and DateFormat.
+      builder: syncL10nFromContext,
       navigatorKey: navigatorKey,
       // No corner "DEBUG" ribbon on dev installs. Release builds never show
       // it, but field-testing happens on debug builds too and the banner
