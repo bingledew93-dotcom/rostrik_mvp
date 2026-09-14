@@ -391,4 +391,259 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get purchaseCheckingPrevious => 'Checking for a previous purchase…';
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsLegalAbout => 'LEGAL & ABOUT';
+
+  @override
+  String get settingsHelp => 'HELP';
+
+  @override
+  String get settingsHowItWorks => 'How it works';
+
+  @override
+  String get settingsReplayTourShake =>
+      'Replay the quick tour — paint a roster + shake-to-dismiss';
+
+  @override
+  String get settingsReplayTour => 'Replay the quick tour — paint a roster';
+
+  @override
+  String get settingsScreenTips => 'Show screen tips';
+
+  @override
+  String get settingsScreenTipsSub =>
+      'One-time hints on each screen. Turn on to see them again.';
+
+  @override
+  String get settingsFullAccess => 'FULL ACCESS';
+
+  @override
+  String get settingsFullAccessUnlocked => 'Full access unlocked';
+
+  @override
+  String get settingsThanks => 'Thanks for supporting Rostrik.';
+
+  @override
+  String settingsTrialDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Free trial — $days days left',
+      one: 'Free trial — 1 day left',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsTrialEnded => 'Free trial ended';
+
+  @override
+  String get settingsUnlockPitch =>
+      'Unlock once to keep your shift alarms firing when the trial ends — a one-time purchase, never a subscription.';
+
+  @override
+  String get settingsRestore => 'Restore';
+
+  @override
+  String get settingsBrandTagline => 'Alarms built outside the 9–5';
+
+  @override
+  String get settingsLeadTime => 'Lead time';
+
+  @override
+  String get settingsLeadTimeSub =>
+      'Alarm fires this long before each shift starts.';
+
+  @override
+  String get settingsSnoozeDuration => 'Snooze duration';
+
+  @override
+  String get settingsSnoozeDurationSub =>
+      'How far forward the Snooze button pushes a firing alarm.';
+
+  @override
+  String get settingsMinutesLabel => 'Minutes';
+
+  @override
+  String commonMinutes(int m) {
+    String _temp0 = intl.Intl.pluralLogic(
+      m,
+      locale: localeName,
+      other: '$m minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsShiftCycles => 'SHIFT CYCLES';
+
+  @override
+  String get settingsShiftCyclesSub =>
+      'Rosters you have generated from a pattern or template.';
+
+  @override
+  String get settingsAddShiftCycle => 'Add Shift Cycle';
+
+  @override
+  String get settingsNoRosters => 'You haven\'t generated any rosters yet.';
+
+  @override
+  String commonDateRange(String start, String end) {
+    return '$start – $end';
+  }
+
+  @override
+  String get commonEdit => 'Edit';
+
+  @override
+  String get commonDelete => 'Delete';
+
+  @override
+  String get commonCancel => 'Cancel';
+
+  @override
+  String get settingsDeleteRosterTitle => 'Delete roster?';
+
+  @override
+  String settingsDeleteRosterBody(String label, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count shifts',
+      one: '1 shift',
+    );
+    return 'Delete \"$label\"? This will cancel any pending alarms and remove $_temp0.';
+  }
+
+  @override
+  String settingsDeletedRoster(String label) {
+    return 'Deleted \"$label\"';
+  }
+
+  @override
+  String get commonActive => 'Active';
+
+  @override
+  String get commonUpcoming => 'Upcoming';
+
+  @override
+  String get commonPast => 'Past';
+
+  @override
+  String get settingsWorkHistory => 'WORK HISTORY';
+
+  @override
+  String get settingsWorkHistorySub =>
+      'Review and export your completed custom shifts to verify payslips.';
+
+  @override
+  String get settingsViewWorkHistory => 'View & Export Work History';
+
+  @override
+  String get settingsPreferences => 'PREFERENCES';
+
+  @override
+  String get settingsPreferencesSub =>
+      'How your schedule is displayed across the app.';
+
+  @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get settingsThemeSystem => 'System';
+
+  @override
+  String get settingsThemeLight => 'Light';
+
+  @override
+  String get settingsThemeDark => 'Dark';
+
+  @override
+  String get settingsThemeSub =>
+      'Dark is Rostrik’s default. Light uses a warm cream palette.';
+
+  @override
+  String get settings24h => 'Use 24-Hour Time';
+
+  @override
+  String get settings24hOn => 'Times show as 14:30';
+
+  @override
+  String get settings24hOff => 'Times show as 02:30 PM';
+
+  @override
+  String get settingsWeekStartTitle => 'Start Calendar on Monday';
+
+  @override
+  String get settingsWeekStartMon => 'Weeks begin on Monday';
+
+  @override
+  String get settingsWeekStartSun => 'Weeks begin on Sunday';
+
+  @override
+  String get settingsTimelineOpensOn => 'Timeline opens on';
+
+  @override
+  String get commonList => 'List';
+
+  @override
+  String get commonMonth => 'Month';
+
+  @override
+  String get settingsCalendar => 'CALENDAR';
+
+  @override
+  String get settingsCalendarSync => 'Sync to Google / Device Calendar';
+
+  @override
+  String get settingsCalendarSyncSub =>
+      'Automatically mirror your shifts to a dedicated \"Rostrik Roster\" calendar on your phone.';
+
+  @override
+  String get settingsCalSyncOff =>
+      'Calendar sync off. Upcoming \"Rostrik Roster\" events were cleared.';
+
+  @override
+  String get settingsCalSyncMirroring =>
+      'Mirroring your roster to the \"Rostrik Roster\" calendar…';
+
+  @override
+  String get settingsCalPermNeeded =>
+      'Calendar permission is needed to sync your roster.';
+
+  @override
+  String get settingsCalBlocked =>
+      'Calendar access is blocked. Enable it in system settings to sync.';
+
+  @override
+  String get settingsCalOpenSettings => 'Settings';
+
+  @override
+  String get settingsCalUnsupported =>
+      'Calendar sync isn\'t available on this device.';
+
+  @override
+  String get settingsDangerZone => 'DANGER ZONE';
+
+  @override
+  String get settingsDangerZoneSub =>
+      'Deletes your roster, alarms, and settings, then restarts onboarding from scratch.';
+
+  @override
+  String get settingsResetAppData => 'Reset App Data';
+
+  @override
+  String get settingsResetTitle => 'Reset app?';
+
+  @override
+  String get settingsResetBody =>
+      'Are you sure? This will delete your roster, alarms, and settings.';
+
+  @override
+  String get settingsResetConfirm => 'Reset';
 }

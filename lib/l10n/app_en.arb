@@ -195,5 +195,116 @@
   "purchaseRestore": "Restore purchase",
   "purchaseOneTime": "One-time purchase. No subscription.",
   "purchaseUnavailable": "Purchases aren’t available right now. Check your connection and try again.",
-  "purchaseCheckingPrevious": "Checking for a previous purchase…"
+  "purchaseCheckingPrevious": "Checking for a previous purchase…",
+  "settingsTitle": "Settings",
+  "settingsLegalAbout": "LEGAL & ABOUT",
+  "settingsHelp": "HELP",
+  "settingsHowItWorks": "How it works",
+  "settingsReplayTourShake": "Replay the quick tour — paint a roster + shake-to-dismiss",
+  "settingsReplayTour": "Replay the quick tour — paint a roster",
+  "settingsScreenTips": "Show screen tips",
+  "settingsScreenTipsSub": "One-time hints on each screen. Turn on to see them again.",
+  "settingsFullAccess": "FULL ACCESS",
+  "settingsFullAccessUnlocked": "Full access unlocked",
+  "settingsThanks": "Thanks for supporting Rostrik.",
+  "settingsTrialDaysLeft": "{days, plural, one{Free trial — 1 day left} other{Free trial — {days} days left}}",
+  "@settingsTrialDaysLeft": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsTrialEnded": "Free trial ended",
+  "settingsUnlockPitch": "Unlock once to keep your shift alarms firing when the trial ends — a one-time purchase, never a subscription.",
+  "settingsRestore": "Restore",
+  "settingsBrandTagline": "Alarms built outside the 9–5",
+  "settingsLeadTime": "Lead time",
+  "settingsLeadTimeSub": "Alarm fires this long before each shift starts.",
+  "settingsSnoozeDuration": "Snooze duration",
+  "settingsSnoozeDurationSub": "How far forward the Snooze button pushes a firing alarm.",
+  "settingsMinutesLabel": "Minutes",
+  "commonMinutes": "{m, plural, one{1 minute} other{{m} minutes}}",
+  "@commonMinutes": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsShiftCycles": "SHIFT CYCLES",
+  "settingsShiftCyclesSub": "Rosters you have generated from a pattern or template.",
+  "settingsAddShiftCycle": "Add Shift Cycle",
+  "settingsNoRosters": "You haven't generated any rosters yet.",
+  "commonDateRange": "{start} – {end}",
+  "@commonDateRange": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "commonEdit": "Edit",
+  "commonDelete": "Delete",
+  "commonCancel": "Cancel",
+  "settingsDeleteRosterTitle": "Delete roster?",
+  "settingsDeleteRosterBody": "Delete \"{label}\"? This will cancel any pending alarms and remove {count, plural, one{1 shift} other{{count} shifts}}.",
+  "@settingsDeleteRosterBody": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsDeletedRoster": "Deleted \"{label}\"",
+  "@settingsDeletedRoster": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commonActive": "Active",
+  "commonUpcoming": "Upcoming",
+  "commonPast": "Past",
+  "settingsWorkHistory": "WORK HISTORY",
+  "settingsWorkHistorySub": "Review and export your completed custom shifts to verify payslips.",
+  "settingsViewWorkHistory": "View & Export Work History",
+  "settingsPreferences": "PREFERENCES",
+  "settingsPreferencesSub": "How your schedule is displayed across the app.",
+  "settingsAppearance": "Appearance",
+  "settingsThemeSystem": "System",
+  "settingsThemeLight": "Light",
+  "settingsThemeDark": "Dark",
+  "settingsThemeSub": "Dark is Rostrik’s default. Light uses a warm cream palette.",
+  "settings24h": "Use 24-Hour Time",
+  "settings24hOn": "Times show as 14:30",
+  "settings24hOff": "Times show as 02:30 PM",
+  "settingsWeekStartTitle": "Start Calendar on Monday",
+  "settingsWeekStartMon": "Weeks begin on Monday",
+  "settingsWeekStartSun": "Weeks begin on Sunday",
+  "settingsTimelineOpensOn": "Timeline opens on",
+  "commonList": "List",
+  "commonMonth": "Month",
+  "settingsCalendar": "CALENDAR",
+  "settingsCalendarSync": "Sync to Google / Device Calendar",
+  "settingsCalendarSyncSub": "Automatically mirror your shifts to a dedicated \"Rostrik Roster\" calendar on your phone.",
+  "settingsCalSyncOff": "Calendar sync off. Upcoming \"Rostrik Roster\" events were cleared.",
+  "settingsCalSyncMirroring": "Mirroring your roster to the \"Rostrik Roster\" calendar…",
+  "settingsCalPermNeeded": "Calendar permission is needed to sync your roster.",
+  "settingsCalBlocked": "Calendar access is blocked. Enable it in system settings to sync.",
+  "settingsCalOpenSettings": "Settings",
+  "settingsCalUnsupported": "Calendar sync isn't available on this device.",
+  "settingsDangerZone": "DANGER ZONE",
+  "settingsDangerZoneSub": "Deletes your roster, alarms, and settings, then restarts onboarding from scratch.",
+  "settingsResetAppData": "Reset App Data",
+  "settingsResetTitle": "Reset app?",
+  "settingsResetBody": "Are you sure? This will delete your roster, alarms, and settings.",
+  "settingsResetConfirm": "Reset"
 }

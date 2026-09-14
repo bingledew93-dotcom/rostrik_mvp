@@ -21,6 +21,7 @@ import '../logic/cycle_to_painted.dart' show isCycleEditable;
 import '../purchase/entitlement_service.dart';
 import '../purchase/entitlement_store.dart';
 import '../state/app_preferences.dart';
+import '../l10n/l10n.dart';
 import 'custom_builder_screen.dart';
 import 'onboarding/onboarding_flow.dart';
 import 'onboarding/walkthrough_flow.dart';
@@ -41,7 +42,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(context.l10n.settingsTitle)),
       // SafeArea(bottom) so the "+ Add Shift Cycle" button can't sit
       // under the Android gesture-pill / 3-button bar.
       body: SafeArea(
@@ -90,13 +91,14 @@ class _LegalAboutSection extends StatelessWidget {
 
   Future<void> _open(BuildContext context, String url) async {
     final messenger = ScaffoldMessenger.of(context);
+    final couldNotOpen = context.l10n.commonCouldNotOpenLink;
     final ok = await launchUrl(
       Uri.parse(url),
       mode: LaunchMode.externalApplication,
     );
     if (!ok) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not open the link.')),
+        SnackBar(content: Text(couldNotOpen)),
       );
     }
   }
@@ -110,7 +112,7 @@ class _LegalAboutSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
           child: Text(
-            'LEGAL & ABOUT',
+            context.l10n.settingsLegalAbout,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -121,14 +123,14 @@ class _LegalAboutSection extends StatelessWidget {
         ListTile(
           key: const ValueKey('settings-privacy-policy'),
           leading: const Icon(Icons.privacy_tip_outlined),
-          title: const Text('Privacy Policy'),
+          title: Text(context.l10n.legalPrivacyPolicy),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => _open(context, kPrivacyPolicyUrl),
         ),
         ListTile(
           key: const ValueKey('settings-terms-of-use'),
           leading: const Icon(Icons.description_outlined),
-          title: const Text('Terms of Use'),
+          title: Text(context.l10n.legalTermsOfUse),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => _open(context, kTermsOfUseUrl),
         ),
@@ -154,7 +156,7 @@ class _HelpSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
           child: Text(
-            'HELP',
+            context.l10n.settingsHelp,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -165,13 +167,13 @@ class _HelpSection extends StatelessWidget {
         ListTile(
           key: const ValueKey('settings-replay-tutorial'),
           leading: const Icon(Icons.school_outlined),
-          title: const Text('How it works'),
+          title: Text(context.l10n.settingsHowItWorks),
           // The tour drops its shake lesson where the gesture does nothing, so
           // the subtitle must not advertise it either.
           subtitle: Text(
             AlarmCapabilities.current.shakeToDismiss
-                ? 'Replay the quick tour — paint a roster + shake-to-dismiss'
-                : 'Replay the quick tour — paint a roster',
+                ? context.l10n.settingsReplayTourShake
+                : context.l10n.settingsReplayTour,
           ),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: () => Navigator.of(context).push(
@@ -205,9 +207,8 @@ class _ScreenTipsToggle extends StatelessWidget {
       builder: (context, box, _) => SwitchListTile(
         key: const ValueKey('settings-screen-tips-toggle'),
         secondary: const Icon(Icons.lightbulb_outline),
-        title: const Text('Show screen tips'),
-        subtitle: const Text('One-time hints on each screen. Turn on to see '
-            'them again.'),
+        title: Text(context.l10n.settingsScreenTips),
+        subtitle: Text(context.l10n.settingsScreenTipsSub),
         value: ScreenTipsPrefs.isEnabled(box),
         onChanged: (v) => ScreenTipsPrefs.setEnabled(box, v),
       ),
@@ -226,16 +227,10 @@ class _FullAccessSection extends StatelessWidget {
 
   Future<void> _buy(BuildContext context, EntitlementService service) async {
     final messenger = ScaffoldMessenger.of(context);
+    final unavailable = context.l10n.purchaseUnavailable;
     final launched = await service.buy();
     if (!launched) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Purchases aren’t available right now. Check your connection and '
-            'try again.',
-          ),
-        ),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(unavailable)));
     }
     // On success the purchase completes asynchronously; the entitlement stream
     // notifies and this section rebuilds to the unlocked state.
@@ -243,10 +238,9 @@ class _FullAccessSection extends StatelessWidget {
 
   Future<void> _restore(BuildContext context, EntitlementService service) async {
     final messenger = ScaffoldMessenger.of(context);
+    final checking = context.l10n.purchaseCheckingPrevious;
     await service.restore();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Checking for a previous purchase…')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(checking)));
   }
 
   @override
@@ -265,7 +259,7 @@ class _FullAccessSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
           child: Text(
-            'FULL ACCESS',
+            context.l10n.settingsFullAccess,
             style: theme.textTheme.labelMedium?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
@@ -286,13 +280,13 @@ class _FullAccessSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Full access unlocked',
+                        context.l10n.settingsFullAccessUnlocked,
                         style: theme.textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Thanks for supporting Rostrik.',
+                        context.l10n.settingsThanks,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
@@ -317,16 +311,15 @@ class _FullAccessSection extends StatelessWidget {
                     children: [
                       Text(
                         e.withinTrial
-                            ? 'Free trial — ${e.trialDaysLeft} '
-                                'day${e.trialDaysLeft == 1 ? '' : 's'} left'
-                            : 'Free trial ended',
+                            ? context.l10n
+                                .settingsTrialDaysLeft(e.trialDaysLeft)
+                            : context.l10n.settingsTrialEnded,
                         style: theme.textTheme.titleSmall
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Unlock once to keep your shift alarms firing when the '
-                        'trial ends — a one-time purchase, never a subscription.',
+                        context.l10n.settingsUnlockPitch,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
@@ -347,8 +340,8 @@ class _FullAccessSection extends StatelessWidget {
                     onPressed: () => _buy(context, service),
                     child: Text(
                       price == null
-                          ? 'Unlock full access'
-                          : 'Unlock full access · $price',
+                          ? context.l10n.purchaseUnlock
+                          : context.l10n.purchaseUnlockWithPrice(price),
                     ),
                   ),
                 ),
@@ -356,7 +349,7 @@ class _FullAccessSection extends StatelessWidget {
                 TextButton(
                   key: const ValueKey('settings-restore-purchase'),
                   onPressed: () => _restore(context, service),
-                  child: const Text('Restore'),
+                  child: Text(context.l10n.settingsRestore),
                 ),
               ],
             ),
@@ -623,7 +616,7 @@ class _BrandingFooter extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Alarms built outside the 9–5',
+            context.l10n.settingsBrandTagline,
             style: theme.textTheme.labelSmall?.copyWith(
               color: muted.withValues(alpha: 0.45),
             ),
@@ -670,10 +663,11 @@ class _LeadTimeSectionState extends State<_LeadTimeSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Lead time', style: theme.textTheme.titleMedium),
+          Text(context.l10n.settingsLeadTime,
+              style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'Alarm fires this long before each shift starts.',
+            context.l10n.settingsLeadTimeSub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -703,8 +697,9 @@ class _LeadTimeSectionState extends State<_LeadTimeSection> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('0 min', style: theme.textTheme.bodySmall),
-              Text('${_maxMinutes.toInt()} min',
+              Text(context.l10n.durationMin(0),
+                  style: theme.textTheme.bodySmall),
+              Text(context.l10n.durationMin(_maxMinutes.toInt()),
                   style: theme.textTheme.bodySmall),
             ],
           ),
@@ -742,10 +737,11 @@ class _SnoozeDurationSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Snooze duration', style: theme.textTheme.titleMedium),
+          Text(context.l10n.settingsSnoozeDuration,
+              style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'How far forward the Snooze button pushes a firing alarm.',
+            context.l10n.settingsSnoozeDurationSub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -765,15 +761,15 @@ class _SnoozeDurationSection extends StatelessWidget {
               final current = _options.contains(stored) ? stored : _defaultMinutes;
               return DropdownButtonFormField<int>(
                 initialValue: current,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Minutes',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: context.l10n.settingsMinutesLabel,
                 ),
                 items: _options
                     .map(
                       (m) => DropdownMenuItem<int>(
                         value: m,
-                        child: Text('$m minutes'),
+                        child: Text(context.l10n.commonMinutes(m)),
                       ),
                     )
                     .toList(),
@@ -821,7 +817,7 @@ class _ShiftCyclesSection extends StatelessWidget {
           // by Material settings layouts to delimit groupings. Reads as
           // a peer to the screen's other section titles.
           Text(
-            'SHIFT CYCLES',
+            context.l10n.settingsShiftCycles,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -830,7 +826,7 @@ class _ShiftCyclesSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Rosters you have generated from a pattern or template.',
+            context.l10n.settingsShiftCyclesSub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -850,7 +846,7 @@ class _ShiftCyclesSection extends StatelessWidget {
                 ),
               ),
               icon: const Icon(Icons.add),
-              label: const Text('Add Shift Cycle'),
+              label: Text(context.l10n.settingsAddShiftCycle),
             ),
           ),
         ],
@@ -874,7 +870,7 @@ class _EmptyCyclesPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        "You haven't generated any rosters yet.",
+        context.l10n.settingsNoRosters,
         style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -927,8 +923,10 @@ class _CycleCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${formatShiftDate(cycle.startDate)} – '
-                    '${formatShiftDate(cycle.endDate)}',
+                    context.l10n.commonDateRange(
+                      formatShiftDate(cycle.startDate),
+                      formatShiftDate(cycle.endDate),
+                    ),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -946,13 +944,13 @@ class _CycleCard extends StatelessWidget {
                   IconButton(
                     key: ValueKey('cycle-edit-${cycle.id}'),
                     icon: const Icon(Icons.edit_outlined),
-                    tooltip: 'Edit',
+                    tooltip: context.l10n.commonEdit,
                     onPressed: () => _openEdit(context),
                   ),
                 IconButton(
                   key: ValueKey('cycle-delete-${cycle.id}'),
                   icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Delete',
+                  tooltip: context.l10n.commonDelete,
                   onPressed: () => _confirmAndDelete(context),
                 ),
               ],
@@ -977,21 +975,21 @@ class _CycleCard extends StatelessWidget {
     final service = context.read<CycleService>();
     final shifts = context.read<ShiftRepository>();
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     final count = (await shifts.getByCycleId(cycle.id)).length;
     if (!context.mounted) return;
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        title: const Text('Delete roster?'),
+        title: Text(l10n.settingsDeleteRosterTitle),
         content: Text(
-          'Delete "${cycle.label}"? This will cancel any pending alarms '
-          'and remove $count shift${count == 1 ? '' : 's'}.',
+          l10n.settingsDeleteRosterBody(cycle.label, count),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogCtx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.commonCancel),
           ),
           FilledButton.tonal(
             style: FilledButton.styleFrom(
@@ -999,7 +997,7 @@ class _CycleCard extends StatelessWidget {
               backgroundColor: Theme.of(dialogCtx).colorScheme.errorContainer,
             ),
             onPressed: () => Navigator.of(dialogCtx).pop(true),
-            child: const Text('Delete'),
+            child: Text(l10n.commonDelete),
           ),
         ],
       ),
@@ -1007,7 +1005,7 @@ class _CycleCard extends StatelessWidget {
     if (ok != true) return;
     await service.deleteCycle(cycle.id);
     messenger.showSnackBar(
-      SnackBar(content: Text('Deleted "${cycle.label}"')),
+      SnackBar(content: Text(l10n.settingsDeletedRoster(cycle.label))),
     );
   }
 }
@@ -1037,17 +1035,17 @@ class _StatusChip extends StatelessWidget {
     final theme = Theme.of(context);
     final (label, bg, fg) = switch (status) {
       _CycleStatus.active => (
-          'Active',
+          context.l10n.commonActive,
           theme.colorScheme.primaryContainer,
           theme.colorScheme.onPrimaryContainer,
         ),
       _CycleStatus.upcoming => (
-          'Upcoming',
+          context.l10n.commonUpcoming,
           theme.colorScheme.secondaryContainer,
           theme.colorScheme.onSecondaryContainer,
         ),
       _CycleStatus.past => (
-          'Past',
+          context.l10n.commonPast,
           theme.colorScheme.surfaceContainerHighest,
           theme.colorScheme.onSurfaceVariant,
         ),
@@ -1089,7 +1087,7 @@ class _WorkHistorySection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'WORK HISTORY',
+            context.l10n.settingsWorkHistory,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -1098,7 +1096,7 @@ class _WorkHistorySection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Review and export your completed custom shifts to verify payslips.',
+            context.l10n.settingsWorkHistorySub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1112,7 +1110,7 @@ class _WorkHistorySection extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const WorkHistoryScreen()),
               ),
               icon: const Icon(Icons.receipt_long_outlined),
-              label: const Text('View & Export Work History'),
+              label: Text(context.l10n.settingsViewWorkHistory),
             ),
           ),
         ],
@@ -1140,7 +1138,7 @@ class _PreferencesSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'PREFERENCES',
+            context.l10n.settingsPreferences,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -1149,35 +1147,35 @@ class _PreferencesSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'How your schedule is displayed across the app.',
+            context.l10n.settingsPreferencesSub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            'Appearance',
+            context.l10n.settingsAppearance,
             style: theme.textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
           SegmentedButton<ThemeMode>(
             key: const ValueKey('settings-theme-mode'),
             showSelectedIcon: false,
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: ThemeMode.system,
-                label: Text('System'),
-                icon: Icon(Icons.brightness_auto),
+                label: Text(context.l10n.settingsThemeSystem),
+                icon: const Icon(Icons.brightness_auto),
               ),
               ButtonSegment(
                 value: ThemeMode.light,
-                label: Text('Light'),
-                icon: Icon(Icons.light_mode_outlined),
+                label: Text(context.l10n.settingsThemeLight),
+                icon: const Icon(Icons.light_mode_outlined),
               ),
               ButtonSegment(
                 value: ThemeMode.dark,
-                label: Text('Dark'),
-                icon: Icon(Icons.dark_mode_outlined),
+                label: Text(context.l10n.settingsThemeDark),
+                icon: const Icon(Icons.dark_mode_outlined),
               ),
             ],
             selected: {prefs.themeMode},
@@ -1186,7 +1184,7 @@ class _PreferencesSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Dark is Rostrik’s default. Light uses a warm cream palette.',
+            context.l10n.settingsThemeSub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1195,11 +1193,11 @@ class _PreferencesSection extends StatelessWidget {
           SwitchListTile(
             key: const ValueKey('settings-use-24h-toggle'),
             contentPadding: EdgeInsets.zero,
-            title: const Text('Use 24-Hour Time'),
+            title: Text(context.l10n.settings24h),
             subtitle: Text(
               prefs.use24HourTime
-                  ? 'Times show as 14:30'
-                  : 'Times show as 02:30 PM',
+                  ? context.l10n.settings24hOn
+                  : context.l10n.settings24hOff,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1211,11 +1209,11 @@ class _PreferencesSection extends StatelessWidget {
           SwitchListTile(
             key: const ValueKey('settings-week-start-toggle'),
             contentPadding: EdgeInsets.zero,
-            title: const Text('Start Calendar on Monday'),
+            title: Text(context.l10n.settingsWeekStartTitle),
             subtitle: Text(
               prefs.startWeekOnMonday
-                  ? 'Weeks begin on Monday'
-                  : 'Weeks begin on Sunday',
+                  ? context.l10n.settingsWeekStartMon
+                  : context.l10n.settingsWeekStartSun,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1226,23 +1224,23 @@ class _PreferencesSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Timeline opens on',
+            context.l10n.settingsTimelineOpensOn,
             style: theme.textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
           SegmentedButton<bool>(
             key: const ValueKey('settings-timeline-default-view'),
             showSelectedIcon: false,
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: false,
-                label: Text('List'),
-                icon: Icon(Icons.view_agenda_outlined),
+                label: Text(context.l10n.commonList),
+                icon: const Icon(Icons.view_agenda_outlined),
               ),
               ButtonSegment(
                 value: true,
-                label: Text('Month'),
-                icon: Icon(Icons.calendar_month),
+                label: Text(context.l10n.commonMonth),
+                icon: const Icon(Icons.calendar_month),
               ),
             ],
             selected: {prefs.timelineDefaultsToMonth},
@@ -1272,18 +1270,15 @@ class _CalendarSyncSection extends StatelessWidget {
     DeviceCalendarService service,
     bool value,
   ) async {
-    // Capture the messenger before the await — BuildContext must not be used
-    // across the async gap.
+    // Capture the messenger + strings before the await — BuildContext must
+    // not be used across the async gap.
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
 
     if (!value) {
       await service.disableSync();
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Calendar sync off. Upcoming "Rostrik Roster" events were cleared.',
-          ),
-        ),
+        SnackBar(content: Text(l10n.settingsCalSyncOff)),
       );
       return;
     }
@@ -1292,35 +1287,25 @@ class _CalendarSyncSection extends StatelessWidget {
     switch (result) {
       case CalendarSyncEnableResult.enabled:
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Mirroring your roster to the "Rostrik Roster" '
-                'calendar…'),
-          ),
+          SnackBar(content: Text(l10n.settingsCalSyncMirroring)),
         );
       case CalendarSyncEnableResult.denied:
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Calendar permission is needed to sync your roster.'),
-          ),
+          SnackBar(content: Text(l10n.settingsCalPermNeeded)),
         );
       case CalendarSyncEnableResult.permanentlyDenied:
         messenger.showSnackBar(
           SnackBar(
-            content: const Text(
-              'Calendar access is blocked. Enable it in system settings to '
-              'sync.',
-            ),
+            content: Text(l10n.settingsCalBlocked),
             action: SnackBarAction(
-              label: 'Settings',
+              label: l10n.settingsCalOpenSettings,
               onPressed: service.openSystemSettings,
             ),
           ),
         );
       case CalendarSyncEnableResult.unsupported:
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text("Calendar sync isn't available on this device."),
-          ),
+          SnackBar(content: Text(l10n.settingsCalUnsupported)),
         );
     }
   }
@@ -1337,7 +1322,7 @@ class _CalendarSyncSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'CALENDAR',
+            context.l10n.settingsCalendar,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -1349,10 +1334,9 @@ class _CalendarSyncSection extends StatelessWidget {
             key: const ValueKey('settings-calendar-sync-toggle'),
             contentPadding: EdgeInsets.zero,
             secondary: const Icon(Icons.event_available_outlined),
-            title: const Text('Sync to Google / Device Calendar'),
+            title: Text(context.l10n.settingsCalendarSync),
             subtitle: Text(
-              'Automatically mirror your shifts to a dedicated "Rostrik Roster" '
-              'calendar on your phone.',
+              context.l10n.settingsCalendarSyncSub,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1392,7 +1376,7 @@ class _FactoryResetSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'DANGER ZONE',
+            context.l10n.settingsDangerZone,
             style: theme.textTheme.labelMedium?.copyWith(
               color: error,
               fontWeight: FontWeight.w700,
@@ -1401,8 +1385,7 @@ class _FactoryResetSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Deletes your roster, alarms, and settings, then restarts '
-            'onboarding from scratch.',
+            context.l10n.settingsDangerZoneSub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1414,7 +1397,7 @@ class _FactoryResetSection extends StatelessWidget {
               key: const ValueKey('settings-reset-app-data'),
               onPressed: () => _confirmAndReset(context),
               icon: const Icon(Icons.delete_forever_outlined),
-              label: const Text('Reset App Data'),
+              label: Text(context.l10n.settingsResetAppData),
               style: OutlinedButton.styleFrom(
                 foregroundColor: error,
                 side: BorderSide(color: error.withValues(alpha: 0.6)),
@@ -1435,21 +1418,19 @@ class _FactoryResetSection extends StatelessWidget {
     final scheduler = context.read<AlarmScheduler>();
     final storage = context.read<LocalStorage>();
     final navigator = Navigator.of(context);
+    final l10n = context.l10n;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) {
         final scheme = Theme.of(dialogCtx).colorScheme;
         return AlertDialog(
-          title: const Text('Reset app?'),
-          content: const Text(
-            'Are you sure? This will delete your roster, alarms, and '
-            'settings.',
-          ),
+          title: Text(l10n.settingsResetTitle),
+          content: Text(l10n.settingsResetBody),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.commonCancel),
             ),
             FilledButton(
               key: const ValueKey('settings-reset-confirm'),
@@ -1458,7 +1439,7 @@ class _FactoryResetSection extends StatelessWidget {
                 foregroundColor: scheme.onError,
               ),
               onPressed: () => Navigator.of(dialogCtx).pop(true),
-              child: const Text('Reset'),
+              child: Text(l10n.settingsResetConfirm),
             ),
           ],
         );

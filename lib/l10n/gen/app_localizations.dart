@@ -753,6 +753,426 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Checking for a previous purchase…'**
   String get purchaseCheckingPrevious;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// No description provided for @settingsLegalAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'LEGAL & ABOUT'**
+  String get settingsLegalAbout;
+
+  /// No description provided for @settingsHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'HELP'**
+  String get settingsHelp;
+
+  /// No description provided for @settingsHowItWorks.
+  ///
+  /// In en, this message translates to:
+  /// **'How it works'**
+  String get settingsHowItWorks;
+
+  /// No description provided for @settingsReplayTourShake.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay the quick tour — paint a roster + shake-to-dismiss'**
+  String get settingsReplayTourShake;
+
+  /// No description provided for @settingsReplayTour.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay the quick tour — paint a roster'**
+  String get settingsReplayTour;
+
+  /// No description provided for @settingsScreenTips.
+  ///
+  /// In en, this message translates to:
+  /// **'Show screen tips'**
+  String get settingsScreenTips;
+
+  /// No description provided for @settingsScreenTipsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'One-time hints on each screen. Turn on to see them again.'**
+  String get settingsScreenTipsSub;
+
+  /// No description provided for @settingsFullAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'FULL ACCESS'**
+  String get settingsFullAccess;
+
+  /// No description provided for @settingsFullAccessUnlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access unlocked'**
+  String get settingsFullAccessUnlocked;
+
+  /// No description provided for @settingsThanks.
+  ///
+  /// In en, this message translates to:
+  /// **'Thanks for supporting Rostrik.'**
+  String get settingsThanks;
+
+  /// No description provided for @settingsTrialDaysLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, one{Free trial — 1 day left} other{Free trial — {days} days left}}'**
+  String settingsTrialDaysLeft(int days);
+
+  /// No description provided for @settingsTrialEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Free trial ended'**
+  String get settingsTrialEnded;
+
+  /// No description provided for @settingsUnlockPitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock once to keep your shift alarms firing when the trial ends — a one-time purchase, never a subscription.'**
+  String get settingsUnlockPitch;
+
+  /// No description provided for @settingsRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get settingsRestore;
+
+  /// No description provided for @settingsBrandTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms built outside the 9–5'**
+  String get settingsBrandTagline;
+
+  /// No description provided for @settingsLeadTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Lead time'**
+  String get settingsLeadTime;
+
+  /// No description provided for @settingsLeadTimeSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarm fires this long before each shift starts.'**
+  String get settingsLeadTimeSub;
+
+  /// No description provided for @settingsSnoozeDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Snooze duration'**
+  String get settingsSnoozeDuration;
+
+  /// No description provided for @settingsSnoozeDurationSub.
+  ///
+  /// In en, this message translates to:
+  /// **'How far forward the Snooze button pushes a firing alarm.'**
+  String get settingsSnoozeDurationSub;
+
+  /// No description provided for @settingsMinutesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get settingsMinutesLabel;
+
+  /// No description provided for @commonMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{m, plural, one{1 minute} other{{m} minutes}}'**
+  String commonMinutes(int m);
+
+  /// No description provided for @settingsShiftCycles.
+  ///
+  /// In en, this message translates to:
+  /// **'SHIFT CYCLES'**
+  String get settingsShiftCycles;
+
+  /// No description provided for @settingsShiftCyclesSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Rosters you have generated from a pattern or template.'**
+  String get settingsShiftCyclesSub;
+
+  /// No description provided for @settingsAddShiftCycle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Shift Cycle'**
+  String get settingsAddShiftCycle;
+
+  /// No description provided for @settingsNoRosters.
+  ///
+  /// In en, this message translates to:
+  /// **'You haven\'t generated any rosters yet.'**
+  String get settingsNoRosters;
+
+  /// No description provided for @commonDateRange.
+  ///
+  /// In en, this message translates to:
+  /// **'{start} – {end}'**
+  String commonDateRange(String start, String end);
+
+  /// No description provided for @commonEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get commonEdit;
+
+  /// No description provided for @commonDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get commonDelete;
+
+  /// No description provided for @commonCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
+
+  /// No description provided for @settingsDeleteRosterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete roster?'**
+  String get settingsDeleteRosterTitle;
+
+  /// No description provided for @settingsDeleteRosterBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{label}\"? This will cancel any pending alarms and remove {count, plural, one{1 shift} other{{count} shifts}}.'**
+  String settingsDeleteRosterBody(String label, int count);
+
+  /// No description provided for @settingsDeletedRoster.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted \"{label}\"'**
+  String settingsDeletedRoster(String label);
+
+  /// No description provided for @commonActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get commonActive;
+
+  /// No description provided for @commonUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get commonUpcoming;
+
+  /// No description provided for @commonPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Past'**
+  String get commonPast;
+
+  /// No description provided for @settingsWorkHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'WORK HISTORY'**
+  String get settingsWorkHistory;
+
+  /// No description provided for @settingsWorkHistorySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and export your completed custom shifts to verify payslips.'**
+  String get settingsWorkHistorySub;
+
+  /// No description provided for @settingsViewWorkHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'View & Export Work History'**
+  String get settingsViewWorkHistory;
+
+  /// No description provided for @settingsPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'PREFERENCES'**
+  String get settingsPreferences;
+
+  /// No description provided for @settingsPreferencesSub.
+  ///
+  /// In en, this message translates to:
+  /// **'How your schedule is displayed across the app.'**
+  String get settingsPreferencesSub;
+
+  /// No description provided for @settingsAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
+  /// No description provided for @settingsThemeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get settingsThemeSystem;
+
+  /// No description provided for @settingsThemeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsThemeLight;
+
+  /// No description provided for @settingsThemeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsThemeDark;
+
+  /// No description provided for @settingsThemeSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark is Rostrik’s default. Light uses a warm cream palette.'**
+  String get settingsThemeSub;
+
+  /// No description provided for @settings24h.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 24-Hour Time'**
+  String get settings24h;
+
+  /// No description provided for @settings24hOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Times show as 14:30'**
+  String get settings24hOn;
+
+  /// No description provided for @settings24hOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Times show as 02:30 PM'**
+  String get settings24hOff;
+
+  /// No description provided for @settingsWeekStartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Calendar on Monday'**
+  String get settingsWeekStartTitle;
+
+  /// No description provided for @settingsWeekStartMon.
+  ///
+  /// In en, this message translates to:
+  /// **'Weeks begin on Monday'**
+  String get settingsWeekStartMon;
+
+  /// No description provided for @settingsWeekStartSun.
+  ///
+  /// In en, this message translates to:
+  /// **'Weeks begin on Sunday'**
+  String get settingsWeekStartSun;
+
+  /// No description provided for @settingsTimelineOpensOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline opens on'**
+  String get settingsTimelineOpensOn;
+
+  /// No description provided for @commonList.
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get commonList;
+
+  /// No description provided for @commonMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get commonMonth;
+
+  /// No description provided for @settingsCalendar.
+  ///
+  /// In en, this message translates to:
+  /// **'CALENDAR'**
+  String get settingsCalendar;
+
+  /// No description provided for @settingsCalendarSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync to Google / Device Calendar'**
+  String get settingsCalendarSync;
+
+  /// No description provided for @settingsCalendarSyncSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically mirror your shifts to a dedicated \"Rostrik Roster\" calendar on your phone.'**
+  String get settingsCalendarSyncSub;
+
+  /// No description provided for @settingsCalSyncOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sync off. Upcoming \"Rostrik Roster\" events were cleared.'**
+  String get settingsCalSyncOff;
+
+  /// No description provided for @settingsCalSyncMirroring.
+  ///
+  /// In en, this message translates to:
+  /// **'Mirroring your roster to the \"Rostrik Roster\" calendar…'**
+  String get settingsCalSyncMirroring;
+
+  /// No description provided for @settingsCalPermNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar permission is needed to sync your roster.'**
+  String get settingsCalPermNeeded;
+
+  /// No description provided for @settingsCalBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar access is blocked. Enable it in system settings to sync.'**
+  String get settingsCalBlocked;
+
+  /// No description provided for @settingsCalOpenSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsCalOpenSettings;
+
+  /// No description provided for @settingsCalUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sync isn\'t available on this device.'**
+  String get settingsCalUnsupported;
+
+  /// No description provided for @settingsDangerZone.
+  ///
+  /// In en, this message translates to:
+  /// **'DANGER ZONE'**
+  String get settingsDangerZone;
+
+  /// No description provided for @settingsDangerZoneSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletes your roster, alarms, and settings, then restarts onboarding from scratch.'**
+  String get settingsDangerZoneSub;
+
+  /// No description provided for @settingsResetAppData.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset App Data'**
+  String get settingsResetAppData;
+
+  /// No description provided for @settingsResetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset app?'**
+  String get settingsResetTitle;
+
+  /// No description provided for @settingsResetBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure? This will delete your roster, alarms, and settings.'**
+  String get settingsResetBody;
+
+  /// No description provided for @settingsResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get settingsResetConfirm;
 }
 
 class _AppLocalizationsDelegate
