@@ -16,6 +16,7 @@ import '../data/repositories/shift_repository.dart';
 import '../logic/cycle_resolver.dart';
 import '../services/widget_service.dart';
 import '../state/app_preferences.dart';
+import '../l10n/l10n.dart';
 import 'calendar/shift_calendar.dart';
 import 'dashboard_hero.dart';
 import 'roster/shift_visuals.dart';
@@ -247,7 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               right: 12,
               child: IconButton(
                 icon: const Icon(Icons.settings_outlined),
-                tooltip: 'Settings',
+                tooltip: context.l10n.settingsTitle,
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const SettingsScreen(),
@@ -280,14 +281,14 @@ class _EmptyDashboard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No upcoming shifts',
+            context.l10n.dashNoUpcomingShifts,
             style: theme.textTheme.headlineSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Enjoy your time off.',
+            context.l10n.dashEnjoyTimeOff,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -331,7 +332,7 @@ class _UpcomingShiftCard extends StatelessWidget {
             const SizedBox(width: 12),
             Flexible(
               child: Text(
-                '${heroTypeLabel(shift.type)} shift',
+                context.l10n.dashHeroShift(heroTypeLabel(shift.type)),
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: visual.color,
                   fontWeight: FontWeight.w700,
@@ -346,7 +347,9 @@ class _UpcomingShiftCard extends StatelessWidget {
         // The hero countdown line. Tight letter-spacing + tabular
         // figures so the digits don't jitter as the minute flips.
         Text(
-          inProgress ? 'Ends in $countdown' : 'Starts in $countdown',
+          inProgress
+              ? context.l10n.heroEndsIn(countdown)
+              : context.l10n.heroStartsIn(countdown),
           style: theme.textTheme.displayMedium?.copyWith(
             fontWeight: FontWeight.w800,
             letterSpacing: -1,
@@ -371,7 +374,7 @@ class _UpcomingShiftCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              'IN PROGRESS',
+              context.l10n.dashInProgress,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: visual.color,
                 fontWeight: FontWeight.w800,
@@ -441,7 +444,7 @@ class _RotationPositionCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Rotation',
+                  context.l10n.dashRotation,
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     letterSpacing: 1.0,
@@ -517,7 +520,7 @@ class _AlarmReliabilityBanner extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Alarms can\'t ring reliably',
+                    context.l10n.dashAlarmsCantRing,
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: scheme.onErrorContainer,
                       fontWeight: FontWeight.w700,
@@ -529,10 +532,9 @@ class _AlarmReliabilityBanner extends StatelessWidget {
             if (!health.notificationsEnabled)
               _issueRow(
                 theme,
-                'Notifications are off — a ringing alarm can\'t show its '
-                'wake screen or be dismissed.',
+                context.l10n.dashNotifsOffIssue,
                 buttonKey: const ValueKey('health-fix-notifications'),
-                buttonLabel: 'Open settings',
+                buttonLabel: context.l10n.dashOpenSettings,
                 onPressed: () async {
                   // Fire-and-forget the settings hop — its future resolves on
                   // the platform's schedule (never, under the test harness),
@@ -548,10 +550,9 @@ class _AlarmReliabilityBanner extends StatelessWidget {
             if (!health.exactAlarmsAllowed)
               _issueRow(
                 theme,
-                'Exact alarms are blocked — wake-ups can\'t be scheduled '
-                'at all.',
+                context.l10n.dashExactBlockedIssue,
                 buttonKey: const ValueKey('health-fix-exact'),
-                buttonLabel: 'Allow',
+                buttonLabel: context.l10n.dashAllow,
                 onPressed: () async {
                   // Same fire-and-forget rationale as the notifications row.
                   unawaited(requestExactAlarmPermission());
@@ -705,14 +706,14 @@ class _DismissUpcomingAlarmControlState
       case _EarlySkipMode.confirmOne:
         return _buildConfirmBar(
           key: const ValueKey('dismiss-upcoming-slide'),
-          label: 'Slide to skip this alarm',
+          label: context.l10n.dashSlideToSkip,
           icon: Icons.alarm_off,
           targets: [_next],
         );
       case _EarlySkipMode.confirmAll:
         return _buildConfirmBar(
           key: const ValueKey('skip-all-slide'),
-          label: 'Slide to skip all ${widget.rings.length} alarms',
+          label: context.l10n.dashSlideToSkipAll(widget.rings.length),
           icon: Icons.clear_all,
           targets: widget.rings,
         );
@@ -735,7 +736,7 @@ class _DismissUpcomingAlarmControlState
             onPressed: () =>
                 setState(() => _mode = _EarlySkipMode.confirmOne),
             icon: const Icon(Icons.alarm_off),
-            label: Text('Dismiss upcoming alarm · $fireClock'),
+            label: Text(context.l10n.dashDismissUpcoming(fireClock)),
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               textStyle: theme.textTheme.titleSmall?.copyWith(
@@ -754,7 +755,7 @@ class _DismissUpcomingAlarmControlState
                   setState(() => _mode = _EarlySkipMode.confirmAll),
               icon: const Icon(Icons.clear_all, size: 18),
               label: Text(
-                'Skip all ${widget.rings.length} alarms for this shift',
+                context.l10n.dashSkipAllForShift(widget.rings.length),
               ),
             ),
         ],
@@ -785,7 +786,7 @@ class _DismissUpcomingAlarmControlState
           IconButton(
             key: const ValueKey('dismiss-upcoming-cancel'),
             icon: const Icon(Icons.close),
-            tooltip: 'Keep alarm',
+            tooltip: context.l10n.dashKeepAlarm,
             onPressed: () =>
                 setState(() => _mode = _EarlySkipMode.collapsed),
           ),
@@ -832,13 +833,13 @@ class _MyRotationTile extends StatelessWidget {
           color: theme.colorScheme.primary,
         ),
         title: Text(
-          'My Rotation',
+          context.l10n.dashMyRotation,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
         subtitle: Text(
-          'Calendar & upcoming shifts',
+          context.l10n.dashCalendarUpcoming,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -861,7 +862,10 @@ class _MyRotationTile extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                child: Text('Next shifts', style: theme.textTheme.labelLarge),
+                child: Text(
+                  context.l10n.dashNextShifts,
+                  style: theme.textTheme.labelLarge,
+                ),
               ),
             ),
             for (final s in preview) _NextShiftPreviewRow(shift: s),
@@ -874,7 +878,7 @@ class _MyRotationTile extends StatelessWidget {
                 // Timeline is index 1 post-migration (was Roster at 2).
                 onPressed: () => onOpenTab!(1),
                 icon: const Icon(Icons.view_list, size: 18),
-                label: const Text('Open Timeline'),
+                label: Text(context.l10n.dashOpenTimeline),
               ),
             ),
         ],

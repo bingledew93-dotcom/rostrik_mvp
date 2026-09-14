@@ -306,5 +306,187 @@
   "settingsResetAppData": "Reset App Data",
   "settingsResetTitle": "Reset app?",
   "settingsResetBody": "Are you sure? This will delete your roster, alarms, and settings.",
-  "settingsResetConfirm": "Reset"
+  "settingsResetConfirm": "Reset",
+  "dashNoUpcomingShifts": "No upcoming shifts",
+  "dashEnjoyTimeOff": "Enjoy your time off.",
+  "dashHeroShift": "{type} shift",
+  "@dashHeroShift": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "dashInProgress": "IN PROGRESS",
+  "dashRotation": "Rotation",
+  "dashAlarmsCantRing": "Alarms can't ring reliably",
+  "dashNotifsOffIssue": "Notifications are off — a ringing alarm can't show its wake screen or be dismissed.",
+  "dashOpenSettings": "Open settings",
+  "dashExactBlockedIssue": "Exact alarms are blocked — wake-ups can't be scheduled at all.",
+  "dashAllow": "Allow",
+  "dashSlideToSkip": "Slide to skip this alarm",
+  "dashSlideToSkipAll": "{count, plural, one{Slide to skip the alarm} other{Slide to skip all {count} alarms}}",
+  "@dashSlideToSkipAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashDismissUpcoming": "Dismiss upcoming alarm · {time}",
+  "@dashDismissUpcoming": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "dashSkipAllForShift": "{count, plural, one{Skip the alarm for this shift} other{Skip all {count} alarms for this shift}}",
+  "@dashSkipAllForShift": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashKeepAlarm": "Keep alarm",
+  "dashMyRotation": "My Rotation",
+  "dashCalendarUpcoming": "Calendar & upcoming shifts",
+  "dashNextShifts": "Next shifts",
+  "dashOpenTimeline": "Open Timeline",
+  "heroStartsIn": "Starts in {countdown}",
+  "@heroStartsIn": {
+    "placeholders": {
+      "countdown": {
+        "type": "String"
+      }
+    }
+  },
+  "heroEndsIn": "Ends in {countdown}",
+  "@heroEndsIn": {
+    "placeholders": {
+      "countdown": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsInPrefix": "Starts in",
+  "heroEndsInPrefix": "Ends in",
+  "heroStartsTodayAt": "Starts today at {time}",
+  "@heroStartsTodayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartedTodayAt": "Started today at {time}",
+  "@heroStartedTodayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsTomorrowAt": "Starts tomorrow at {time}",
+  "@heroStartsTomorrowAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartedYesterdayAt": "Started yesterday at {time}",
+  "@heroStartedYesterdayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsYesterdayAt": "Starts yesterday at {time}",
+  "@heroStartsYesterdayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsOnAt": "Starts {date} at {time}",
+  "@heroStartsOnAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartedOnAt": "Started {date} at {time}",
+  "@heroStartedOnAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "shiftTypeDayShift": "Day shift",
+  "shiftTypeAfternoonShift": "Afternoon shift",
+  "shiftTypeNightShift": "Night shift",
+  "heroDayXofY": "Day {x} of {y} — {label}",
+  "@heroDayXofY": {
+    "placeholders": {
+      "x": {
+        "type": "int"
+      },
+      "y": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "heroOffTomorrow": "Off tomorrow",
+  "heroOffInDays": "{days, plural, one{Off in 1 day} other{Off in {days} days}}",
+  "@heroOffInDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "heroBackOnTomorrow": "Back on tomorrow",
+  "heroBackOnInDays": "{days, plural, one{Back on in 1 day} other{Back on in {days} days}}",
+  "@heroBackOnInDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "heroOffRdo": "Off / RDO",
+  "durationDayShort": "{d}d",
+  "@durationDayShort": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
+  "durationDayHourShort": "{d}d {h}h",
+  "@durationDayHourShort": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      },
+      "h": {
+        "type": "int"
+      }
+    }
+  }
 }

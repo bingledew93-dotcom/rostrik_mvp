@@ -646,4 +646,189 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsResetConfirm => 'Reset';
+
+  @override
+  String get dashNoUpcomingShifts => 'No upcoming shifts';
+
+  @override
+  String get dashEnjoyTimeOff => 'Enjoy your time off.';
+
+  @override
+  String dashHeroShift(String type) {
+    return '$type shift';
+  }
+
+  @override
+  String get dashInProgress => 'IN PROGRESS';
+
+  @override
+  String get dashRotation => 'Rotation';
+
+  @override
+  String get dashAlarmsCantRing => 'Alarms can\'t ring reliably';
+
+  @override
+  String get dashNotifsOffIssue =>
+      'Notifications are off — a ringing alarm can\'t show its wake screen or be dismissed.';
+
+  @override
+  String get dashOpenSettings => 'Open settings';
+
+  @override
+  String get dashExactBlockedIssue =>
+      'Exact alarms are blocked — wake-ups can\'t be scheduled at all.';
+
+  @override
+  String get dashAllow => 'Allow';
+
+  @override
+  String get dashSlideToSkip => 'Slide to skip this alarm';
+
+  @override
+  String dashSlideToSkipAll(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Slide to skip all $count alarms',
+      one: 'Slide to skip the alarm',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashDismissUpcoming(String time) {
+    return 'Dismiss upcoming alarm · $time';
+  }
+
+  @override
+  String dashSkipAllForShift(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Skip all $count alarms for this shift',
+      one: 'Skip the alarm for this shift',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dashKeepAlarm => 'Keep alarm';
+
+  @override
+  String get dashMyRotation => 'My Rotation';
+
+  @override
+  String get dashCalendarUpcoming => 'Calendar & upcoming shifts';
+
+  @override
+  String get dashNextShifts => 'Next shifts';
+
+  @override
+  String get dashOpenTimeline => 'Open Timeline';
+
+  @override
+  String heroStartsIn(String countdown) {
+    return 'Starts in $countdown';
+  }
+
+  @override
+  String heroEndsIn(String countdown) {
+    return 'Ends in $countdown';
+  }
+
+  @override
+  String get heroStartsInPrefix => 'Starts in';
+
+  @override
+  String get heroEndsInPrefix => 'Ends in';
+
+  @override
+  String heroStartsTodayAt(String time) {
+    return 'Starts today at $time';
+  }
+
+  @override
+  String heroStartedTodayAt(String time) {
+    return 'Started today at $time';
+  }
+
+  @override
+  String heroStartsTomorrowAt(String time) {
+    return 'Starts tomorrow at $time';
+  }
+
+  @override
+  String heroStartedYesterdayAt(String time) {
+    return 'Started yesterday at $time';
+  }
+
+  @override
+  String heroStartsYesterdayAt(String time) {
+    return 'Starts yesterday at $time';
+  }
+
+  @override
+  String heroStartsOnAt(String date, String time) {
+    return 'Starts $date at $time';
+  }
+
+  @override
+  String heroStartedOnAt(String date, String time) {
+    return 'Started $date at $time';
+  }
+
+  @override
+  String get shiftTypeDayShift => 'Day shift';
+
+  @override
+  String get shiftTypeAfternoonShift => 'Afternoon shift';
+
+  @override
+  String get shiftTypeNightShift => 'Night shift';
+
+  @override
+  String heroDayXofY(int x, int y, String label) {
+    return 'Day $x of $y — $label';
+  }
+
+  @override
+  String get heroOffTomorrow => 'Off tomorrow';
+
+  @override
+  String heroOffInDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Off in $days days',
+      one: 'Off in 1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get heroBackOnTomorrow => 'Back on tomorrow';
+
+  @override
+  String heroBackOnInDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Back on in $days days',
+      one: 'Back on in 1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get heroOffRdo => 'Off / RDO';
+
+  @override
+  String durationDayShort(int d) {
+    return '${d}d';
+  }
+
+  @override
+  String durationDayHourShort(int d, int h) {
+    return '${d}d ${h}h';
+  }
 }

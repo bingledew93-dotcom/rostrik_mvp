@@ -1173,6 +1173,252 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reset'**
   String get settingsResetConfirm;
+
+  /// No description provided for @dashNoUpcomingShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming shifts'**
+  String get dashNoUpcomingShifts;
+
+  /// No description provided for @dashEnjoyTimeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Enjoy your time off.'**
+  String get dashEnjoyTimeOff;
+
+  /// No description provided for @dashHeroShift.
+  ///
+  /// In en, this message translates to:
+  /// **'{type} shift'**
+  String dashHeroShift(String type);
+
+  /// No description provided for @dashInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'IN PROGRESS'**
+  String get dashInProgress;
+
+  /// No description provided for @dashRotation.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation'**
+  String get dashRotation;
+
+  /// No description provided for @dashAlarmsCantRing.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms can\'t ring reliably'**
+  String get dashAlarmsCantRing;
+
+  /// No description provided for @dashNotifsOffIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are off — a ringing alarm can\'t show its wake screen or be dismissed.'**
+  String get dashNotifsOffIssue;
+
+  /// No description provided for @dashOpenSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get dashOpenSettings;
+
+  /// No description provided for @dashExactBlockedIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact alarms are blocked — wake-ups can\'t be scheduled at all.'**
+  String get dashExactBlockedIssue;
+
+  /// No description provided for @dashAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get dashAllow;
+
+  /// No description provided for @dashSlideToSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Slide to skip this alarm'**
+  String get dashSlideToSkip;
+
+  /// No description provided for @dashSlideToSkipAll.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Slide to skip the alarm} other{Slide to skip all {count} alarms}}'**
+  String dashSlideToSkipAll(int count);
+
+  /// No description provided for @dashDismissUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss upcoming alarm · {time}'**
+  String dashDismissUpcoming(String time);
+
+  /// No description provided for @dashSkipAllForShift.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Skip the alarm for this shift} other{Skip all {count} alarms for this shift}}'**
+  String dashSkipAllForShift(int count);
+
+  /// No description provided for @dashKeepAlarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep alarm'**
+  String get dashKeepAlarm;
+
+  /// No description provided for @dashMyRotation.
+  ///
+  /// In en, this message translates to:
+  /// **'My Rotation'**
+  String get dashMyRotation;
+
+  /// No description provided for @dashCalendarUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar & upcoming shifts'**
+  String get dashCalendarUpcoming;
+
+  /// No description provided for @dashNextShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'Next shifts'**
+  String get dashNextShifts;
+
+  /// No description provided for @dashOpenTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Timeline'**
+  String get dashOpenTimeline;
+
+  /// No description provided for @heroStartsIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts in {countdown}'**
+  String heroStartsIn(String countdown);
+
+  /// No description provided for @heroEndsIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends in {countdown}'**
+  String heroEndsIn(String countdown);
+
+  /// No description provided for @heroStartsInPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts in'**
+  String get heroStartsInPrefix;
+
+  /// No description provided for @heroEndsInPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends in'**
+  String get heroEndsInPrefix;
+
+  /// No description provided for @heroStartsTodayAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts today at {time}'**
+  String heroStartsTodayAt(String time);
+
+  /// No description provided for @heroStartedTodayAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Started today at {time}'**
+  String heroStartedTodayAt(String time);
+
+  /// No description provided for @heroStartsTomorrowAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts tomorrow at {time}'**
+  String heroStartsTomorrowAt(String time);
+
+  /// No description provided for @heroStartedYesterdayAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Started yesterday at {time}'**
+  String heroStartedYesterdayAt(String time);
+
+  /// No description provided for @heroStartsYesterdayAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts yesterday at {time}'**
+  String heroStartsYesterdayAt(String time);
+
+  /// No description provided for @heroStartsOnAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts {date} at {time}'**
+  String heroStartsOnAt(String date, String time);
+
+  /// No description provided for @heroStartedOnAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Started {date} at {time}'**
+  String heroStartedOnAt(String date, String time);
+
+  /// No description provided for @shiftTypeDayShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Day shift'**
+  String get shiftTypeDayShift;
+
+  /// No description provided for @shiftTypeAfternoonShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Afternoon shift'**
+  String get shiftTypeAfternoonShift;
+
+  /// No description provided for @shiftTypeNightShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Night shift'**
+  String get shiftTypeNightShift;
+
+  /// No description provided for @heroDayXofY.
+  ///
+  /// In en, this message translates to:
+  /// **'Day {x} of {y} — {label}'**
+  String heroDayXofY(int x, int y, String label);
+
+  /// No description provided for @heroOffTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Off tomorrow'**
+  String get heroOffTomorrow;
+
+  /// No description provided for @heroOffInDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, one{Off in 1 day} other{Off in {days} days}}'**
+  String heroOffInDays(int days);
+
+  /// No description provided for @heroBackOnTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Back on tomorrow'**
+  String get heroBackOnTomorrow;
+
+  /// No description provided for @heroBackOnInDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, one{Back on in 1 day} other{Back on in {days} days}}'**
+  String heroBackOnInDays(int days);
+
+  /// No description provided for @heroOffRdo.
+  ///
+  /// In en, this message translates to:
+  /// **'Off / RDO'**
+  String get heroOffRdo;
+
+  /// No description provided for @durationDayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{d}d'**
+  String durationDayShort(int d);
+
+  /// No description provided for @durationDayHourShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{d}d {h}h'**
+  String durationDayHourShort(int d, int h);
 }
 
 class _AppLocalizationsDelegate
