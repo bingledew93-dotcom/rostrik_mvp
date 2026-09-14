@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 
+import '../../l10n/l10n.dart';
+
 /// A one-time coaching tip for a single main screen: what it's for and how to
 /// use it, shown the first time a new user lands on that tab.
 class ScreenTip {
@@ -16,8 +18,29 @@ class ScreenTip {
   final String tipKey;
 
   final IconData icon;
+
+  /// English fallbacks — render via [localizedTitle] / [localizedBody], which
+  /// resolve per-locale by [tipKey] and fall back to these for an unknown key.
   final String title;
   final String body;
+
+  String get localizedTitle => switch (tipKey) {
+        'dashboard' => currentL10n.tipDashboardTitle,
+        'timeline' => currentL10n.tipTimelineTitle,
+        'manage' => currentL10n.tipManageTitle,
+        'alarms' => currentL10n.tipAlarmsTitle,
+        'sleep' => currentL10n.tipSleepTitle,
+        _ => title,
+      };
+
+  String get localizedBody => switch (tipKey) {
+        'dashboard' => currentL10n.tipDashboardBody,
+        'timeline' => currentL10n.tipTimelineBody,
+        'manage' => currentL10n.tipManageBody,
+        'alarms' => currentL10n.tipAlarmsBody,
+        'sleep' => currentL10n.tipSleepBody,
+        _ => body,
+      };
 }
 
 /// One tip per bottom-nav tab, in tab order (Dashboard, Timeline, Manage,

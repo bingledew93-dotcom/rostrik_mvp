@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/l10n.dart';
 
 import 'pattern_picker_body.dart';
 
@@ -18,7 +19,7 @@ class PatternPickerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Choose a pattern')),
+      appBar: AppBar(title: Text(context.l10n.patternChoosePattern)),
       body: PatternPickerBody(
         // async so it satisfies the Future-returning onGenerated; the pop
         // unmounts this picker, so the body's mounted-guarded reset is a no-op.

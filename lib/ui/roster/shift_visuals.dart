@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/l10n.dart';
 
 import '../../data/models/shift_type.dart';
 
@@ -41,14 +42,15 @@ TypeVisual visualFor(ShiftType type) {
 /// Distinct from `shiftTypeLabel` (used in the timeline rows) which can
 /// afford full words like "Afternoon".
 String shiftTypeShortLabel(ShiftType type) {
+  final l10n = currentL10n;
   switch (type) {
     case ShiftType.day:
-      return 'Day';
+      return l10n.shiftTypeDay;
     case ShiftType.afternoon:
-      return 'Aft';
+      return l10n.shiftTypeAftShort;
     case ShiftType.night:
-      return 'Night';
+      return l10n.shiftTypeNight;
     case ShiftType.off:
-      return 'Off';
+      return l10n.shiftTypeOff;
   }
 }

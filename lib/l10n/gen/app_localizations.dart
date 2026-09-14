@@ -2301,6 +2301,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reminder'**
   String get dayReminder;
+
+  /// No description provided for @actEditActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit activity'**
+  String get actEditActivity;
+
+  /// No description provided for @actLeadAtTime.
+  ///
+  /// In en, this message translates to:
+  /// **'At time'**
+  String get actLeadAtTime;
+
+  /// No description provided for @actLead10Min.
+  ///
+  /// In en, this message translates to:
+  /// **'10 min before'**
+  String get actLead10Min;
+
+  /// No description provided for @actLead30Min.
+  ///
+  /// In en, this message translates to:
+  /// **'30 min before'**
+  String get actLead30Min;
+
+  /// No description provided for @actLead1Hour.
+  ///
+  /// In en, this message translates to:
+  /// **'1 hour before'**
+  String get actLead1Hour;
+
+  /// No description provided for @actLead1Day.
+  ///
+  /// In en, this message translates to:
+  /// **'1 day before'**
+  String get actLead1Day;
+
+  /// No description provided for @actEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Event'**
+  String get actEvent;
+
+  /// No description provided for @actTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Task'**
+  String get actTask;
+
+  /// No description provided for @actBirthday.
+  ///
+  /// In en, this message translates to:
+  /// **'Birthday'**
+  String get actBirthday;
+
+  /// No description provided for @actTitleField.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get actTitleField;
+
+  /// No description provided for @actAllDay.
+  ///
+  /// In en, this message translates to:
+  /// **'All day'**
+  String get actAllDay;
+
+  /// No description provided for @actTimeField.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get actTimeField;
+
+  /// No description provided for @actRemindMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Remind me'**
+  String get actRemindMe;
+
+  /// No description provided for @actRemindMeSub.
+  ///
+  /// In en, this message translates to:
+  /// **'A gentle notification — separate from your shift alarms.'**
+  String get actRemindMeSub;
+
+  /// No description provided for @actRemindAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Remind at'**
+  String get actRemindAt;
+
+  /// No description provided for @actReminderPassed.
+  ///
+  /// In en, this message translates to:
+  /// **'That time has already passed — this reminder won’t fire.'**
+  String get actReminderPassed;
+
+  /// No description provided for @actNoteOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get actNoteOptional;
+
+  /// No description provided for @actCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get actCompleted;
+
+  /// No description provided for @tipDashboardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your dashboard'**
+  String get tipDashboardTitle;
+
+  /// No description provided for @tipDashboardBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Home base. See your next shift with a live countdown and where you are in your rotation. Tap a tile to jump straight to the details.'**
+  String get tipDashboardBody;
+
+  /// No description provided for @tipTimelineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your whole roster'**
+  String get tipTimelineTitle;
+
+  /// No description provided for @tipTimelineBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch between a List and a Month calendar up top. Tap any day to edit a shift — or add an event, task or birthday.'**
+  String get tipTimelineBody;
+
+  /// No description provided for @tipManageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Build & adjust'**
+  String get tipManageTitle;
+
+  /// No description provided for @tipManageBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a rotating roster, add a one-off (overtime) shift, or pause your whole schedule for leave — all from here.'**
+  String get tipManageBody;
+
+  /// No description provided for @tipAlarmsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your alarms'**
+  String get tipAlarmsTitle;
+
+  /// No description provided for @tipAlarmsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Every alarm your shifts create, plus any you add yourself. Tap one to change its time or tone, or make it a shake-to-dismiss Critical Shift alarm.'**
+  String get tipAlarmsBody;
+
+  /// No description provided for @tipSleepTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep plan'**
+  String get tipSleepTitle;
+
+  /// No description provided for @tipSleepBody.
+  ///
+  /// In en, this message translates to:
+  /// **'A wind-down plan that follows your roster: set a sleep goal and get ready for your next shift feeling rested.'**
+  String get tipSleepBody;
+
+  /// No description provided for @tipReplayHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay these anytime from Settings › How it works.'**
+  String get tipReplayHint;
+
+  /// No description provided for @tipDontShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t show tips'**
+  String get tipDontShow;
+
+  /// No description provided for @tipGotIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get tipGotIt;
+
+  /// No description provided for @timelineListView.
+  ///
+  /// In en, this message translates to:
+  /// **'List View'**
+  String get timelineListView;
+
+  /// No description provided for @timelineMonthView.
+  ///
+  /// In en, this message translates to:
+  /// **'Month View'**
+  String get timelineMonthView;
+
+  /// No description provided for @shiftTypeAftShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Aft'**
+  String get shiftTypeAftShort;
+
+  /// No description provided for @timelineNoShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'No shifts scheduled. Tap + to add one.'**
+  String get timelineNoShifts;
+
+  /// No description provided for @timelineNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No shifts match the {filter} filter.'**
+  String timelineNoMatch(String filter);
+
+  /// No description provided for @timelineRestDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Rest day'**
+  String get timelineRestDay;
+
+  /// No description provided for @timelineRestDayReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Rest day · {reason}'**
+  String timelineRestDayReason(String reason);
+
+  /// No description provided for @timelineAllDay.
+  ///
+  /// In en, this message translates to:
+  /// **'All day'**
+  String get timelineAllDay;
+
+  /// No description provided for @calLegendPausedLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused / Leave'**
+  String get calLegendPausedLeave;
+
+  /// No description provided for @calLegendActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get calLegendActivity;
+
+  /// No description provided for @filterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get filterAll;
+
+  /// No description provided for @filterWork.
+  ///
+  /// In en, this message translates to:
+  /// **'Work'**
+  String get filterWork;
+
+  /// No description provided for @criticalHoldToDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Or hold to dismiss'**
+  String get criticalHoldToDismiss;
+
+  /// No description provided for @patternChoosePattern.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a pattern'**
+  String get patternChoosePattern;
 }
 
 class _AppLocalizationsDelegate

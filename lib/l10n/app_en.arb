@@ -762,5 +762,64 @@
   "dayAddAnotherShift": "Add another shift",
   "dayAddActivity": "Add activity",
   "dayAddActivitySub": "Event, task or birthday",
-  "dayReminder": "Reminder"
+  "dayReminder": "Reminder",
+  "actEditActivity": "Edit activity",
+  "actLeadAtTime": "At time",
+  "actLead10Min": "10 min before",
+  "actLead30Min": "30 min before",
+  "actLead1Hour": "1 hour before",
+  "actLead1Day": "1 day before",
+  "actEvent": "Event",
+  "actTask": "Task",
+  "actBirthday": "Birthday",
+  "actTitleField": "Title",
+  "actAllDay": "All day",
+  "actTimeField": "Time",
+  "actRemindMe": "Remind me",
+  "actRemindMeSub": "A gentle notification — separate from your shift alarms.",
+  "actRemindAt": "Remind at",
+  "actReminderPassed": "That time has already passed — this reminder won’t fire.",
+  "actNoteOptional": "Note (optional)",
+  "actCompleted": "Completed",
+  "tipDashboardTitle": "Your dashboard",
+  "tipDashboardBody": "Home base. See your next shift with a live countdown and where you are in your rotation. Tap a tile to jump straight to the details.",
+  "tipTimelineTitle": "Your whole roster",
+  "tipTimelineBody": "Switch between a List and a Month calendar up top. Tap any day to edit a shift — or add an event, task or birthday.",
+  "tipManageTitle": "Build & adjust",
+  "tipManageBody": "Create a rotating roster, add a one-off (overtime) shift, or pause your whole schedule for leave — all from here.",
+  "tipAlarmsTitle": "Your alarms",
+  "tipAlarmsBody": "Every alarm your shifts create, plus any you add yourself. Tap one to change its time or tone, or make it a shake-to-dismiss Critical Shift alarm.",
+  "tipSleepTitle": "Sleep plan",
+  "tipSleepBody": "A wind-down plan that follows your roster: set a sleep goal and get ready for your next shift feeling rested.",
+  "tipReplayHint": "Replay these anytime from Settings › How it works.",
+  "tipDontShow": "Don't show tips",
+  "tipGotIt": "Got it",
+  "timelineListView": "List View",
+  "timelineMonthView": "Month View",
+  "shiftTypeAftShort": "Aft",
+  "timelineNoShifts": "No shifts scheduled. Tap + to add one.",
+  "timelineNoMatch": "No shifts match the {filter} filter.",
+  "@timelineNoMatch": {
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "timelineRestDay": "Rest day",
+  "timelineRestDayReason": "Rest day · {reason}",
+  "@timelineRestDayReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "timelineAllDay": "All day",
+  "calLegendPausedLeave": "Paused / Leave",
+  "calLegendActivity": "Activity",
+  "filterAll": "All",
+  "filterWork": "Work",
+  "criticalHoldToDismiss": "Or hold to dismiss",
+  "patternChoosePattern": "Choose a pattern"
 }

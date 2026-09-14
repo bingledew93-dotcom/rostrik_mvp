@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/l10n.dart';
 
 import '../../data/models/shift.dart';
 import '../../data/models/shift_type.dart';
@@ -16,9 +17,9 @@ enum ShiftFilter {
   off;
 
   String get label => switch (this) {
-        ShiftFilter.all => 'All',
-        ShiftFilter.work => 'Work',
-        ShiftFilter.off => 'Off',
+        ShiftFilter.all => currentL10n.filterAll,
+        ShiftFilter.work => currentL10n.filterWork,
+        ShiftFilter.off => currentL10n.shiftTypeOff,
       };
 
   /// Whether [shift] should be visible under this filter. The orchestrator

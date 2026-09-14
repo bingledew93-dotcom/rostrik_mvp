@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/shift.dart';
@@ -225,8 +226,8 @@ class _EmptyTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final message = filter == ShiftFilter.all
-        ? 'No shifts scheduled. Tap + to add one.'
-        : 'No shifts match the ${filter.label} filter.';
+        ? context.l10n.timelineNoShifts
+        : context.l10n.timelineNoMatch(filter.label);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -359,8 +360,10 @@ class ShiftCard extends StatelessWidget {
                             Flexible(
                               child: Text(
                                 shift.pauseReason == null
-                                    ? 'Paused'
-                                    : 'Paused · ${shift.pauseReason}',
+                                    ? context.l10n.commonPaused
+                                    : context.l10n.workHistoryPausedReason(
+                                        shift.pauseReason!,
+                                      ),
                                 style: theme.textTheme.labelMedium?.copyWith(
                                   color: muted,
                                   fontWeight: FontWeight.w700,
@@ -391,8 +394,8 @@ class ShiftCard extends StatelessWidget {
     // "Rest day" (not "Off") — friendlier for tired eyes, and avoids colliding
     // with the "Off" filter chip.
     final trailing = (shift.isPaused && shift.pauseReason != null)
-        ? 'Rest day · ${shift.pauseReason}'
-        : 'Rest day';
+        ? context.l10n.timelineRestDayReason(shift.pauseReason!)
+        : context.l10n.timelineRestDay;
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
@@ -441,7 +444,7 @@ class ShiftCard extends StatelessWidget {
 }
 
 String _timeRange(Shift shift, bool use24Hour) {
-  if (shift.type == ShiftType.off) return 'All day';
+  if (shift.type == ShiftType.off) return currentL10n.timelineAllDay;
   return '${formatClock(shift.startMinutes, use24Hour: use24Hour)} – '
       '${formatClock(shift.endMinutes, use24Hour: use24Hour)}';
 }

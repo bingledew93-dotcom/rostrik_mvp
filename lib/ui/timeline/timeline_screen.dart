@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/calendar_activity.dart';
 import '../../data/models/shift.dart';
+import '../../l10n/l10n.dart';
 import '../../state/app_preferences.dart';
 import '../app_theme.dart';
 import '../calendar/shift_calendar.dart';
@@ -49,11 +50,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Timeline'),
+        title: Text(context.l10n.navTimeline),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
+            tooltip: context.l10n.settingsTitle,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
@@ -106,16 +107,16 @@ class _ViewToggle extends StatelessWidget {
       width: double.infinity,
       child: SegmentedButton<_TimelineView>(
         showSelectedIcon: false,
-        segments: const [
+        segments: [
           ButtonSegment(
             value: _TimelineView.list,
-            label: Text('List View'),
-            icon: Icon(Icons.view_agenda_outlined),
+            label: Text(context.l10n.timelineListView),
+            icon: const Icon(Icons.view_agenda_outlined),
           ),
           ButtonSegment(
             value: _TimelineView.month,
-            label: Text('Month View'),
-            icon: Icon(Icons.calendar_month),
+            label: Text(context.l10n.timelineMonthView),
+            icon: const Icon(Icons.calendar_month),
           ),
         ],
         selected: <_TimelineView>{value},

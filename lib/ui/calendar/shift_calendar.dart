@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/l10n.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../data/models/shift.dart';
@@ -359,33 +360,33 @@ class ShiftCalendarLegend extends StatelessWidget {
         children: [
           _LegendChip(
             color: visualFor(ShiftType.day).color,
-            label: 'Day',
+            label: context.l10n.shiftTypeDay,
             labelStyle: labelStyle,
           ),
           _LegendChip(
             color: visualFor(ShiftType.afternoon).color,
-            label: 'Afternoon',
+            label: context.l10n.shiftTypeAfternoon,
             labelStyle: labelStyle,
           ),
           _LegendChip(
             color: visualFor(ShiftType.night).color,
-            label: 'Night',
+            label: context.l10n.shiftTypeNight,
             labelStyle: labelStyle,
           ),
           _LegendChip(
             color: Colors.transparent,
             borderColor: scheme.primary,
-            label: 'Ad-Hoc',
+            label: context.l10n.workHistoryAdHocBadge,
             labelStyle: labelStyle,
           ),
           _LegendChip(
             color: Colors.grey.withValues(alpha: 0.4),
-            label: 'Paused / Leave',
+            label: context.l10n.calLegendPausedLeave,
             labelStyle: labelStyle,
           ),
           _LegendChip(
             color: scheme.tertiary,
-            label: 'Activity',
+            label: context.l10n.calLegendActivity,
             labelStyle: labelStyle,
             dot: true,
           ),

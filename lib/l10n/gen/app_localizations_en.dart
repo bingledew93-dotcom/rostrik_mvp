@@ -1343,4 +1343,151 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dayReminder => 'Reminder';
+
+  @override
+  String get actEditActivity => 'Edit activity';
+
+  @override
+  String get actLeadAtTime => 'At time';
+
+  @override
+  String get actLead10Min => '10 min before';
+
+  @override
+  String get actLead30Min => '30 min before';
+
+  @override
+  String get actLead1Hour => '1 hour before';
+
+  @override
+  String get actLead1Day => '1 day before';
+
+  @override
+  String get actEvent => 'Event';
+
+  @override
+  String get actTask => 'Task';
+
+  @override
+  String get actBirthday => 'Birthday';
+
+  @override
+  String get actTitleField => 'Title';
+
+  @override
+  String get actAllDay => 'All day';
+
+  @override
+  String get actTimeField => 'Time';
+
+  @override
+  String get actRemindMe => 'Remind me';
+
+  @override
+  String get actRemindMeSub =>
+      'A gentle notification — separate from your shift alarms.';
+
+  @override
+  String get actRemindAt => 'Remind at';
+
+  @override
+  String get actReminderPassed =>
+      'That time has already passed — this reminder won’t fire.';
+
+  @override
+  String get actNoteOptional => 'Note (optional)';
+
+  @override
+  String get actCompleted => 'Completed';
+
+  @override
+  String get tipDashboardTitle => 'Your dashboard';
+
+  @override
+  String get tipDashboardBody =>
+      'Home base. See your next shift with a live countdown and where you are in your rotation. Tap a tile to jump straight to the details.';
+
+  @override
+  String get tipTimelineTitle => 'Your whole roster';
+
+  @override
+  String get tipTimelineBody =>
+      'Switch between a List and a Month calendar up top. Tap any day to edit a shift — or add an event, task or birthday.';
+
+  @override
+  String get tipManageTitle => 'Build & adjust';
+
+  @override
+  String get tipManageBody =>
+      'Create a rotating roster, add a one-off (overtime) shift, or pause your whole schedule for leave — all from here.';
+
+  @override
+  String get tipAlarmsTitle => 'Your alarms';
+
+  @override
+  String get tipAlarmsBody =>
+      'Every alarm your shifts create, plus any you add yourself. Tap one to change its time or tone, or make it a shake-to-dismiss Critical Shift alarm.';
+
+  @override
+  String get tipSleepTitle => 'Sleep plan';
+
+  @override
+  String get tipSleepBody =>
+      'A wind-down plan that follows your roster: set a sleep goal and get ready for your next shift feeling rested.';
+
+  @override
+  String get tipReplayHint =>
+      'Replay these anytime from Settings › How it works.';
+
+  @override
+  String get tipDontShow => 'Don\'t show tips';
+
+  @override
+  String get tipGotIt => 'Got it';
+
+  @override
+  String get timelineListView => 'List View';
+
+  @override
+  String get timelineMonthView => 'Month View';
+
+  @override
+  String get shiftTypeAftShort => 'Aft';
+
+  @override
+  String get timelineNoShifts => 'No shifts scheduled. Tap + to add one.';
+
+  @override
+  String timelineNoMatch(String filter) {
+    return 'No shifts match the $filter filter.';
+  }
+
+  @override
+  String get timelineRestDay => 'Rest day';
+
+  @override
+  String timelineRestDayReason(String reason) {
+    return 'Rest day · $reason';
+  }
+
+  @override
+  String get timelineAllDay => 'All day';
+
+  @override
+  String get calLegendPausedLeave => 'Paused / Leave';
+
+  @override
+  String get calLegendActivity => 'Activity';
+
+  @override
+  String get filterAll => 'All';
+
+  @override
+  String get filterWork => 'Work';
+
+  @override
+  String get criticalHoldToDismiss => 'Or hold to dismiss';
+
+  @override
+  String get patternChoosePattern => 'Choose a pattern';
 }
