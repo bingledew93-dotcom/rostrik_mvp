@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik dùng máy ảnh để chụp lịch ca in sẵn và đọc giờ làm ngay trên thiết bị của bạn.";
+"NSPhotoLibraryUsageDescription" = "Rostrik có thể đọc ảnh lịch ca đã lưu để nhập giờ làm ngay trên thiết bị của bạn.";
+"NSCalendarsUsageDescription" = "Rostrik sao chép các ca vào lịch riêng \"Rostrik Roster\" để chúng hiện cùng các sự kiện khác.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik sao chép các ca vào lịch riêng \"Rostrik Roster\" để chúng hiện cùng các sự kiện khác.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik thêm các ca vào lịch riêng \"Rostrik Roster\".";
+"NSAppleMusicUsageDescription" = "Rostrik cho phép bạn chọn một bài hát trong thư viện làm âm báo thức tùy chỉnh.";
+"NSAlarmKitUsageDescription" = "Rostrik dùng báo thức để báo thức trước ca vẫn reo ngay cả khi điện thoại ở chế độ im lặng hoặc chế độ Tập trung.";

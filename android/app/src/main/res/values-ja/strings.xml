@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">次のシフトをひと目で</string>
+    <string name="alarm_fallback_title">アラーム</string>
+    <string name="alarm_hint_critical">重要アラーム\nしっかり振って止めてください</string>
+    <string name="alarm_hint_slide">下のつまみをスライドして止めます</string>
+    <string name="alarm_snooze_button">スヌーズ（%1$d 分）</string>
+    <string name="alarm_slide_to_dismiss">スライドして止める</string>
+    <string name="channel_alarm_name">アラーム</string>
+    <string name="channel_alarm_description">シフトのアラーム時刻になると全画面でアラームを表示します。</string>
+    <string name="channel_alarm_playback_name">アラーム再生</string>
+    <string name="channel_alarm_playback_description">カスタム音のアラームを確実に鳴らし続けます。</string>
+    <string name="channel_sleep_name">睡眠サウンド</string>
+    <string name="channel_sleep_description">画面オフでも睡眠サウンドを再生し続けます。</string>
+    <string name="channel_reminders_name">リマインダー</string>
+    <string name="channel_reminders_description">イベント・タスク・誕生日の任意のお知らせ。</string>
+    <string name="sleep_sound_fallback">睡眠サウンド</string>
+    <string name="sleep_playing">再生中</string>
+    <string name="sleep_playing_stops_in">再生中 · あと %1$d 分で停止</string>
+    <string name="sleep_stop">停止</string>
+    <string name="ringtone_picker_title">アラーム音を選択</string>
+    <string name="ringtone_system_fallback">システムの音</string>
+    <string name="widget_off_rdo">🛌 休み</string>
+    <string name="widget_no_shifts">シフトはまだありません</string>
+    <string name="duration_m">%1$d分</string>
+    <string name="duration_h">%1$d時間</string>
+    <string name="duration_h_m">%1$d時間%2$d分</string>
+    <string name="duration_d">%1$d日</string>
+    <string name="duration_d_h">%1$d日%2$d時間</string>
+</resources>

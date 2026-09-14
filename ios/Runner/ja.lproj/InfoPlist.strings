@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik は、印刷された勤務表を撮影し、シフトの時刻を端末内で読み取るためにカメラを使用します。";
+"NSPhotoLibraryUsageDescription" = "Rostrik は、保存した勤務表の写真を読み取り、シフトの時刻を端末内で取り込みます。";
+"NSCalendarsUsageDescription" = "Rostrik はシフトを専用カレンダー「Rostrik Roster」に反映し、ほかの予定と一緒に表示します。";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik はシフトを専用カレンダー「Rostrik Roster」に反映し、ほかの予定と一緒に表示します。";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik はシフトを専用カレンダー「Rostrik Roster」に追加します。";
+"NSAppleMusicUsageDescription" = "Rostrik では、ライブラリの曲をカスタムアラーム音として選べます。";
+"NSAlarmKitUsageDescription" = "Rostrik はアラーム機能を使い、消音モードや集中モード中でもシフト前の起床アラームが鳴るようにします。";
