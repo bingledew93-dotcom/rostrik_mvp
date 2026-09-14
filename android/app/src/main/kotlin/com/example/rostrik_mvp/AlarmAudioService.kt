@@ -327,10 +327,10 @@ class AlarmAudioService : Service() {
         if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Alarm playback",
+            getString(R.string.channel_alarm_playback_name),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Keeps a ringing custom alarm playing reliably."
+            description = getString(R.string.channel_alarm_playback_description)
             setSound(null, null)
             enableVibration(false)
             setShowBadge(false)
@@ -347,7 +347,9 @@ class AlarmAudioService : Service() {
         }
         return builder
             .setContentTitle(label)
-            .setContentText(AlarmReceiver.notificationDetail(displayTime, contextText))
+            .setContentText(
+                AlarmReceiver.notificationDetail(this, displayTime, contextText),
+            )
             .setSmallIcon(R.drawable.ic_stat_alarm)
             .setOngoing(true)
             .build()

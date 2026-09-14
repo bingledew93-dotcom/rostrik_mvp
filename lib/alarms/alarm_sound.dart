@@ -26,6 +26,8 @@
 ///     `ios/tools/generate_alarm_tones.sh` from the Android masters.
 library;
 
+import '../l10n/l10n.dart';
+
 /// Key persisted in [AppAlarm.soundKey] and carried in the notification
 /// payload when an alarm has no explicit tone (legacy records, and the
 /// default for new alarms). MUST equal `kAlarmSounds.first.key`.
@@ -79,6 +81,24 @@ class AlarmSound {
   /// Distinct Android notification channel for this tone. The sound is bound
   /// to the channel at creation and is immutable, so each tone needs its own.
   final String androidChannelId;
+}
+
+/// Locale-aware display name for a bundled tone, keyed by its stable
+/// [AlarmSound.key]; [AlarmSound.label] is the English fallback.
+String alarmSoundLabel(AlarmSound s) {
+  final l10n = currentL10n;
+  switch (s.key) {
+    case 'classic':
+      return l10n.soundClassic;
+    case 'siren':
+      return l10n.soundSiren;
+    case 'digital':
+      return l10n.soundDigital;
+    case 'chime':
+      return l10n.soundChime;
+    default:
+      return s.label;
+  }
 }
 
 /// The beta tone catalog. The FIRST entry is the default and MUST match

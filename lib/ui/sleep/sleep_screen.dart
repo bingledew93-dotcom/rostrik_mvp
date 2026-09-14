@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/alarm_settings.dart';
+import '../../l10n/l10n.dart';
 import '../../data/models/app_alarm.dart';
 import '../../data/models/shift.dart';
 import '../../logic/sleep_plan.dart';
@@ -44,11 +45,11 @@ class SleepScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sleep'),
+        title: Text(context.l10n.sleepTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
+            tooltip: context.l10n.settingsTitle,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
@@ -64,12 +65,9 @@ class SleepScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // ── Sleep target (hours) ─────────────────────────────────────────
-            const _SectionHeader('SLEEP TARGET'),
+            _SectionHeader(context.l10n.sleepTargetHeader),
             const SizedBox(height: 4),
-            const _SectionSub(
-              'How many hours you want. Rostrik counts back from your next '
-              'wake-up alarm to set tonight’s bedtime.',
-            ),
+            _SectionSub(context.l10n.sleepTargetSub),
             const SizedBox(height: 12),
             _TargetHoursChips(
               selectedHours: prefs.sleepGoalHours,
@@ -78,7 +76,7 @@ class SleepScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // ── Reminders ────────────────────────────────────────────────────
-            const _SectionHeader('REMINDERS'),
+            _SectionHeader(context.l10n.sleepRemindersHeader),
             const SizedBox(height: 4),
             _RemindersSection(
               plan: plan,
@@ -92,11 +90,9 @@ class SleepScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // ── Wind-down lead (how early the wind-down nudge fires) ─────────
-            const _SectionHeader('WIND-DOWN LEAD'),
+            _SectionHeader(context.l10n.sleepWindDownHeader),
             const SizedBox(height: 4),
-            const _SectionSub(
-              'How long before bedtime the wind-down nudge lands.',
-            ),
+            _SectionSub(context.l10n.sleepWindDownSub),
             const SizedBox(height: 12),
             _WindDownDurationChips(
               selectedMinutes: prefs.windDownMinutes,
@@ -106,12 +102,9 @@ class SleepScreen extends StatelessWidget {
             const SizedBox(height: 28),
 
             // ── Sleep sounds ─────────────────────────────────────────────────
-            const _SectionHeader('SLEEP SOUNDS'),
+            _SectionHeader(context.l10n.sleepSoundsHeader),
             const SizedBox(height: 4),
-            const _SectionSub(
-              'White & brown noise to drift off to. Pick an auto-stop timer and '
-              'tap a sound.',
-            ),
+            _SectionSub(context.l10n.sleepSoundsSub),
             const SizedBox(height: 12),
             _SleepTimerChips(
               selectedMinutes: prefs.sleepSoundTimerMinutes,
@@ -246,15 +239,14 @@ class _NoPlanContent extends StatelessWidget {
             color: theme.colorScheme.primary, size: 30),
         const SizedBox(height: 14),
         Text(
-          'Nothing to plan tonight',
+          context.l10n.sleepNothingToPlan,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Add a shift to your roster and Rostrik will build a personalised '
-          'bedtime around your next wake-up.',
+          context.l10n.sleepNothingToPlanSub,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.4,
@@ -282,7 +274,7 @@ class _NightTransitionContent extends StatelessWidget {
                 color: theme.colorScheme.primary, size: 22),
             const SizedBox(width: 8),
             Text(
-              'TRANSITION DAY',
+              context.l10n.sleepTransitionDay,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w700,
@@ -293,7 +285,7 @@ class _NightTransitionContent extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          'Tomorrow is a Night Shift. Consider sleeping in.',
+          context.l10n.sleepTransitionTitle,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
             height: 1.2,
@@ -301,9 +293,7 @@ class _NightTransitionContent extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          "It's a transition day — you have a rest day before nights, so "
-          "there's no early alarm to chase. Bank extra rest now and let your "
-          'body drift later tonight.',
+          context.l10n.sleepTransitionBody,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.4,
@@ -331,7 +321,7 @@ class _RestRecoveryContent extends StatelessWidget {
                 color: theme.colorScheme.primary, size: 22),
             const SizedBox(width: 8),
             Text(
-              'REST & RECOVERY',
+              context.l10n.sleepRestRecovery,
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w700,
@@ -342,7 +332,7 @@ class _RestRecoveryContent extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          'No early alarm to chase',
+          context.l10n.sleepNoEarlyAlarm,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
             height: 1.2,
@@ -350,9 +340,7 @@ class _RestRecoveryContent extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          "Your next shift is more than a day away, so there's no wake-up to "
-          'plan tonight. Sleep on your own clock and bank some recovery — '
-          'Rostrik will build your bedtime plan as it draws closer.',
+          context.l10n.sleepRestBody,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.4,
@@ -381,7 +369,7 @@ class _ActiveTargetContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "TONIGHT'S PLAN",
+          context.l10n.sleepTonightsPlan,
           style: theme.textTheme.labelMedium?.copyWith(
             color: theme.colorScheme.primary,
             fontWeight: FontWeight.w700,
@@ -400,7 +388,7 @@ class _ActiveTargetContent extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Target bedtime',
+                    context.l10n.sleepTargetBedtime,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -423,9 +411,18 @@ class _ActiveTargetContent extends StatelessWidget {
         const SizedBox(height: 14),
         Row(
           children: [
-            _PlanStat(label: 'Wind-down', value: _clock(plan.windDownTime)),
-            _PlanStat(label: 'Wake up', value: _clock(plan.wakeTime)),
-            _PlanStat(label: 'Duration', value: '${plan.sleepGoalHours}h'),
+            _PlanStat(
+              label: context.l10n.sleepWindDownStat,
+              value: _clock(plan.windDownTime),
+            ),
+            _PlanStat(
+              label: context.l10n.sleepWakeUpStat,
+              value: _clock(plan.wakeTime),
+            ),
+            _PlanStat(
+              label: context.l10n.sleepDurationStat,
+              value: context.l10n.durationHShort(plan.sleepGoalHours),
+            ),
           ],
         ),
       ],
@@ -489,7 +486,7 @@ class _TargetHoursChips extends StatelessWidget {
         final selected = selectedHours == h;
         return ChoiceChip(
           key: ValueKey('sleep-goal-$h'),
-          label: Text('${h}h'),
+          label: Text(context.l10n.durationHShort(h)),
           selected: selected,
           showCheckmark: false,
           selectedColor: kRostrikOrange,
@@ -540,11 +537,11 @@ class _RemindersSection extends StatelessWidget {
         SwitchListTile(
           key: const ValueKey('sleep-bedtime-reminder-toggle'),
           contentPadding: EdgeInsets.zero,
-          title: const Text('Bedtime Reminder'),
+          title: Text(context.l10n.sleepBedtimeReminder),
           subtitle: Text(
             bedtime != null
-                ? 'Nudge me at $bedtime to head to bed'
-                : "A nudge when it's time to head to bed",
+                ? context.l10n.sleepNudgeAtBedtime(bedtime)
+                : context.l10n.sleepBedtimeSub,
           ),
           value: prefs.bedtimeReminderEnabled,
           onChanged: onBedtimeChanged,
@@ -552,11 +549,11 @@ class _RemindersSection extends StatelessWidget {
         SwitchListTile(
           key: const ValueKey('sleep-winddown-reminder-toggle'),
           contentPadding: EdgeInsets.zero,
-          title: const Text('Wind-Down Reminder'),
+          title: Text(context.l10n.sleepWindDownReminder),
           subtitle: Text(
             windDown != null
-                ? 'Nudge me at $windDown to start winding down'
-                : 'An earlier heads-up to start winding down',
+                ? context.l10n.sleepNudgeAtWindDown(windDown)
+                : context.l10n.sleepWindDownReminderSub,
           ),
           value: prefs.windDownReminderEnabled,
           onChanged: onWindDownChanged,
@@ -589,7 +586,7 @@ class _WindDownDurationChips extends StatelessWidget {
         final selected = selectedMinutes == m;
         return ChoiceChip(
           key: ValueKey('sleep-winddown-$m'),
-          label: Text('${m}m'),
+          label: Text(context.l10n.durationMinShort(m)),
           selected: selected,
           showCheckmark: false,
           selectedColor: kRostrikOrange,
@@ -628,7 +625,9 @@ class _SleepTimerChips extends StatelessWidget {
         final selected = selectedMinutes == m;
         return ChoiceChip(
           key: ValueKey('sleep-timer-$m'),
-          label: Text(m == 0 ? 'Off' : '${m}m'),
+          label: Text(
+            m == 0 ? context.l10n.commonOff : context.l10n.durationMinShort(m),
+          ),
           selected: selected,
           showCheckmark: false,
           selectedColor: kRostrikOrange,
@@ -733,7 +732,7 @@ class _SoundCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              sound.label,
+              sleepSoundLabel(sound),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

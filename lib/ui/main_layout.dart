@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:home_widget/home_widget.dart';
 
+import '../l10n/l10n.dart';
 import 'alarms_screen.dart';
 import 'dashboard_screen.dart';
 import 'manage/manage_screen.dart';
@@ -146,31 +147,31 @@ class _MainLayoutState extends State<MainLayout> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
-        destinations: const <NavigationDestination>[
+        destinations: <NavigationDestination>[
           NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Dashboard',
+            icon: const Icon(Icons.home),
+            label: context.l10n.navDashboard,
           ),
           // Timeline merges the chronological list + the month grid behind an
           // in-screen [ List View | Month View ] toggle.
           NavigationDestination(
-            icon: Icon(Icons.calendar_month),
-            label: 'Timeline',
+            icon: const Icon(Icons.calendar_month),
+            label: context.l10n.navTimeline,
           ),
           // Manage is the roster-manipulation hub (generate / add / pause).
           NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune),
-            label: 'Manage',
+            icon: const Icon(Icons.tune_outlined),
+            selectedIcon: const Icon(Icons.tune),
+            label: context.l10n.navManage,
           ),
           NavigationDestination(
-            icon: Icon(Icons.access_alarm),
-            label: 'Alarms',
+            icon: const Icon(Icons.access_alarm),
+            label: context.l10n.navAlarms,
           ),
           NavigationDestination(
-            icon: Icon(Icons.bedtime_outlined),
-            selectedIcon: Icon(Icons.bedtime),
-            label: 'Sleep',
+            icon: const Icon(Icons.bedtime_outlined),
+            selectedIcon: const Icon(Icons.bedtime),
+            label: context.l10n.navSleep,
           ),
         ],
       ),

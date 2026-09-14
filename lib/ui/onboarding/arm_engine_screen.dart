@@ -8,6 +8,7 @@ import '../../data/repositories/alarm_settings_repository.dart';
 import '../../data/repositories/app_alarm_repository.dart';
 import '../../data/repositories/shift_cycle_repository.dart';
 import '../../data/repositories/shift_repository.dart';
+import '../../l10n/l10n.dart';
 import '../../logic/cycle_service.dart';
 import '../../logic/default_alarm_seeder.dart';
 import '../shift_format.dart';
@@ -169,7 +170,10 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
     if (_workTypes.isEmpty) return '';
     final labels = _workTypes.map(defaultAlarmLabelFor).toList();
     if (labels.length == 1) return labels.single;
-    return '${labels.sublist(0, labels.length - 1).join(', ')} & ${labels.last}';
+    return currentL10n.commonListAnd(
+      labels.sublist(0, labels.length - 1).join(', '),
+      labels.last,
+    );
   }
 
   @override
@@ -192,7 +196,7 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: (_arming || _backing) ? null : _handleBack,
         ),
-        title: const Text('Arm your alarms'),
+        title: Text(context.l10n.armEngineTitle),
         bottom: const OnboardingProgressBar(step: 3),
       ),
       body: SafeArea(
@@ -213,7 +217,7 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Your roster is ready',
+                      context.l10n.armEngineRosterReady,
                       textAlign: TextAlign.center,
                       style: theme.textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w800,
@@ -224,7 +228,10 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
                       Text(
                         _anchor == null
                             ? _cycleLabel!
-                            : '$_cycleLabel · starts ${formatShiftDate(_anchor!)}',
+                            : context.l10n.armEngineCycleStarts(
+                                _cycleLabel!,
+                                formatShiftDate(_anchor!),
+                              ),
                         key: const ValueKey('arm-engine-summary'),
                         textAlign: TextAlign.center,
                         style: theme.textTheme.titleMedium?.copyWith(
@@ -250,8 +257,7 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'We\'ll switch on $_armingSummary wake-up '
-                                'alarms before every matching shift.',
+                                context.l10n.armEngineSwitchOn(_armingSummary),
                                 key: const ValueKey('arm-engine-arming-summary'),
                                 style: theme.textTheme.bodyMedium,
                               ),
@@ -288,7 +294,9 @@ class _ArmEngineScreenState extends State<ArmEngineScreen> {
                               )
                             : const Icon(Icons.alarm_add, size: 26),
                         label: Text(
-                          _arming ? 'Arming…' : 'Automate My Alarms',
+                          _arming
+                              ? context.l10n.armEngineArming
+                              : context.l10n.armEngineCta,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -333,8 +341,8 @@ class _LeadTimeField extends StatelessWidget {
       initialValue: value,
       isExpanded: true,
       decoration: InputDecoration(
-        labelText: 'Alarm lead time',
-        helperText: 'How early the alarm rings before a shift starts.',
+        labelText: context.l10n.armEngineLeadTimeLabel,
+        helperText: context.l10n.armEngineLeadTimeHelper,
         prefixIcon:
             Icon(Icons.timer_outlined, color: theme.colorScheme.primary),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),

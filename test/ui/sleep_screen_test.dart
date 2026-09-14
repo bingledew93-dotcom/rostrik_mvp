@@ -9,6 +9,7 @@ import 'package:rostrik_mvp/data/models/app_alarm.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/state/app_preferences.dart';
 import 'package:rostrik_mvp/ui/sleep/sleep_screen.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 /// Widget tests for the (now unlocked) Sleep tab. The sound grid degrades
 /// gracefully without a `SleepSoundController` provider — tiles render, taps
@@ -56,7 +57,10 @@ void main() {
           Provider<AlarmSettings>.value(value: AlarmSettings.defaults),
           ChangeNotifierProvider<AppPreferences>.value(value: prefs),
         ],
-        child: const MaterialApp(home: SleepScreen()),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SleepScreen()),
       ),
     );
     await tester.pump();

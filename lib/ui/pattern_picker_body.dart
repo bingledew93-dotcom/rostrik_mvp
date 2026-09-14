@@ -2,15 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/shift_type.dart';
+import '../l10n/l10n.dart';
 import '../logic/rotation_pattern.dart';
 import '../logic/rotation_pattern_validator.dart';
 import '../logic/shift_generator.dart';
 import 'custom_builder_screen.dart';
+import 'dashboard_hero.dart' show heroTypeLabelShort;
 import 'onboarding/onboarding_state.dart';
 import 'roster/shift_visuals.dart';
 import '../state/app_preferences.dart';
 import 'shift_format.dart';
 import 'time_picker_pref.dart';
+
+/// Locale-aware preset summary, derived from the blocks themselves ("7 Days,
+/// 7 Off") so every locale reads a correct description without 16 hand-kept
+/// strings. [RotationPattern.summary] stays as the English fallback for an
+/// empty block list.
+String localizedPatternSummary(RotationPattern p) {
+  if (p.blocks.isEmpty) return p.summary;
+  final l10n = currentL10n;
+  return p.blocks.map((b) {
+    switch (b.type) {
+      case ShiftType.day:
+        return l10n.patternBlockDays(b.consecutiveDays);
+      case ShiftType.afternoon:
+        return l10n.patternBlockAfternoons(b.consecutiveDays);
+      case ShiftType.night:
+        return l10n.patternBlockNights(b.consecutiveDays);
+      case ShiftType.off:
+        return l10n.patternBlockOff(b.consecutiveDays);
+    }
+  }).join(', ');
+}
 
 /// Shared body widget for the Pattern Picker. Powers both the
 /// post-onboarding picker ([PatternPickerScreen]) and the onboarding
@@ -191,6 +214,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
     if (!_canGenerate) return;
     final pattern = _selected!;
     final firstBlockLabel = _firstBlockHumanLabel(pattern);
+    final l10n = context.l10n;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -199,10 +223,10 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
       initialDate: today,
       firstDate: DateTime(today.year - 1, today.month, today.day),
       lastDate: DateTime(today.year + 1, today.month, today.day),
-      helpText: 'Select your Next Day 1',
-      fieldHintText: 'First day of your $firstBlockLabel block',
-      fieldLabelText: 'Next Day 1',
-      confirmText: 'Use this date',
+      helpText: l10n.patternSelectDay1,
+      fieldHintText: l10n.patternDay1Hint(firstBlockLabel),
+      fieldLabelText: l10n.patternNextDay1,
+      confirmText: l10n.patternUseThisDate,
     );
     if (picked == null || !mounted) return;
     await _generate(pattern, picked);
@@ -215,6 +239,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
     // `context` across the async gap.
     final generator = context.read<ShiftGenerator>();
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
 
     try {
       // Synthesise a pattern with the user's edited times applied. OFF
@@ -249,7 +274,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
       );
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Generated ${shifts.length} shifts')),
+        SnackBar(content: Text(l10n.patternGenerated(shifts.length))),
       );
       // AWAIT the caller's navigation. It completes either when the picker is
       // replaced (success path → pushAndRemoveUntil, this State unmounts) or
@@ -264,7 +289,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text('Generation failed: $e')),
+        SnackBar(content: Text(l10n.patternGenerationFailed('$e'))),
       );
     } finally {
       // Clear the spinner once generation AND the awaited navigation settle —
@@ -292,17 +317,8 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
   /// Feeds the date-picker hint text so the user knows which block
   /// their anchor will land on.
   static String _firstBlockHumanLabel(RotationPattern p) {
-    if (p.blocks.isEmpty) return 'first';
-    switch (p.blocks.first.type) {
-      case ShiftType.day:
-        return 'Day';
-      case ShiftType.afternoon:
-        return 'Afternoon';
-      case ShiftType.night:
-        return 'Night';
-      case ShiftType.off:
-        return 'Off';
-    }
+    if (p.blocks.isEmpty) return currentL10n.patternFirstBlockFallback;
+    return shiftTypeLabel(p.blocks.first.type);
   }
 
   @override
@@ -322,7 +338,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
           children: [
             if (showRotating) ...[
               _CategorySection(
-                title: 'Rotating Swings',
+                title: context.l10n.patternRotatingSwings,
                 presets: kRotatingPatterns,
                 selectedId: _selected?.id,
                 onPresetTapped: _selectPreset,
@@ -331,7 +347,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
             ],
             if (showDay) ...[
               _CategorySection(
-                title: 'Day Only Swings',
+                title: context.l10n.patternDaySwings,
                 presets: kDayPatterns,
                 selectedId: _selected?.id,
                 onPresetTapped: _selectPreset,
@@ -340,7 +356,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
             ],
             if (showNight) ...[
               _CategorySection(
-                title: 'Night Only Swings',
+                title: context.l10n.patternNightSwings,
                 presets: kNightPatterns,
                 selectedId: _selected?.id,
                 onPresetTapped: _selectPreset,
@@ -353,7 +369,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
             if (_selected != null && _editedTimes.isNotEmpty) ...[
               const SizedBox(height: 24),
               Text(
-                'Shift times',
+                context.l10n.patternShiftTimes,
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -379,7 +395,7 @@ class _PatternPickerBodyState extends State<PatternPickerBody> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Set Day 1 & Generate'),
+                  : Text(context.l10n.patternGenerate),
             ),
 
             const SizedBox(height: 24),
@@ -496,14 +512,16 @@ class _PresetTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      pattern.label,
+                      pattern.id == 'rot-first-responder'
+                          ? context.l10n.patternFirstResponder
+                          : pattern.label,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      pattern.summary,
+                      localizedPatternSummary(pattern),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -599,13 +617,7 @@ class _ShiftTimesRow extends StatelessWidget {
   final VoidCallback onPickStart;
   final VoidCallback onPickEnd;
 
-  String get _label => switch (type) {
-        ShiftType.day => 'Day shift',
-        ShiftType.afternoon => 'Afternoon shift',
-        ShiftType.night => 'Night shift',
-        // Unreachable: parent guards on `type != off` before rendering.
-        ShiftType.off => 'Off',
-      };
+  String get _label => heroTypeLabelShort(type);
 
   @override
   Widget build(BuildContext context) {
@@ -671,14 +683,14 @@ class _CustomBuilderEntryTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Build custom roster',
+                  context.l10n.patternBuildCustom,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  "Doesn't fit a preset? Compose your own blocks.",
+                  context.l10n.patternBuildCustomSub,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

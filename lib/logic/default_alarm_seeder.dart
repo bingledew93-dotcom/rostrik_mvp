@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../data/models/app_alarm.dart';
 import '../data/models/shift_type.dart';
 import '../data/repositories/app_alarm_repository.dart';
+import '../l10n/l10n.dart';
 
 /// Creates one enabled follows-rotation wake-up alarm per distinct working
 /// shift type in [workTypes], each using the global lead time (a null per-alarm
@@ -47,7 +48,9 @@ Future<List<AppAlarm>> seedDefaultAlarms({
       // minutesOfDay is irrelevant for followsRotation (it fires at
       // shiftStart − lead), but the model requires a valid 0..1439 value.
       minutesOfDay: 6 * 60,
-      label: '${defaultAlarmLabelFor(type)} wake-up',
+      // Stamped once, in the language active at seeding — it is the user's
+      // alarm name from then on, editable like any other label.
+      label: currentL10n.seedWakeUpLabel(defaultAlarmLabelFor(type)),
       repeatType: AppAlarmRepeatType.followsRotation,
       enabled: true,
       linkedShiftType: type,
@@ -64,14 +67,15 @@ Future<List<AppAlarm>> seedDefaultAlarms({
 /// screen can describe what it's about to arm ("Day & Night wake-up alarms")
 /// using the same wording the seeder stamps on the records.
 String defaultAlarmLabelFor(ShiftType type) {
+  final l10n = currentL10n;
   switch (type) {
     case ShiftType.day:
-      return 'Day';
+      return l10n.shiftTypeDay;
     case ShiftType.afternoon:
-      return 'Afternoon';
+      return l10n.shiftTypeAfternoon;
     case ShiftType.night:
-      return 'Night';
+      return l10n.shiftTypeNight;
     case ShiftType.off:
-      return 'Shift';
+      return l10n.seedShiftGeneric;
   }
 }

@@ -7,6 +7,7 @@ import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../alarms/alarm_projection.dart';
+import '../l10n/l10n.dart';
 import '../alarms/one_off_snooze_store.dart';
 import '../logic/alarm_sort.dart';
 import '../state/app_preferences.dart';
@@ -48,7 +49,7 @@ class AlarmsScreen extends StatelessWidget {
     );
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Alarms'),
+        title: Text(context.l10n.alarmsTitle),
         actions: [
           // Sort control — offered only when there's a list to order. Purely a
           // display preference (persisted); it never touches alarm scheduling.
@@ -89,7 +90,7 @@ class AlarmsScreen extends StatelessWidget {
         // default-tag collision without affecting the tap behaviour.
         heroTag: null,
         onPressed: () => showCreateAlarmSheet(context),
-        tooltip: 'Add alarm',
+        tooltip: context.l10n.alarmsAddTooltip,
         child: const Icon(Icons.add),
       ),
     );
@@ -110,7 +111,7 @@ class _AlarmSortMenu extends StatelessWidget {
     return PopupMenuButton<bool>(
       key: const ValueKey('alarms-sort-menu'),
       icon: const Icon(Icons.sort),
-      tooltip: 'Sort alarms',
+      tooltip: context.l10n.alarmsSortTooltip,
       onSelected: (value) =>
           context.read<AppPreferences?>()?.setAlarmSortByShiftType(value),
       itemBuilder: (context) => [
@@ -118,13 +119,13 @@ class _AlarmSortMenu extends StatelessWidget {
           key: const ValueKey('alarms-sort-by-time'),
           value: false,
           checked: !byShiftType,
-          child: const Text('By time'),
+          child: Text(context.l10n.alarmsSortByTime),
         ),
         CheckedPopupMenuItem<bool>(
           key: const ValueKey('alarms-sort-by-shift-type'),
           value: true,
           checked: byShiftType,
-          child: const Text('By shift type'),
+          child: Text(context.l10n.alarmsSortByShiftType),
         ),
       ],
     );
@@ -148,14 +149,14 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No alarms yet.',
+            context.l10n.alarmsEmptyTitle,
             style: theme.textTheme.headlineSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Tap + to add one.',
+            context.l10n.alarmsEmptyBody,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -217,7 +218,7 @@ class _NextAlarmHero extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'NEXT ALARM',
+                context.l10n.alarmsNextAlarm,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: scheme.primary,
                   fontWeight: FontWeight.w800,
@@ -227,18 +228,18 @@ class _NextAlarmHero extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          ..._buildBody(theme),
+          ..._buildBody(context, theme),
         ],
       ),
     );
   }
 
-  List<Widget> _buildBody(ThemeData theme) {
+  List<Widget> _buildBody(BuildContext context, ThemeData theme) {
     final scheme = theme.colorScheme;
     if (isSchedulePaused) {
       return [
         Text(
-          'Holiday mode',
+          context.l10n.alarmsHolidayMode,
           style: theme.textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w800,
             color: scheme.onSurface,
@@ -246,7 +247,7 @@ class _NextAlarmHero extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Alarms are paused — nothing will ring.',
+          context.l10n.alarmsHolidayModeSub,
           style: theme.textTheme.bodyMedium
               ?.copyWith(color: scheme.onSurfaceVariant),
         ),
@@ -256,7 +257,7 @@ class _NextAlarmHero extends StatelessWidget {
     if (r == null) {
       return [
         Text(
-          'No upcoming shift alarm',
+          context.l10n.alarmsNoUpcoming,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
             color: scheme.onSurfaceVariant,
@@ -264,7 +265,7 @@ class _NextAlarmHero extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Add a follows-rotation alarm, or generate a roster.',
+          context.l10n.alarmsNoUpcomingSub,
           style: theme.textTheme.bodySmall
               ?.copyWith(color: scheme.onSurfaceVariant),
         ),
@@ -274,7 +275,10 @@ class _NextAlarmHero extends StatelessWidget {
         formatClock(r.fireAt.hour * 60 + r.fireAt.minute, use24Hour: use24Hour);
     final shift = r.shift;
     final subtitle = shift != null
-        ? 'for your ${shiftTypeLabel(shift.type)} shift · ${_formatRelativeDay(r.fireAt)}'
+        ? context.l10n.alarmsForYourShift(
+            shiftTypeLabel(shift.type),
+            _formatRelativeDay(r.fireAt),
+          )
         : '${r.alarm.label} · ${_formatRelativeDay(r.fireAt)}';
     return [
       Text(
@@ -307,8 +311,8 @@ String _formatRelativeDay(DateTime when) {
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(when.year, when.month, when.day);
   final diff = day.difference(today).inDays;
-  if (diff == 0) return 'Today';
-  if (diff == 1) return 'Tomorrow';
+  if (diff == 0) return currentL10n.commonToday;
+  if (diff == 1) return currentL10n.commonTomorrow;
   return formatShiftDate(when);
 }
 
@@ -517,7 +521,7 @@ class _AlarmCardState extends State<_AlarmCard> {
         IconButton(
           key: ValueKey('alarm-delete-icon-${alarm.id}'),
           icon: const Icon(Icons.delete_outline),
-          tooltip: 'Delete',
+          tooltip: context.l10n.commonDelete,
           onPressed: () => setState(() => _confirming = true),
         ),
       ],
@@ -536,7 +540,7 @@ class _AlarmCardState extends State<_AlarmCard> {
     final scheme = theme.colorScheme;
     if (!alarm.enabled) {
       return Text(
-        "Off — won't ring",
+        context.l10n.alarmsOffWontRing,
         style: theme.textTheme.bodySmall?.copyWith(
           color: scheme.onSurfaceVariant,
           fontStyle: FontStyle.italic,
@@ -545,7 +549,7 @@ class _AlarmCardState extends State<_AlarmCard> {
     }
     if (ring == null) {
       return Text(
-        'No upcoming ring scheduled',
+        context.l10n.alarmsNoUpcomingRing,
         style: theme.textTheme.bodySmall
             ?.copyWith(color: scheme.onSurfaceVariant),
       );
@@ -561,7 +565,10 @@ class _AlarmCardState extends State<_AlarmCard> {
         const SizedBox(width: 4),
         Flexible(
           child: Text(
-            'Next ring: ${_formatRelativeDay(ring.fireAt)} at $clock',
+            context.l10n.alarmsNextRing(
+              _formatRelativeDay(ring.fireAt),
+              clock,
+            ),
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.primary,
               fontWeight: FontWeight.w600,
@@ -584,7 +591,7 @@ class _AlarmCardState extends State<_AlarmCard> {
         IconButton(
           key: ValueKey('alarm-delete-cancel-${widget.alarm.id}'),
           icon: const Icon(Icons.close),
-          tooltip: 'Cancel',
+          tooltip: context.l10n.commonCancel,
           onPressed: _onCancel,
         ),
       ],
@@ -663,7 +670,7 @@ class _SlideToConfirmDeleteState extends State<_SlideToConfirmDelete> {
               Opacity(
                 opacity: 1 - progress,
                 child: Text(
-                  'Swipe to delete',
+                  context.l10n.alarmsSwipeToDelete,
                   style: theme.textTheme.labelLarge?.copyWith(
                     color: theme.colorScheme.onErrorContainer,
                     fontWeight: FontWeight.w600,
@@ -740,22 +747,28 @@ String _alarmHeadline(
 String _alarmDetailLine(AppAlarm a, int globalLeadMinutes) {
   if (a.repeatType == AppAlarmRepeatType.oneTime) {
     return a.autoDeleteAfterFiring
-        ? 'Rings once · auto-deletes'
-        : 'Rings one time only';
+        ? currentL10n.alarmsRingsOnceAutoDelete
+        : currentL10n.alarmsRingsOnce;
   }
   if (a.repeatType == AppAlarmRepeatType.weekly) {
     return formatWeekdays(a.weekdaysBitmask);
   }
   final shift = a.linkedShiftType == null
-      ? 'your shift'
-      : '${shiftTypeLabel(a.linkedShiftType!)} shifts';
+      ? currentL10n.alarmsYourShift
+      : currentL10n.alarmsShiftsOfType(shiftTypeLabel(a.linkedShiftType!));
   // Same mode gate the fire-time math uses, so a malformed exact-time record
   // (null clock) correctly reads as the lead-time line it actually fires on.
   if (a.activeExactTimeMinutes != null) {
-    return 'Exact time · $shift';
+    return currentL10n.alarmsExactTime(shift);
   }
   if (a.relativeOffsetMinutes == null) {
-    return '${formatLeadOffset(globalLeadMinutes)} before $shift · default';
+    return currentL10n.alarmsLeadBeforeDefault(
+      formatLeadOffset(globalLeadMinutes),
+      shift,
+    );
   }
-  return '${formatLeadOffset(a.relativeOffsetMinutes!)} before $shift';
+  return currentL10n.alarmsLeadBefore(
+    formatLeadOffset(a.relativeOffsetMinutes!),
+    shift,
+  );
 }

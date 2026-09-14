@@ -1,4 +1,5 @@
 import '../data/models/shift.dart';
+import '../l10n/l10n.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/models/shift_type.dart';
 import '../logic/cycle_resolver.dart';
@@ -71,19 +72,22 @@ ShiftCycle? pickActiveCycle(List<ShiftCycle> cycles) {
 /// "14h 22m" / "23m" / "3d 14h". Always rounds DOWN — better a minute
 /// pessimistic than late.
 String formatHeroCountdown(Duration d) {
-  if (d.isNegative) return '0m';
+  final l10n = currentL10n;
+  if (d.isNegative) return l10n.durationMinShort(0);
   final totalMinutes = d.inMinutes;
   if (totalMinutes < 60) {
-    return '${totalMinutes}m';
+    return l10n.durationMinShort(totalMinutes);
   }
   if (totalMinutes < 60 * 24) {
     final h = totalMinutes ~/ 60;
     final m = totalMinutes % 60;
-    return m == 0 ? '${h}h' : '${h}h ${m}m';
+    return m == 0 ? l10n.durationHShort(h) : l10n.durationHMinShort(h, m);
   }
   final days = totalMinutes ~/ (60 * 24);
   final hoursRem = (totalMinutes - days * 60 * 24) ~/ 60;
-  return hoursRem == 0 ? '${days}d' : '${days}d ${hoursRem}h';
+  return hoursRem == 0
+      ? l10n.durationDayShort(days)
+      : l10n.durationDayHourShort(days, hoursRem);
 }
 
 /// "Today at 06:00" / "Tomorrow at 06:00" / "Fri, May 22 at 06:00".
@@ -103,11 +107,21 @@ String formatHeroAbsoluteWhen(
     start.hour * 60 + start.minute,
     use24Hour: use24Hour,
   );
-  final verb = inProgress ? 'Started' : 'Starts';
-  if (_isSameDay(startDay, today)) return '$verb today at $time';
-  if (_isSameDay(startDay, tomorrow)) return 'Starts tomorrow at $time';
-  if (_isSameDay(startDay, yesterday)) return '$verb yesterday at $time';
-  return '$verb ${formatShiftDate(start)} at $time';
+  final l10n = currentL10n;
+  if (_isSameDay(startDay, today)) {
+    return inProgress
+        ? l10n.heroStartedTodayAt(time)
+        : l10n.heroStartsTodayAt(time);
+  }
+  if (_isSameDay(startDay, tomorrow)) return l10n.heroStartsTomorrowAt(time);
+  if (_isSameDay(startDay, yesterday)) {
+    return inProgress
+        ? l10n.heroStartedYesterdayAt(time)
+        : l10n.heroStartsYesterdayAt(time);
+  }
+  return inProgress
+      ? l10n.heroStartedOnAt(formatShiftDate(start), time)
+      : l10n.heroStartsOnAt(formatShiftDate(start), time);
 }
 
 bool _isSameDay(DateTime a, DateTime b) =>
@@ -116,31 +130,21 @@ bool _isSameDay(DateTime a, DateTime b) =>
 /// Hero type label — "Day" / "Afternoon" / "Night" (rendered as "$label shift").
 /// OFF is unreachable on the hero (filtered by [findNextShift]); benign
 /// fallback.
-String heroTypeLabel(ShiftType type) {
-  switch (type) {
-    case ShiftType.day:
-      return 'Day';
-    case ShiftType.afternoon:
-      return 'Afternoon';
-    case ShiftType.night:
-      return 'Night';
-    case ShiftType.off:
-      return 'Off';
-  }
-}
+String heroTypeLabel(ShiftType type) => shiftTypeLabel(type);
 
 /// Rotation-card short label ("Day shift" / "Afternoon shift" / "Night shift" /
 /// "Off"), used in the "Day X of Y — …" position copy.
 String heroTypeLabelShort(ShiftType type) {
+  final l10n = currentL10n;
   switch (type) {
     case ShiftType.day:
-      return 'Day shift';
+      return l10n.shiftTypeDayShift;
     case ShiftType.afternoon:
-      return 'Afternoon shift';
+      return l10n.shiftTypeAfternoonShift;
     case ShiftType.night:
-      return 'Night shift';
+      return l10n.shiftTypeNightShift;
     case ShiftType.off:
-      return 'Off';
+      return l10n.shiftTypeOff;
   }
 }
 
@@ -151,7 +155,11 @@ String rotationPositionCopy(
   int consecutiveDays,
   ShiftType type,
 ) =>
-    'Day ${dayWithinBlock + 1} of $consecutiveDays — ${heroTypeLabelShort(type)}';
+    currentL10n.heroDayXofY(
+      dayWithinBlock + 1,
+      consecutiveDays,
+      heroTypeLabelShort(type),
+    );
 
 /// Walks the cycle forward from [today] to the next OFF day. Returns "Off
 /// tomorrow" / "Off in N days", or null (currently OFF, or no OFF in the cycle).
@@ -175,7 +183,9 @@ String? daysUntilNextOffCopy(ShiftCycle cycle, DateTime today) {
       blocks: cycle.blocks!,
     );
     if (r != null && r.block.type == ShiftType.off) {
-      return offset == 1 ? 'Off tomorrow' : 'Off in $offset days';
+      return offset == 1
+          ? currentL10n.heroOffTomorrow
+          : currentL10n.heroOffInDays(offset);
     }
   }
   return null;
@@ -194,7 +204,9 @@ String? daysUntilNextWorkCopy(ShiftCycle cycle, DateTime today) {
       blocks: cycle.blocks!,
     );
     if (r != null && r.block.type != ShiftType.off) {
-      return offset == 1 ? 'Back on tomorrow' : 'Back on in $offset days';
+      return offset == 1
+          ? currentL10n.heroBackOnTomorrow
+          : currentL10n.heroBackOnInDays(offset);
     }
   }
   return null;
@@ -205,13 +217,13 @@ String? daysUntilNextWorkCopy(ShiftCycle cycle, DateTime today) {
 String heroBadge(ShiftType type) {
   switch (type) {
     case ShiftType.day:
-      return '☀️ Day shift';
+      return '☀️ ${heroTypeLabelShort(type)}';
     case ShiftType.afternoon:
-      return '🌇 Afternoon shift';
+      return '🌇 ${heroTypeLabelShort(type)}';
     case ShiftType.night:
-      return '🌙 Night shift';
+      return '🌙 ${heroTypeLabelShort(type)}';
     case ShiftType.off:
-      return '🛌 Off / RDO';
+      return '🛌 ${currentL10n.heroOffRdo}';
   }
 }
 
@@ -303,11 +315,15 @@ DashboardHero buildDashboardHero({
     final countdown = formatHeroCountdown(target.difference(now));
     return DashboardHero(
       badge: heroBadge(next.type),
-      mainText: inProgress ? 'Ends in $countdown' : 'Starts in $countdown',
+      mainText: inProgress
+          ? currentL10n.heroEndsIn(countdown)
+          : currentL10n.heroStartsIn(countdown),
       subtitle: formatHeroAbsoluteWhen(start, now, inProgress, use24Hour),
       shiftType: next.type,
       countdownTo: target,
-      countdownPrefix: inProgress ? 'Ends in' : 'Starts in',
+      countdownPrefix: inProgress
+          ? currentL10n.heroEndsInPrefix
+          : currentL10n.heroStartsInPrefix,
     );
   }
 
@@ -325,8 +341,8 @@ DashboardHero buildDashboardHero({
     if (res != null) {
       final type = res.block.type;
       final subtitle = type == ShiftType.off
-          ? (daysUntilNextWorkCopy(cycle, today) ?? 'Enjoy your time off.')
-          : (daysUntilNextOffCopy(cycle, today) ?? 'Enjoy your time off.');
+          ? (daysUntilNextWorkCopy(cycle, today) ?? currentL10n.dashEnjoyTimeOff)
+          : (daysUntilNextOffCopy(cycle, today) ?? currentL10n.dashEnjoyTimeOff);
       return DashboardHero(
         badge: heroBadge(type),
         mainText: rotationPositionCopy(
@@ -341,10 +357,10 @@ DashboardHero buildDashboardHero({
   }
 
   // Tier C — nothing scheduled at all.
-  return const DashboardHero(
-    badge: '🛌 Off / RDO',
-    mainText: 'No upcoming shifts',
-    subtitle: 'Enjoy your time off.',
+  return DashboardHero(
+    badge: '🛌 ${currentL10n.heroOffRdo}',
+    mainText: currentL10n.dashNoUpcomingShifts,
+    subtitle: currentL10n.dashEnjoyTimeOff,
     shiftType: ShiftType.off,
   );
 }

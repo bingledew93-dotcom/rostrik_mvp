@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik uses the camera to photograph your printed roster and read the shift times on your device.";
+"NSPhotoLibraryUsageDescription" = "Rostrik can read a saved photo of your roster to import shift times on your device.";
+"NSCalendarsUsageDescription" = "Rostrik mirrors your shifts to a dedicated \"Rostrik Roster\" calendar so they show alongside your other events.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik mirrors your shifts to a dedicated \"Rostrik Roster\" calendar so they show alongside your other events.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik adds your shifts to a dedicated \"Rostrik Roster\" calendar.";
+"NSAppleMusicUsageDescription" = "Rostrik lets you pick a song from your library to use as a custom alarm tone.";
+"NSAlarmKitUsageDescription" = "Rostrik uses alarms so your pre-shift wake-up rings even when your phone is silenced or in a Focus mode.";

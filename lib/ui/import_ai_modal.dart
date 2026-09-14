@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models/shift_type.dart';
+import '../l10n/l10n.dart';
 import '../roster_ai/ai_prompts.dart';
 import '../roster_ai/roster_ai_parser.dart';
 import '../state/app_preferences.dart';
@@ -77,11 +78,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Prompt copied! Paste it into your AI app along with your roster.',
-        ),
-      ),
+      SnackBar(content: Text(context.l10n.aiPromptCopied)),
     );
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) setState(() => _copied = false);
@@ -96,7 +93,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('Nothing to paste from the clipboard.')),
+          SnackBar(content: Text(context.l10n.aiNothingToPaste)),
         );
       return;
     }
@@ -114,8 +111,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
     setState(() {
       if (parsed.isEmpty) {
         _parsed = null;
-        _error = 'No valid shifts detected. Make sure you used the copied '
-            'AI prompt.';
+        _error = context.l10n.aiNoValidShifts;
       } else {
         // Chronological order for the preview + the write (import order is
         // irrelevant to persistence, but a sorted preview reads naturally).
@@ -196,7 +192,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _stepLabel(theme, '1', 'Copy the prompt'),
+                      _stepLabel(theme, '1', context.l10n.aiStep1),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
                         key: const ValueKey('import-ai-copy-prompt'),
@@ -205,7 +201,11 @@ class _ImportAiModalState extends State<ImportAiModal> {
                           _copied ? Icons.check_circle_outline : Icons.copy,
                           size: 18,
                         ),
-                        label: Text(_copied ? 'Copied!' : 'Copy AI Prompt'),
+                        label: Text(
+                          _copied
+                              ? context.l10n.aiCopied
+                              : context.l10n.aiCopyPrompt,
+                        ),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           foregroundColor:
@@ -214,8 +214,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Paste it into ChatGPT, Gemini or any AI app, then add '
-                        'your roster text or a photo/screenshot and send.',
+                        context.l10n.aiStep1Sub,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
@@ -223,13 +222,13 @@ class _ImportAiModalState extends State<ImportAiModal> {
                       Row(
                         children: [
                           Expanded(
-                            child: _stepLabel(theme, '2', "Paste the AI's reply"),
+                            child: _stepLabel(theme, '2', context.l10n.aiStep2),
                           ),
                           TextButton.icon(
                             key: const ValueKey('import-ai-paste'),
                             onPressed: _paste,
                             icon: const Icon(Icons.content_paste, size: 18),
-                            label: const Text('Paste'),
+                            label: Text(context.l10n.aiPaste),
                           ),
                         ],
                       ),
@@ -263,7 +262,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
                         key: const ValueKey('import-ai-parse'),
                         onPressed: _parseAndPreview,
                         icon: const Icon(Icons.auto_awesome, size: 18),
-                        label: const Text('Parse & Preview'),
+                        label: Text(context.l10n.aiParsePreview),
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
@@ -274,11 +273,10 @@ class _ImportAiModalState extends State<ImportAiModal> {
                       ],
                       if (parsed != null && parsed.isNotEmpty) ...[
                         const SizedBox(height: 20),
-                        _stepLabel(theme, '3', 'Review the detected shifts'),
+                        _stepLabel(theme, '3', context.l10n.aiStep3),
                         const SizedBox(height: 4),
                         Text(
-                          'Tap a badge to switch it between Day, Afternoon and '
-                          'Night if the AI got one wrong.',
+                          context.l10n.aiStep3Sub,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
@@ -305,8 +303,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text('Import ${parsed.length} '
-                          'day${parsed.length == 1 ? '' : 's'}'),
+                      : Text(context.l10n.aiImportDays(parsed.length)),
                 ),
               ],
             ],
@@ -328,13 +325,13 @@ class _ImportAiModalState extends State<ImportAiModal> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Import via AI',
+                context.l10n.builderImportViaAi,
                 style: theme.textTheme.titleLarge
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 2),
               Text(
-                'Turn any roster text into shifts with the help of an AI app.',
+                context.l10n.aiTitleSub,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: scheme.onSurfaceVariant),
               ),
@@ -344,7 +341,7 @@ class _ImportAiModalState extends State<ImportAiModal> {
         IconButton(
           key: const ValueKey('import-ai-close'),
           icon: const Icon(Icons.close),
-          tooltip: 'Close',
+          tooltip: context.l10n.commonClose,
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ],
@@ -447,8 +444,7 @@ class _PreviewList extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '${shifts.length} day${shifts.length == 1 ? '' : 's'} '
-                    '· $working working · $off off',
+                    context.l10n.aiSummaryLine(shifts.length, working, off),
                     style: theme.textTheme.labelLarge
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
@@ -497,7 +493,7 @@ class _PreviewRow extends StatelessWidget {
     final isOff = type == ShiftType.off;
     final use24Hour = AppPreferences.use24HourOf(context);
     final timeLabel = isOff
-        ? 'Rest day'
+        ? context.l10n.timelineRestDay
         : '${formatClock(shift.startMinutes, use24Hour: use24Hour)} – '
             '${formatClock(shift.endMinutes, use24Hour: use24Hour)}';
     return Padding(

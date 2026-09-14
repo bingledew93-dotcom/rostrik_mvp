@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/models/calendar_activity.dart';
+import '../l10n/l10n.dart';
 import '../data/repositories/calendar_activity_repository.dart';
 import '../state/app_preferences.dart';
 import 'shift_format.dart';
@@ -49,13 +50,13 @@ class ActivityEditorModal extends StatefulWidget {
 
 /// Lead-time options (minutes before the event start) for a TIMED activity's
 /// reminder. `0` == "At time of event".
-const _leadOptions = <int, String>{
-  0: 'At time',
-  10: '10 min before',
-  30: '30 min before',
-  60: '1 hour before',
-  1440: '1 day before',
-};
+Map<int, String> get _leadOptions => <int, String>{
+      0: currentL10n.actLeadAtTime,
+      10: currentL10n.actLead10Min,
+      30: currentL10n.actLead30Min,
+      60: currentL10n.actLead1Hour,
+      1440: currentL10n.actLead1Day,
+    };
 
 class _ActivityEditorModalState extends State<ActivityEditorModal> {
   static const _uuid = Uuid();
@@ -228,7 +229,9 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                isEdit ? 'Edit activity' : 'Add activity',
+                isEdit
+                    ? context.l10n.actEditActivity
+                    : context.l10n.dayAddActivity,
                 style: theme.textTheme.titleLarge,
                 textAlign: TextAlign.center,
               ),
@@ -245,21 +248,21 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
               // Kind selector.
               SegmentedButton<ActivityKind>(
                 key: const ValueKey('activity-kind'),
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: ActivityKind.event,
-                    label: Text('Event'),
-                    icon: Icon(Icons.event_outlined),
+                    label: Text(context.l10n.actEvent),
+                    icon: const Icon(Icons.event_outlined),
                   ),
                   ButtonSegment(
                     value: ActivityKind.task,
-                    label: Text('Task'),
-                    icon: Icon(Icons.check_circle_outline),
+                    label: Text(context.l10n.actTask),
+                    icon: const Icon(Icons.check_circle_outline),
                   ),
                   ButtonSegment(
                     value: ActivityKind.birthday,
-                    label: Text('Birthday'),
-                    icon: Icon(Icons.cake_outlined),
+                    label: Text(context.l10n.actBirthday),
+                    icon: const Icon(Icons.cake_outlined),
                   ),
                 ],
                 selected: {_kind},
@@ -271,9 +274,9 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
                 key: const ValueKey('activity-title'),
                 controller: _titleController,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.l10n.actTitleField,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
               ),
@@ -283,7 +286,7 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
               SwitchListTile(
                 key: const ValueKey('activity-all-day'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('All day'),
+                title: Text(context.l10n.actAllDay),
                 value: _allDay,
                 onChanged: (v) => setState(() {
                   _allDay = v;
@@ -294,9 +297,9 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
               ),
               if (!_allDay)
                 _PickerRow(
-                  label: 'Time',
+                  label: context.l10n.actTimeField,
                   valueLabel: _timeMinutes == null
-                      ? 'Pick time'
+                      ? context.l10n.shiftEdPickTime
                       : formatClock(_timeMinutes!, use24Hour: use24Hour),
                   onPressed: _pickTime,
                   buttonKey: const ValueKey('activity-time'),
@@ -308,9 +311,9 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
               SwitchListTile(
                 key: const ValueKey('activity-remind'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Remind me'),
+                title: Text(context.l10n.actRemindMe),
                 subtitle: Text(
-                  'A gentle notification — separate from your shift alarms.',
+                  context.l10n.actRemindMeSub,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -337,7 +340,7 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
                   )
                 else
                   _PickerRow(
-                    label: 'Remind at',
+                    label: context.l10n.actRemindAt,
                     valueLabel:
                         formatClockOfDay(_allDayReminderTime, use24Hour: use24Hour),
                     onPressed: _pickAllDayReminderTime,
@@ -347,7 +350,7 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'That time has already passed — this reminder won’t fire.',
+                      context.l10n.actReminderPassed,
                       key: const ValueKey('activity-reminder-passed'),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.error,
@@ -365,9 +368,9 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
                 textCapitalization: TextCapitalization.sentences,
                 minLines: 1,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Note (optional)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.l10n.actNoteOptional,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
               ),
@@ -377,7 +380,7 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
                 CheckboxListTile(
                   key: const ValueKey('activity-done'),
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Completed'),
+                  title: Text(context.l10n.actCompleted),
                   value: _isDone,
                   onChanged: (v) => setState(() => _isDone = v ?? false),
                 ),
@@ -393,20 +396,20 @@ class _ActivityEditorModalState extends State<ActivityEditorModal> {
                       icon: Icon(Icons.delete_outline,
                           color: theme.colorScheme.error),
                       label: Text(
-                        'Delete',
+                        context.l10n.commonDelete,
                         style: TextStyle(color: theme.colorScheme.error),
                       ),
                     ),
                   const Spacer(),
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                    child: Text(context.l10n.commonCancel),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
                     key: const ValueKey('activity-save'),
                     onPressed: _canSave ? _save : null,
-                    child: const Text('Save'),
+                    child: Text(context.l10n.commonSave),
                   ),
                 ],
               ),

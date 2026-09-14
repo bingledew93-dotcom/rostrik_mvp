@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Ca tiếp theo của bạn, xem nhanh</string>
+    <string name="alarm_fallback_title">Báo thức</string>
+    <string name="alarm_hint_critical">Báo thức quan trọng\nLắc mạnh để tắt</string>
+    <string name="alarm_hint_slide">Trượt nút bên dưới để tắt</string>
+    <string name="alarm_snooze_button">BÁO LẠI (%1$d PHÚT)</string>
+    <string name="alarm_slide_to_dismiss">Trượt để tắt</string>
+    <string name="channel_alarm_name">Báo thức</string>
+    <string name="channel_alarm_description">Hiện báo thức toàn màn hình khi đến giờ báo thức ca.</string>
+    <string name="channel_alarm_playback_name">Phát báo thức</string>
+    <string name="channel_alarm_playback_description">Giữ báo thức có nhạc chuông tùy chỉnh reo ổn định.</string>
+    <string name="channel_sleep_name">Âm thanh giấc ngủ</string>
+    <string name="channel_sleep_description">Tiếp tục phát âm thanh giấc ngủ khi tắt màn hình.</string>
+    <string name="channel_reminders_name">Lời nhắc</string>
+    <string name="channel_reminders_description">Lời nhắc tùy chọn cho sự kiện, việc cần làm và sinh nhật.</string>
+    <string name="sleep_sound_fallback">Âm thanh giấc ngủ</string>
+    <string name="sleep_playing">Đang phát</string>
+    <string name="sleep_playing_stops_in">Đang phát · dừng sau %1$d phút</string>
+    <string name="sleep_stop">Dừng</string>
+    <string name="ringtone_picker_title">Chọn âm báo thức</string>
+    <string name="ringtone_system_fallback">Nhạc chuông hệ thống</string>
+    <string name="widget_off_rdo">🛌 Ngày nghỉ</string>
+    <string name="widget_no_shifts">Chưa có ca nào</string>
+    <string name="duration_m">%1$dph</string>
+    <string name="duration_h">%1$dg</string>
+    <string name="duration_h_m">%1$dg %2$dph</string>
+    <string name="duration_d">%1$dng</string>
+    <string name="duration_d_h">%1$dng %2$dg</string>
+</resources>

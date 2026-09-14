@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik utilise l'appareil photo pour photographier votre planning imprimé et lire les horaires sur votre appareil.";
+"NSPhotoLibraryUsageDescription" = "Rostrik peut lire une photo enregistrée de votre planning pour importer les horaires sur votre appareil.";
+"NSCalendarsUsageDescription" = "Rostrik copie vos postes dans un agenda « Rostrik Roster » dédié pour qu'ils s'affichent avec vos autres événements.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik copie vos postes dans un agenda « Rostrik Roster » dédié pour qu'ils s'affichent avec vos autres événements.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik ajoute vos postes à un agenda « Rostrik Roster » dédié.";
+"NSAppleMusicUsageDescription" = "Rostrik vous permet de choisir un morceau de votre bibliothèque comme sonnerie d'alarme.";
+"NSAlarmKitUsageDescription" = "Rostrik utilise les alarmes pour que votre réveil avant le poste sonne même en mode silencieux ou en mode Concentration.";

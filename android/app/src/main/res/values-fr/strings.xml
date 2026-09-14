@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Votre prochain poste en un coup d\'œil</string>
+    <string name="alarm_fallback_title">Alarme</string>
+    <string name="alarm_hint_critical">Alarme critique\nSecouez fort pour arrêter</string>
+    <string name="alarm_hint_slide">Faites glisser la poignée ci-dessous pour arrêter</string>
+    <string name="alarm_snooze_button">RÉPÉTER (%1$d MIN)</string>
+    <string name="alarm_slide_to_dismiss">Glissez pour arrêter</string>
+    <string name="channel_alarm_name">Alarme</string>
+    <string name="channel_alarm_description">Affiche l\'alarme en plein écran quand une alarme de poste arrive.</string>
+    <string name="channel_alarm_playback_name">Lecture de l\'alarme</string>
+    <string name="channel_alarm_playback_description">Maintient de façon fiable la lecture d\'une alarme à sonnerie personnalisée.</string>
+    <string name="channel_sleep_name">Sons pour dormir</string>
+    <string name="channel_sleep_description">Continue un son pour dormir écran éteint.</string>
+    <string name="channel_reminders_name">Rappels</string>
+    <string name="channel_reminders_description">Rappels facultatifs pour les événements, tâches et anniversaires.</string>
+    <string name="sleep_sound_fallback">Son pour dormir</string>
+    <string name="sleep_playing">Lecture en cours</string>
+    <string name="sleep_playing_stops_in">Lecture · s\'arrête dans %1$d min</string>
+    <string name="sleep_stop">Arrêter</string>
+    <string name="ringtone_picker_title">Choisir la sonnerie d\'alarme</string>
+    <string name="ringtone_system_fallback">Sonnerie système</string>
+    <string name="widget_off_rdo">🛌 Repos</string>
+    <string name="widget_no_shifts">Aucun poste</string>
+    <string name="duration_m">%1$d min</string>
+    <string name="duration_h">%1$d h</string>
+    <string name="duration_h_m">%1$d h %2$d</string>
+    <string name="duration_d">%1$d j</string>
+    <string name="duration_d_h">%1$d j %2$d h</string>
+</resources>

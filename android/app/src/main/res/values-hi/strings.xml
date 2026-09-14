@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">आपकी अगली शिफ्ट एक नज़र में</string>
+    <string name="alarm_fallback_title">अलार्म</string>
+    <string name="alarm_hint_critical">ज़रूरी अलार्म\nबंद करने के लिए ज़ोर से हिलाएँ</string>
+    <string name="alarm_hint_slide">बंद करने के लिए नीचे का हैंडल खिसकाएँ</string>
+    <string name="alarm_snooze_button">स्नूज़ (%1$d मिनट)</string>
+    <string name="alarm_slide_to_dismiss">बंद करने के लिए खिसकाएँ</string>
+    <string name="channel_alarm_name">अलार्म</string>
+    <string name="channel_alarm_description">शिफ्ट अलार्म का समय होने पर पूरी स्क्रीन पर अलार्म दिखाता है।</string>
+    <string name="channel_alarm_playback_name">अलार्म प्लेबैक</string>
+    <string name="channel_alarm_playback_description">कस्टम टोन वाले अलार्म को बिना रुके बजाता रहता है।</string>
+    <string name="channel_sleep_name">नींद की आवाज़ें</string>
+    <string name="channel_sleep_description">स्क्रीन बंद होने पर भी नींद की आवाज़ चलाता रहता है।</string>
+    <string name="channel_reminders_name">रिमाइंडर</string>
+    <string name="channel_reminders_description">इवेंट, काम और जन्मदिन के लिए वैकल्पिक याद दिलाने वाली सूचनाएँ।</string>
+    <string name="sleep_sound_fallback">नींद की आवाज़</string>
+    <string name="sleep_playing">चल रहा है</string>
+    <string name="sleep_playing_stops_in">चल रहा है · %1$d मिनट में रुकेगा</string>
+    <string name="sleep_stop">रोकें</string>
+    <string name="ringtone_picker_title">अलार्म टोन चुनें</string>
+    <string name="ringtone_system_fallback">सिस्टम टोन</string>
+    <string name="widget_off_rdo">🛌 छुट्टी</string>
+    <string name="widget_no_shifts">अभी कोई शिफ्ट नहीं</string>
+    <string name="duration_m">%1$d मि</string>
+    <string name="duration_h">%1$d घं</string>
+    <string name="duration_h_m">%1$d घं %2$d मि</string>
+    <string name="duration_d">%1$d दि</string>
+    <string name="duration_d_h">%1$d दि %2$d घं</string>
+</resources>

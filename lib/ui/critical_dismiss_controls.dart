@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../l10n/l10n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -112,14 +113,14 @@ class _ShakeToDismissState extends State<ShakeToDismiss> {
               ),
             ),
           ),
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.vibration, color: Colors.white, size: 24),
-              SizedBox(width: 12),
+              const Icon(Icons.vibration, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
               Text(
-                'Shake to dismiss',
-                style: TextStyle(
+                context.l10n.walkthroughShakeLabel,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -213,9 +214,9 @@ class _HoldToDismissState extends State<HoldToDismiss>
                 ),
               ),
             ),
-            const Text(
-              'Or hold to dismiss',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+            Text(
+              context.l10n.criticalHoldToDismiss,
+              style: const TextStyle(color: Colors.white70, fontSize: 16),
             ),
           ],
         ),

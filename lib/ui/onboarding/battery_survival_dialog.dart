@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../l10n/l10n.dart';
+
 /// The educational "Battery Survival" dialog.
 ///
 /// WHY THIS EXISTS instead of the stock battery-optimisation toggle:
@@ -25,17 +27,16 @@ Future<void> showBatterySurvivalDialog(BuildContext context) {
 
 /// The manual recovery path, as plain steps. Phrased generically — the exact
 /// wording differs per OEM, so we name the destination ("Unrestricted") and
-/// the breadcrumb rather than promising a pixel-perfect match.
-const List<String> _batterySteps = <String>[
-  'Open this app’s settings (button below).',
-  'Tap Battery (or "App battery usage").',
-  'Choose Unrestricted (not "Optimised" or "Restricted").',
-  'If you see "Allow background activity", switch it on too.',
-  // Critical for long gaps between shifts: Android hibernates rarely-opened apps
-  // and auto-revokes their permissions, which silently disarms every alarm.
-  'Turn OFF "Pause app activity if unused" (or "Remove permissions if app is '
-      'unused") so Android can’t revoke alarm permissions while you’re away.',
-];
+/// the breadcrumb rather than promising a pixel-perfect match. Step 5 is
+/// critical for long gaps between shifts: Android hibernates rarely-opened
+/// apps and auto-revokes their permissions, silently disarming every alarm.
+List<String> _batterySteps(AppLocalizations l10n) => <String>[
+      l10n.batteryStep1,
+      l10n.batteryStep2,
+      l10n.batteryStep3,
+      l10n.batteryStep4,
+      l10n.batteryStep5,
+    ];
 
 class _BatterySurvivalDialog extends StatelessWidget {
   const _BatterySurvivalDialog();
@@ -44,32 +45,32 @@ class _BatterySurvivalDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = context.l10n;
+    final steps = _batterySteps(l10n);
     return AlertDialog(
       key: const ValueKey('battery-survival-dialog'),
       icon: Icon(Icons.battery_alert_outlined, color: scheme.primary, size: 32),
-      title: const Text('Keep alarms alive'),
+      title: Text(l10n.batteryDialogTitle),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Some phones (Samsung, Xiaomi, Oppo, Huawei) aggressively '
-              'shut down background apps to save battery. If that happens to '
-              'Rostrik, an alarm can be silenced before it fires.',
+              l10n.batteryDialogIntro,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              'Mark Rostrik as Unrestricted to stop this:',
+              l10n.batteryDialogMarkUnrestricted,
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 12),
-            for (var i = 0; i < _batterySteps.length; i++)
+            for (var i = 0; i < steps.length; i++)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
@@ -95,7 +96,7 @@ class _BatterySurvivalDialog extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        _batterySteps[i],
+                        steps[i],
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
@@ -109,7 +110,7 @@ class _BatterySurvivalDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Not now'),
+          child: Text(l10n.commonNotNow),
         ),
         FilledButton.icon(
           key: const ValueKey('battery-go-to-settings'),
@@ -121,7 +122,7 @@ class _BatterySurvivalDialog extends StatelessWidget {
             if (context.mounted) Navigator.of(context).pop();
           },
           icon: const Icon(Icons.open_in_new, size: 18),
-          label: const Text('Go to Settings'),
+          label: Text(l10n.batteryGoToSettings),
         ),
       ],
     );

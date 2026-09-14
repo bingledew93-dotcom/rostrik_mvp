@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "يستخدم Rostrik الكاميرا لتصوير جدولك المطبوع وقراءة أوقات الورديات على جهازك.";
+"NSPhotoLibraryUsageDescription" = "يمكن لـ Rostrik قراءة صورة محفوظة لجدولك لاستيراد أوقات الورديات على جهازك.";
+"NSCalendarsUsageDescription" = "ينسخ Rostrik وردياتك إلى تقويم مخصص باسم «Rostrik Roster» لتظهر مع أحداثك الأخرى.";
+"NSCalendarsFullAccessUsageDescription" = "ينسخ Rostrik وردياتك إلى تقويم مخصص باسم «Rostrik Roster» لتظهر مع أحداثك الأخرى.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "يضيف Rostrik وردياتك إلى تقويم مخصص باسم «Rostrik Roster».";
+"NSAppleMusicUsageDescription" = "يتيح لك Rostrik اختيار أغنية من مكتبتك لتكون نغمة منبه مخصصة.";
+"NSAlarmKitUsageDescription" = "يستخدم Rostrik المنبهات لكي يرن منبه الاستيقاظ قبل الوردية حتى عندما يكون الهاتف صامتًا أو في وضع التركيز.";

@@ -21,6 +21,7 @@ import 'alarm_scheduler.dart';
 import 'ios_notification_budget.dart';
 import 'notification_id_map.dart';
 import 'one_off_snooze_store.dart';
+import '../l10n/l10n.dart';
 
 /// Payload sentinel for alarms with no linked shift (one-time alarms,
 /// future custom-repeat / bundle alarms). Replaces the shiftId field
@@ -604,7 +605,8 @@ class AlarmSyncService {
   /// of id-map keys — anything that isn't exactly a [_dateKey] is left alone.
   static final RegExp _isoDateKeyPattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 
-  String _titleFor(AppAlarm a) => a.label.isEmpty ? 'Alarm' : a.label;
+  String _titleFor(AppAlarm a) =>
+      a.label.isEmpty ? currentL10n.createFallbackLabel : a.label;
 
   /// The short shift CONTEXT line for the alarm notification — deliberately
   /// time-free. The native scheduler supplies the formatted ring time
@@ -617,21 +619,22 @@ class AlarmSyncService {
     if (a.repeatType == AppAlarmRepeatType.followsRotation && type != null) {
       // "Before" reads correctly for both timing modes: an exact time the user
       // picks is, in practice, ahead of the shift start, as is a lead-time ring.
-      return 'Before your ${_typeLabel(type)} shift';
+      return currentL10n.notifBeforeYourShift(_typeLabel(type));
     }
     return '';
   }
 
   static String _typeLabel(ShiftType t) {
+    final l10n = currentL10n;
     switch (t) {
       case ShiftType.day:
-        return 'Day';
+        return l10n.shiftTypeDay;
       case ShiftType.afternoon:
-        return 'Afternoon';
+        return l10n.shiftTypeAfternoon;
       case ShiftType.night:
-        return 'Night';
+        return l10n.shiftTypeNight;
       case ShiftType.off:
-        return 'Off';
+        return l10n.shiftTypeOff;
     }
   }
 }

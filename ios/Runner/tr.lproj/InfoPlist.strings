@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik, basılı çizelgenin fotoğrafını çekip vardiya saatlerini cihazında okumak için kamerayı kullanır.";
+"NSPhotoLibraryUsageDescription" = "Rostrik, vardiya saatlerini cihazında içe aktarmak için çizelgenin kayıtlı bir fotoğrafını okuyabilir.";
+"NSCalendarsUsageDescription" = "Rostrik, vardiyalarının diğer etkinliklerinle birlikte görünmesi için onları ayrı bir \"Rostrik Roster\" takvimine kopyalar.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik, vardiyalarının diğer etkinliklerinle birlikte görünmesi için onları ayrı bir \"Rostrik Roster\" takvimine kopyalar.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik vardiyalarını ayrı bir \"Rostrik Roster\" takvimine ekler.";
+"NSAppleMusicUsageDescription" = "Rostrik, arşivinden bir şarkıyı özel alarm sesi olarak seçmene olanak tanır.";
+"NSAlarmKitUsageDescription" = "Rostrik, vardiya öncesi uyandırman telefon sessizdeyken veya bir Odak modundayken bile çalsın diye alarmları kullanır.";

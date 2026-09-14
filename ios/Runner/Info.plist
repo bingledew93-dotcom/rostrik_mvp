@@ -1,131 +1,109 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+<dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.rostrik.app.alarmSyncRefresh</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Rostrik</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ar</string>
+		<string>de</string>
+		<string>es</string>
+		<string>fr</string>
+		<string>hi</string>
+		<string>id</string>
+		<string>it</string>
+		<string>ja</string>
+		<string>ko</string>
+		<string>nl</string>
+		<string>pl</string>
+		<string>pt</string>
+		<string>tr</string>
+		<string>vi</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>Rostrik</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Rostrik uses alarms so your pre-shift wake-up rings even when your phone is silenced or in a Focus mode.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Rostrik lets you pick a song from your library to use as a custom alarm tone.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Rostrik adds your shifts to a dedicated "Rostrik Roster" calendar.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Rostrik uses the camera to photograph your printed roster and read the shift times on your device.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Rostrik can read a saved photo of your roster to import shift times on your device.</string>
+	<key>UIApplicationSceneManifest</key>
 	<dict>
-		<!-- OCR roster scanner (Phase 6): image_picker opens the camera and
-	     image_cropper lets the user crop tight around the shift grid. iOS
-	     hard-crashes the picker without a camera usage string. The photo
-	     library string is defensive (a future "import from gallery" path);
-	     the camera flow itself runs with requestFullMetadata:false so it
-	     does not prompt for library access. -->
-		<key>NSCameraUsageDescription</key>
-		<string>Rostrik uses the camera to photograph your printed roster and read the shift times on your device.</string>
-		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Rostrik can read a saved photo of your roster to import shift times on your device.</string>
-		<!-- Optional Device Calendar Sync (device_calendar_plus): only requested
-	     when the user turns Calendar Sync on in Settings. Full access is needed
-	     to find-or-create the dedicated "Rostrik Roster" calendar and clear its
-	     old events before re-mirroring the roster. The legacy key covers iOS
-	     10–16; the Full/WriteOnly keys are the iOS 17+ split. -->
-		<key>NSCalendarsUsageDescription</key>
-		<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
-		<key>NSCalendarsFullAccessUsageDescription</key>
-		<string>Rostrik mirrors your shifts to a dedicated "Rostrik Roster" calendar so they show alongside your other events.</string>
-		<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-		<string>Rostrik adds your shifts to a dedicated "Rostrik Roster" calendar.</string>
-		<!-- Custom alarm tone (create_alarm_sheet.dart "Select from Files" ->
-	     FilePicker.pickFiles(type: FileType.audio)): on iOS file_picker's audio
-	     type opens MPMediaPickerController (the Music library grid), not a
-	     Files browser. iOS won't show that picker's permission prompt without
-	     this string and gets stuck rather than failing cleanly. -->
-		<key>NSAppleMusicUsageDescription</key>
-		<string>Rostrik lets you pick a song from your library to use as a custom alarm tone.</string>
-		<!-- AlarmKit (iOS 26+), the preferred alarm delivery path: it breaks
-	     through the silent switch and Focus, which an ordinary notification
-	     cannot. iOS refuses to schedule an AlarmKit alarm without this string.
-	     Harmless on older iOS, which ignores the key and takes the
-	     UNUserNotificationCenter fallback in NativeAlarmPlugin.swift. -->
-		<key>NSAlarmKitUsageDescription</key>
-		<string>Rostrik uses alarms so your pre-shift wake-up rings even when your phone is silenced or in a Focus mode.</string>
-		<key>CADisableMinimumFrameDurationOnPhone</key>
-		<true/>
-		<key>CFBundleDevelopmentRegion</key>
-		<string>$(DEVELOPMENT_LANGUAGE)</string>
-		<key>CFBundleDisplayName</key>
-		<string>Rostrik</string>
-		<key>CFBundleExecutable</key>
-		<string>$(EXECUTABLE_NAME)</string>
-		<key>CFBundleIdentifier</key>
-		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-		<key>CFBundleInfoDictionaryVersion</key>
-		<string>6.0</string>
-		<key>CFBundleName</key>
-		<string>Rostrik</string>
-		<key>CFBundlePackageType</key>
-		<string>APPL</string>
-		<key>CFBundleShortVersionString</key>
-		<string>$(FLUTTER_BUILD_NAME)</string>
-		<key>CFBundleSignature</key>
-		<string>????</string>
-		<key>CFBundleVersion</key>
-		<string>$(FLUTTER_BUILD_NUMBER)</string>
-		<key>LSRequiresIPhoneOS</key>
-		<true/>
-		<key>UIApplicationSceneManifest</key>
-		<dict>
-			<key>UIApplicationSupportsMultipleScenes</key>
-			<false/>
-			<key>UISceneConfigurations</key>
-			<dict>
-				<key>UIWindowSceneSessionRoleApplication</key>
-				<array>
-					<dict>
-						<key>UISceneClassName</key>
-						<string>UIWindowScene</string>
-						<key>UISceneConfigurationName</key>
-						<string>flutter</string>
-						<key>UISceneDelegateClassName</key>
-						<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-						<key>UISceneStoryboardFile</key>
-						<string>Main</string>
-					</dict>
-				</array>
-			</dict>
-		</dict>
-		<key>UIApplicationSupportsIndirectInputEvents</key>
-		<true/>
-		<key>UILaunchStoryboardName</key>
-		<string>LaunchScreen</string>
-		<key>UIMainStoryboardFile</key>
-		<string>Main</string>
-		<!-- Strict portrait lock (Beta blocker: landscape overflow). Only
-	     UIInterfaceOrientationPortrait is allowed on both iPhone and iPad, so
-	     iOS itself refuses to rotate even if a future Flutter-side change drops
-	     the SystemChrome lock. Upside-down is intentionally excluded. -->
-		<key>UISupportedInterfaceOrientations</key>
-		<array>
-			<string>UIInterfaceOrientationPortrait</string>
-		</array>
-		<key>UISupportedInterfaceOrientations~ipad</key>
-		<array>
-			<string>UIInterfaceOrientationPortrait</string>
-		</array>
-		<!-- Background execution wiring for the 14-day rolling alarm window.
-	     `fetch` is the legacy background fetch mode and lets BGAppRefreshTask
-	     fire on iOS 13+. `processing` covers BGProcessingTaskRequest if a
-	     future longer-running task is added (not used today but cheap to
-	     declare; iOS ignores modes the app never schedules against). -->
-		<key>UIBackgroundModes</key>
-		<array>
-			<string>fetch</string>
-			<string>processing</string>
-			<!-- Sleep sounds (SleepSoundPlugin.swift). Without this iOS silences
-		     AVAudioPlayer the moment the screen locks — which is exactly when a
-		     wind-down sound needs to keep playing. Android's equivalent is the
-		     SleepSoundService foreground service. -->
-			<string>audio</string>
-		</array>
-		<!-- Identifiers iOS will accept BGTaskScheduler.register calls for.
-	     Must match the constant in AppDelegate.swift exactly — a typo
-	     here causes a hard assertion at app launch, not a silent
-	     skip. If a second background task is added later, append its
-	     identifier to this array; the registration call site in
-	     AppDelegate.swift is the authoritative list. -->
-		<key>BGTaskSchedulerPermittedIdentifiers</key>
-		<array>
-			<string>com.rostrik.app.alarmSyncRefresh</string>
-		</array>
-		<key>UIStatusBarHidden</key>
+		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>audio</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIStatusBarHidden</key>
+	<false/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+</dict>
 </plist>

@@ -10,6 +10,7 @@ import 'package:rostrik_mvp/ui/day_actions_sheet.dart';
 
 import '../alarms/fakes.dart';
 import '../reminders/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   late FakeShiftRepository shifts;
@@ -58,6 +59,8 @@ void main() {
           Provider<CalendarActivityRepository>.value(value: activities),
         ],
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Builder(
               builder: (context) => Center(

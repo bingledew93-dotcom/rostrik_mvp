@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Twoja następna zmiana w skrócie</string>
+    <string name="alarm_fallback_title">Budzik</string>
+    <string name="alarm_hint_critical">Budzik krytyczny\nPotrząśnij mocno, aby wyłączyć</string>
+    <string name="alarm_hint_slide">Przesuń uchwyt poniżej, aby wyłączyć</string>
+    <string name="alarm_snooze_button">DRZEMKA (%1$d MIN)</string>
+    <string name="alarm_slide_to_dismiss">Przesuń, aby wyłączyć</string>
+    <string name="channel_alarm_name">Budzik</string>
+    <string name="channel_alarm_description">Pokazuje budzik na pełnym ekranie, gdy nadchodzi budzik zmiany.</string>
+    <string name="channel_alarm_playback_name">Odtwarzanie budzika</string>
+    <string name="channel_alarm_playback_description">Niezawodnie odtwarza dzwoniący budzik z własnym dźwiękiem.</string>
+    <string name="channel_sleep_name">Dźwięki do snu</string>
+    <string name="channel_sleep_description">Odtwarza dźwięk do snu przy wyłączonym ekranie.</string>
+    <string name="channel_reminders_name">Przypomnienia</string>
+    <string name="channel_reminders_description">Opcjonalne przypomnienia o wydarzeniach, zadaniach i urodzinach.</string>
+    <string name="sleep_sound_fallback">Dźwięk do snu</string>
+    <string name="sleep_playing">Odtwarzanie</string>
+    <string name="sleep_playing_stops_in">Odtwarzanie · koniec za %1$d min</string>
+    <string name="sleep_stop">Stop</string>
+    <string name="ringtone_picker_title">Wybierz dźwięk budzika</string>
+    <string name="ringtone_system_fallback">Dźwięk systemowy</string>
+    <string name="widget_off_rdo">🛌 Wolne</string>
+    <string name="widget_no_shifts">Brak zmian</string>
+    <string name="duration_m">%1$d min</string>
+    <string name="duration_h">%1$d godz.</string>
+    <string name="duration_h_m">%1$d godz. %2$d min</string>
+    <string name="duration_d">%1$d d.</string>
+    <string name="duration_d_h">%1$d d. %2$d godz.</string>
+</resources>

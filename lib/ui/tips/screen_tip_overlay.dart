@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import 'screen_tip.dart';
 
 /// The first-run coach card for a screen: a soft scrim to draw the eye plus a
@@ -76,7 +77,7 @@ class ScreenTipOverlay extends StatelessWidget {
                             const SizedBox(width: 14),
                             Expanded(
                               child: Text(
-                                tip.title,
+                                tip.localizedTitle,
                                 key: const ValueKey('screen-tip-title'),
                                 style: theme.textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w700,
@@ -87,7 +88,7 @@ class ScreenTipOverlay extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          tip.body,
+                          tip.localizedBody,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.35,
@@ -95,7 +96,7 @@ class ScreenTipOverlay extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Replay these anytime from Settings › How it works.',
+                          context.l10n.tipReplayHint,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant
                                 .withValues(alpha: 0.7),
@@ -108,7 +109,7 @@ class ScreenTipOverlay extends StatelessWidget {
                               key: const ValueKey('screen-tip-disable'),
                               onPressed: onDisable,
                               child: Text(
-                                "Don't show tips",
+                                context.l10n.tipDontShow,
                                 style: TextStyle(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
@@ -123,7 +124,7 @@ class ScreenTipOverlay extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(22),
                                 ),
                               ),
-                              child: const Text('Got it'),
+                              child: Text(context.l10n.tipGotIt),
                             ),
                           ],
                         ),

@@ -13,6 +13,7 @@ import 'package:rostrik_mvp/ui/dashboard_screen.dart';
 import 'package:rostrik_mvp/ui/shift_format.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   Future<FakeShiftRepository> pumpDashboard(
@@ -55,7 +56,10 @@ void main() {
           Provider<ShiftRepository>.value(value: shiftRepo),
           Provider<AppAlarmRepository>.value(value: appAlarmRepo),
         ],
-        child: MaterialApp(home: DashboardScreen(healthProbe: healthProbe)),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: DashboardScreen(healthProbe: healthProbe)),
       ),
     );
     await tester.pump();

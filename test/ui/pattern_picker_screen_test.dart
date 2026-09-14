@@ -13,6 +13,7 @@ import 'package:rostrik_mvp/ui/pattern_picker_body.dart';
 import 'package:rostrik_mvp/ui/pattern_picker_screen.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 /// Widget coverage for the categorized pattern picker (post-onboarding).
 ///
@@ -48,7 +49,10 @@ void main() {
           Provider<ShiftRepository>.value(value: shiftRepo),
           Provider<ShiftGenerator>.value(value: generator),
         ],
-        child: const MaterialApp(home: PatternPickerScreen()),
+        child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PatternPickerScreen()),
       ),
     );
     await tester.pumpAndSettle();
@@ -228,6 +232,8 @@ void main() {
             Provider<ShiftGenerator>.value(value: generator),
           ],
           child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
             home: PatternPickerOnboardingScreen(
               rosterType: rosterType,
               onBack: () {},
@@ -550,6 +556,8 @@ void main() {
               Provider<ShiftGenerator>.value(value: generator),
             ],
             child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
               home: Scaffold(
                 body: PatternPickerBody(
                   // Restricting to Day pre-selects day-7-7, so Generate is live.

@@ -14,6 +14,7 @@ import 'package:rostrik_mvp/logic/cycle_service.dart';
 import 'package:rostrik_mvp/ui/onboarding/arm_engine_screen.dart';
 
 import '../alarms/fakes.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 /// The fake repo set the Arm-Engine harness exposes for assertions.
 typedef ArmHarness = ({
@@ -83,6 +84,8 @@ void main() {
           Provider<CycleService>.value(value: cycleService),
         ],
         child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
           home: pushed
               ? _ArmHost(onArmComplete: () async => onArm())
               : ArmEngineScreen(onArmComplete: () async => onArm()),

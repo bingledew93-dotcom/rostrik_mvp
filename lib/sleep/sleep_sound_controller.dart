@@ -64,7 +64,7 @@ class SleepSoundController extends ChangeNotifier with WidgetsBindingObserver {
 
     await _channel.play(
       resource: sound.resource,
-      label: sound.label,
+      label: sleepSoundLabel(sound),
       timerMinutes: timerMinutes,
     );
 

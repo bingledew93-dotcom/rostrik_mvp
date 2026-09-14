@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/l10n.dart';
 import '../../purchase/entitlement.dart' show kTrialDuration;
 import '../../state/app_preferences.dart';
 
@@ -74,7 +75,7 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 20),
                       Text(
-                        'The smart alarm clock built for shift workers.',
+                        context.l10n.welcomeTagline,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
@@ -82,7 +83,7 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Alarms that follow your rotating roster — not just weekdays.',
+                        context.l10n.welcomeSubTagline,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -122,7 +123,7 @@ class WelcomeScreen extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          child: const Text('Get Started'),
+                          child: Text(context.l10n.welcomeGetStarted),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -130,7 +131,7 @@ class WelcomeScreen extends StatelessWidget {
                         key: const ValueKey('welcome-skip-button'),
                         onPressed: onSkip,
                         child: Text(
-                          'Skip / Set up later',
+                          context.l10n.welcomeSkip,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
@@ -178,7 +179,7 @@ class _TrialCallout extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${kTrialDuration.inDays}-day free trial',
+                  context.l10n.welcomeTrialTitle(kTrialDuration.inDays),
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: scheme.primary,
@@ -186,8 +187,7 @@ class _TrialCallout extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Full access to every feature — no card needed. Just a '
-                  'one-time purchase after, never a subscription.',
+                  context.l10n.welcomeTrialBody,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -231,13 +231,13 @@ class _QuickPreferences extends StatelessWidget {
         children: [
           _PrefRow(
             icon: Icons.schedule,
-            label: 'Time format',
+            label: context.l10n.welcomeTimeFormat,
             child: SegmentedButton<bool>(
               key: const ValueKey('welcome-pref-timeformat'),
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: false, label: Text('12h')),
-                ButtonSegment(value: true, label: Text('24h')),
+              segments: [
+                ButtonSegment(value: false, label: Text(context.l10n.common12h)),
+                ButtonSegment(value: true, label: Text(context.l10n.common24h)),
               ],
               selected: {use24Hour},
               onSelectionChanged: (s) => onTimeFormatChanged(s.first),
@@ -246,13 +246,19 @@ class _QuickPreferences extends StatelessWidget {
           const Divider(height: 8),
           _PrefRow(
             icon: Icons.calendar_today_outlined,
-            label: 'Week starts',
+            label: context.l10n.welcomeWeekStarts,
             child: SegmentedButton<bool>(
               key: const ValueKey('welcome-pref-weekstart'),
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: false, label: Text('Sun')),
-                ButtonSegment(value: true, label: Text('Mon')),
+              segments: [
+                ButtonSegment(
+                  value: false,
+                  label: Text(context.l10n.commonSundayShort),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text(context.l10n.commonMondayShort),
+                ),
               ],
               selected: {startWeekOnMonday},
               onSelectionChanged: (s) => onWeekStartChanged(s.first),

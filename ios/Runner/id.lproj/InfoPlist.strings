@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik memakai kamera untuk memotret jadwal cetakmu dan membaca jam shift di perangkatmu.";
+"NSPhotoLibraryUsageDescription" = "Rostrik dapat membaca foto jadwal yang tersimpan untuk mengimpor jam shift di perangkatmu.";
+"NSCalendarsUsageDescription" = "Rostrik menyalin shift-mu ke kalender khusus \"Rostrik Roster\" agar tampil bersama acara lainnya.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik menyalin shift-mu ke kalender khusus \"Rostrik Roster\" agar tampil bersama acara lainnya.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik menambahkan shift-mu ke kalender khusus \"Rostrik Roster\".";
+"NSAppleMusicUsageDescription" = "Rostrik memungkinkanmu memilih lagu dari perpustakaanmu sebagai nada alarm kustom.";
+"NSAlarmKitUsageDescription" = "Rostrik memakai alarm agar alarm bangun sebelum shift tetap berbunyi meski ponsel dalam mode senyap atau mode Fokus.";

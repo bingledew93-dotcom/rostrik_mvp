@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rostrik_mvp/ui/tips/screen_tip.dart';
 import 'package:rostrik_mvp/ui/tips/screen_tip_overlay.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   const tip = ScreenTip(
@@ -18,6 +19,8 @@ void main() {
   }) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Stack(
             children: [

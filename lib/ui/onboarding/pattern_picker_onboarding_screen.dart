@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 
+import '../../l10n/l10n.dart';
 import '../main_layout.dart';
 import '../pattern_picker_body.dart';
 import 'arm_engine_screen.dart';
@@ -71,7 +72,7 @@ class PatternPickerOnboardingScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: onBack,
         ),
-        title: const Text('Pick your rotation'),
+        title: Text(context.l10n.onbPatternTitle),
         bottom: const OnboardingProgressBar(step: 2),
       ),
       body: PatternPickerBody(

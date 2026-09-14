@@ -13,6 +13,7 @@ import '../alarms/alarm_sound.dart';
 import '../alarms/default_tone_prefs.dart';
 import '../alarms/ringtone_channel.dart';
 import '../data/models/alarm_settings.dart';
+import '../l10n/l10n.dart';
 import '../data/models/app_alarm.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
@@ -23,12 +24,6 @@ import '../util/weekday_mask.dart';
 import 'alarm_time_projection.dart';
 import 'shift_format.dart';
 import 'time_picker_pref.dart';
-
-/// Monday-first short weekday labels for the weekly-repeat chips. Index `d - 1`
-/// for an ISO weekday (`DateTime.monday == 1`).
-const List<String> _weekdayChipLabels = <String>[
-  'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-];
 
 /// Modal entry point shown from the AlarmsScreen FAB (create) and from tapping
 /// an existing card (edit). Builds an [AppAlarm] from a draft state and
@@ -87,8 +82,10 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
   // immediately gets a sensible default — they can always edit later.
   // Only used by one-time alarms; follows-rotation alarms ignore it.
   int _minutesOfDay = 7 * 60;
+  // Seeded via currentL10n (context.l10n is off-limits in initState — the
+  // AppLocalizations lookup is an inherited-widget dependency).
   final TextEditingController _labelController =
-      TextEditingController(text: 'Wake Up');
+      TextEditingController(text: currentL10n.createDefaultLabel);
   AppAlarmRepeatType _repeatType = AppAlarmRepeatType.followsRotation;
   ShiftType _linkedShiftType = ShiftType.day;
   // THE lead time for a follows-rotation alarm in lead-time mode — what the
@@ -203,7 +200,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   child: Text(
-                    'Your pick becomes the default for new alarms.',
+                    sheetCtx.l10n.createPickBecomesDefault,
                     style: Theme.of(sheetCtx).textTheme.bodySmall?.copyWith(
                           color:
                               Theme.of(sheetCtx).colorScheme.onSurfaceVariant,
@@ -215,7 +212,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   ListTile(
                     key: ValueKey('ringtone-tone-${s.key}'),
                     leading: const Icon(Icons.music_note_outlined),
-                    title: Text(s.label),
+                    title: Text(alarmSoundLabel(s)),
                     trailing: (!hasCustom && _soundKey == s.key)
                         ? Icon(Icons.check, color: accent)
                         : null,
@@ -232,9 +229,8 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   ListTile(
                     key: const ValueKey('ringtone-source-files'),
                     leading: const Icon(Icons.folder_open_outlined),
-                    title: const Text('Select from Files'),
-                    subtitle:
-                        const Text('Pick an audio file saved on your device'),
+                    title: Text(sheetCtx.l10n.createSelectFromFiles),
+                    subtitle: Text(sheetCtx.l10n.createFilesSub),
                     onTap: () => Navigator.of(sheetCtx).pop('files'),
                   ),
                 ],
@@ -242,9 +238,8 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   ListTile(
                     key: const ValueKey('ringtone-source-system'),
                     leading: const Icon(Icons.library_music_outlined),
-                    title: const Text('Select System Tone'),
-                    subtitle:
-                        const Text("Choose from your device's alarm sounds"),
+                    title: Text(sheetCtx.l10n.createSelectSystemTone),
+                    subtitle: Text(sheetCtx.l10n.createSystemToneSub),
                     onTap: () => Navigator.of(sheetCtx).pop('system'),
                   ),
               ],
@@ -455,7 +450,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
       // in place (one card, one reconcile) instead of minting a duplicate.
       id: initial?.id ?? _uuid.v4(),
       minutesOfDay: _minutesOfDay,
-      label: label.isEmpty ? 'Alarm' : label,
+      label: label.isEmpty ? currentL10n.createFallbackLabel : label,
       repeatType: _repeatType,
       // Preserve the on/off state when editing; new alarms start enabled.
       enabled: initial?.enabled ?? true,
@@ -545,7 +540,10 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Alarm timing', style: theme.textTheme.labelLarge),
+                child: Text(
+                  context.l10n.createAlarmTiming,
+                  style: theme.textTheme.labelLarge,
+                ),
               ),
               const SizedBox(height: 8),
               // Lead Time (fire BEFORE the shift, tracking it) vs Exact Time
@@ -553,9 +551,15 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
               // workers who want a fixed wake regardless of the global lead.
               SegmentedButton<bool>(
                 key: const ValueKey('create-alarm-timing-mode'),
-                segments: const [
-                  ButtonSegment(value: false, label: Text('Lead time')),
-                  ButtonSegment(value: true, label: Text('Exact time')),
+                segments: [
+                  ButtonSegment(
+                    value: false,
+                    label: Text(context.l10n.createLeadTimeMode),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text(context.l10n.createExactTimeMode),
+                  ),
                 ],
                 selected: {_isExactTime},
                 onSelectionChanged: (s) =>
@@ -574,8 +578,9 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   onPressed: _pickExactTime,
                   icon: const Icon(Icons.schedule),
                   label: Text(
-                    'Fires at '
-                    '${formatClock(_exactTimeMinutes, use24Hour: use24Hour)}',
+                    context.l10n.createFiresAt(
+                      formatClock(_exactTimeMinutes, use24Hour: use24Hour),
+                    ),
                   ),
                 )
               else
@@ -584,25 +589,36 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   onPressed: _pickRelativeOffset,
                   icon: const Icon(Icons.timer_outlined),
                   label: Text(
-                    '${formatLeadOffset(_leadTimeMinutes)} before shift start',
+                    context.l10n.createLeadBeforeShiftStart(
+                      formatLeadOffset(_leadTimeMinutes),
+                    ),
                   ),
                 ),
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Linked shift', style: theme.textTheme.labelLarge),
+                child: Text(
+                  context.l10n.createLinkedShift,
+                  style: theme.textTheme.labelLarge,
+                ),
               ),
               const SizedBox(height: 8),
               // Three options — Off intentionally excluded (there's no shift to
               // ring before on an off day).
               SegmentedButton<ShiftType>(
-                segments: const [
-                  ButtonSegment(value: ShiftType.day, label: Text('Day')),
+                segments: [
+                  ButtonSegment(
+                    value: ShiftType.day,
+                    label: Text(context.l10n.shiftTypeDay),
+                  ),
                   ButtonSegment(
                     value: ShiftType.afternoon,
-                    label: Text('Afternoon'),
+                    label: Text(context.l10n.shiftTypeAfternoon),
                   ),
-                  ButtonSegment(value: ShiftType.night, label: Text('Night')),
+                  ButtonSegment(
+                    value: ShiftType.night,
+                    label: Text(context.l10n.shiftTypeNight),
+                  ),
                 ],
                 selected: {_linkedShiftType},
                 onSelectionChanged: (s) =>
@@ -621,7 +637,10 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Repeat on', style: theme.textTheme.labelLarge),
+                child: Text(
+                  context.l10n.createRepeatOn,
+                  style: theme.textTheme.labelLarge,
+                ),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -631,7 +650,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                   for (var d = 1; d <= 7; d++)
                     FilterChip(
                       key: ValueKey('create-alarm-weekday-$d'),
-                      label: Text(_weekdayChipLabels[d - 1]),
+                      label: Text(weekdayShort(d)),
                       selected: _weekdays.contains(d),
                       onSelected: (sel) => setState(() {
                         if (sel) {
@@ -666,7 +685,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
     // discriminator, so a custom selection always wins the label.
     final hasCustomRingtone = _customRingtoneName != null;
     final ringtoneName =
-        _customRingtoneName ?? resolveAlarmSound(_soundKey).label;
+        _customRingtoneName ?? alarmSoundLabel(resolveAlarmSound(_soundKey));
     // Roster shifts (streamed app-wide) let the hero show the REAL firing clock
     // time for the linked shift, not the bare offset. Empty/absent-of-type →
     // falls back to a per-type default so a clock always renders.
@@ -700,7 +719,9 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _isEditing ? 'Edit alarm' : 'New alarm',
+              _isEditing
+                  ? context.l10n.createEditAlarm
+                  : context.l10n.createNewAlarm,
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -739,10 +760,17 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             if (showLeadTime)
               Text(
                 _isExactTime
-                    ? 'Exact time · '
-                        '${shiftTypeLabel(_linkedShiftType)} shifts'
-                    : '${formatLeadOffset(_leadTimeMinutes)} before '
-                        '${shiftTypeLabel(_linkedShiftType)} shifts',
+                    ? context.l10n.alarmsExactTime(
+                        context.l10n.alarmsShiftsOfType(
+                          shiftTypeLabel(_linkedShiftType),
+                        ),
+                      )
+                    : context.l10n.alarmsLeadBefore(
+                        formatLeadOffset(_leadTimeMinutes),
+                        context.l10n.alarmsShiftsOfType(
+                          shiftTypeLabel(_linkedShiftType),
+                        ),
+                      ),
                 key: const ValueKey('create-alarm-offset-caption'),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -755,7 +783,7 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
             if (_repeatType == AppAlarmRepeatType.weekly)
               Text(
                 _weekdays.isEmpty
-                    ? 'Pick at least one day'
+                    ? context.l10n.createPickOneDay
                     : formatWeekdays(weekdayMaskFromSet(_weekdays)),
                 key: const ValueKey('create-alarm-weekly-caption'),
                 textAlign: TextAlign.center,
@@ -768,10 +796,10 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
               key: const ValueKey('create-alarm-label'),
               controller: _labelController,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Label',
-                hintText: 'e.g. Wake Up',
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText: context.l10n.createLabelField,
+                hintText: context.l10n.createLabelHint,
               ),
             ),
             const SizedBox(height: 8),
@@ -788,9 +816,8 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                 contentPadding: EdgeInsets.zero,
                 value: _isCriticalShift,
                 onChanged: (v) => setState(() => _isCriticalShift = v),
-                title: const Text('Critical shift'),
-                subtitle:
-                    const Text('Shake to dismiss · 3-second hold fail-safe'),
+                title: Text(context.l10n.createCriticalShift),
+                subtitle: Text(context.l10n.createCriticalShiftSub),
               ),
             const SizedBox(height: 8),
             // Audio — the SINGLE source of truth for this alarm's sound. Tapping
@@ -819,7 +846,10 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Ringtone', style: theme.textTheme.labelLarge),
+                            Text(
+                              context.l10n.createRingtone,
+                              style: theme.textTheme.labelLarge,
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               ringtoneName,
@@ -844,7 +874,9 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                     IconButton(
                       key: const ValueKey('create-alarm-ringtone-preview'),
                       onPressed: _toggleRingtonePreview,
-                      tooltip: _ringtonePreviewing ? 'Stop' : 'Play',
+                      tooltip: _ringtonePreviewing
+                          ? context.l10n.commonStop
+                          : context.l10n.commonPlay,
                       icon: Icon(
                         _ringtonePreviewing
                             ? Icons.stop_circle_outlined
@@ -871,28 +903,31 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                 value: alarmSettings.vibrationEnabled,
                 onChanged: _setVibration,
                 secondary: const Icon(Icons.vibration),
-                title: const Text('Vibrate'),
+                title: Text(context.l10n.createVibrate),
               ),
               const SizedBox(height: 8),
             ],
             Align(
               alignment: Alignment.centerLeft,
-              child: Text('Repeat', style: theme.textTheme.labelLarge),
+              child: Text(
+                context.l10n.createRepeat,
+                style: theme.textTheme.labelLarge,
+              ),
             ),
             const SizedBox(height: 8),
             SegmentedButton<AppAlarmRepeatType>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: AppAlarmRepeatType.followsRotation,
-                  label: Text('Rotation'),
+                  label: Text(context.l10n.createRepeatRotation),
                 ),
                 ButtonSegment(
                   value: AppAlarmRepeatType.weekly,
-                  label: Text('Weekly'),
+                  label: Text(context.l10n.createRepeatWeekly),
                 ),
                 ButtonSegment(
                   value: AppAlarmRepeatType.oneTime,
-                  label: Text('One time'),
+                  label: Text(context.l10n.createRepeatOneTime),
                 ),
               ],
               selected: {_repeatType},
@@ -918,7 +953,11 @@ class _CreateAlarmSheetState extends State<CreateAlarmSheet> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(_isEditing ? 'Save changes' : 'Save'),
+                  : Text(
+                      _isEditing
+                          ? context.l10n.commonSaveChanges
+                          : context.l10n.commonSave,
+                    ),
             ),
           ],
         ),
@@ -975,7 +1014,7 @@ class _OffsetPickerDialogState extends State<_OffsetPickerDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('Time before shift'),
+      title: Text(context.l10n.createTimeBeforeShift),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -995,8 +1034,10 @@ class _OffsetPickerDialogState extends State<_OffsetPickerDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            '${formatLeadOffset(_value.round())} before '
-            '${widget.shiftLabel} shifts',
+            context.l10n.alarmsLeadBefore(
+              formatLeadOffset(_value.round()),
+              context.l10n.alarmsShiftsOfType(widget.shiftLabel),
+            ),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1014,8 +1055,11 @@ class _OffsetPickerDialogState extends State<_OffsetPickerDialog> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('5 min', style: theme.textTheme.bodySmall),
-              Text('4 h', style: theme.textTheme.bodySmall),
+              Text(
+                context.l10n.durationMin(5),
+                style: theme.textTheme.bodySmall,
+              ),
+              Text(context.l10n.durationH(4), style: theme.textTheme.bodySmall),
             ],
           ),
         ],
@@ -1023,12 +1067,12 @@ class _OffsetPickerDialogState extends State<_OffsetPickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.commonCancel),
         ),
         FilledButton(
           key: const ValueKey('offset-picker-ok'),
           onPressed: () => Navigator.of(context).pop(_value.round()),
-          child: const Text('OK'),
+          child: Text(context.l10n.commonOk),
         ),
       ],
     );

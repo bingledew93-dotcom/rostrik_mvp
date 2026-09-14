@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Shift berikutnya dalam sekejap</string>
+    <string name="alarm_fallback_title">Alarm</string>
+    <string name="alarm_hint_critical">Alarm kritis\nGoyangkan kuat-kuat untuk mematikan</string>
+    <string name="alarm_hint_slide">Geser tuas di bawah untuk mematikan</string>
+    <string name="alarm_snooze_button">TUNDA (%1$d MNT)</string>
+    <string name="alarm_slide_to_dismiss">Geser untuk mematikan</string>
+    <string name="channel_alarm_name">Alarm</string>
+    <string name="channel_alarm_description">Menampilkan alarm layar penuh saat alarm shift tiba.</string>
+    <string name="channel_alarm_playback_name">Pemutaran alarm</string>
+    <string name="channel_alarm_playback_description">Menjaga alarm dengan nada kustom tetap berbunyi dengan andal.</string>
+    <string name="channel_sleep_name">Suara tidur</string>
+    <string name="channel_sleep_description">Tetap memutar suara tidur saat layar mati.</string>
+    <string name="channel_reminders_name">Pengingat</string>
+    <string name="channel_reminders_description">Pengingat opsional untuk acara, tugas, dan ulang tahun.</string>
+    <string name="sleep_sound_fallback">Suara tidur</string>
+    <string name="sleep_playing">Memutar</string>
+    <string name="sleep_playing_stops_in">Memutar · berhenti dalam %1$d mnt</string>
+    <string name="sleep_stop">Stop</string>
+    <string name="ringtone_picker_title">Pilih nada alarm</string>
+    <string name="ringtone_system_fallback">Nada sistem</string>
+    <string name="widget_off_rdo">🛌 Libur</string>
+    <string name="widget_no_shifts">Belum ada shift</string>
+    <string name="duration_m">%1$d mnt</string>
+    <string name="duration_h">%1$d jam</string>
+    <string name="duration_h_m">%1$d jam %2$d mnt</string>
+    <string name="duration_d">%1$d hr</string>
+    <string name="duration_d_h">%1$d hr %2$d jam</string>
+</resources>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 import 'package:rostrik_mvp/legal/legal.dart';
 import 'package:rostrik_mvp/ui/legal_consent_screen.dart';
 
@@ -15,7 +16,11 @@ void main() {
     required VoidCallback onAccepted,
   }) async {
     await tester.pumpWidget(
-      MaterialApp(home: LegalConsentScreen(onAccepted: onAccepted)),
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: LegalConsentScreen(onAccepted: onAccepted),
+      ),
     );
     await tester.pumpAndSettle();
   }

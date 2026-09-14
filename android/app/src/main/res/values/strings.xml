@@ -2,4 +2,40 @@
 <resources>
     <!-- Shown under the widget in the launcher's widget picker. -->
     <string name="widget_description">Your next shift, at a glance</string>
+
+    <!-- Full-screen alarm (AlarmActivity). -->
+    <string name="alarm_fallback_title">Alarm</string>
+    <string name="alarm_hint_critical">Critical alarm\nShake firmly to dismiss</string>
+    <string name="alarm_hint_slide">Slide the handle below to dismiss</string>
+    <string name="alarm_snooze_button">SNOOZE (%1$d MIN)</string>
+    <string name="alarm_slide_to_dismiss">Slide to dismiss</string>
+
+    <!-- Notification channels (names appear in system notification settings). -->
+    <string name="channel_alarm_name">Alarm</string>
+    <string name="channel_alarm_description">Fires the full-screen alarm when a shift alarm is due.</string>
+    <string name="channel_alarm_playback_name">Alarm playback</string>
+    <string name="channel_alarm_playback_description">Keeps a ringing custom alarm playing reliably.</string>
+    <string name="channel_sleep_name">Sleep sounds</string>
+    <string name="channel_sleep_description">Keeps a sleep sound playing with the screen off.</string>
+    <string name="channel_reminders_name">Reminders</string>
+    <string name="channel_reminders_description">Optional nudges for calendar events, tasks and birthdays.</string>
+
+    <!-- Sleep sound foreground notification. -->
+    <string name="sleep_sound_fallback">Sleep sound</string>
+    <string name="sleep_playing">Playing</string>
+    <string name="sleep_playing_stops_in">Playing · stops in %1$d min</string>
+    <string name="sleep_stop">Stop</string>
+
+    <!-- System ringtone picker. -->
+    <string name="ringtone_picker_title">Select alarm tone</string>
+    <string name="ringtone_system_fallback">System tone</string>
+
+    <!-- Home-screen widget fallbacks + countdown units. -->
+    <string name="widget_off_rdo">🛌 Off / RDO</string>
+    <string name="widget_no_shifts">No shifts yet</string>
+    <string name="duration_m">%1$dm</string>
+    <string name="duration_h">%1$dh</string>
+    <string name="duration_h_m">%1$dh %2$dm</string>
+    <string name="duration_d">%1$dd</string>
+    <string name="duration_d_h">%1$dd %2$dh</string>
 </resources>

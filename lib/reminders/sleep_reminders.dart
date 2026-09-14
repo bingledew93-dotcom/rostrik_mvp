@@ -1,6 +1,7 @@
 import '../data/models/shift_type.dart';
 import '../logic/sleep_plan.dart';
 import 'reminder_id.dart';
+import '../l10n/l10n.dart';
 
 /// Pure, plugin-free logic for the Sleep tab's gentle nudges: which reminders a
 /// given [SleepPlan] should arm, when, and with what copy. Kept apart from
@@ -79,11 +80,10 @@ List<SleepReminder> desiredSleepReminders({
     out.add(SleepReminder(
       id: kSleepWindDownReminderId,
       at: windDown,
-      title: 'Time to wind down 🌙',
+      title: currentL10n.notifWindDownTitle,
       body: bedtime != null
-          ? 'Ease off the screens — target bedtime is '
-              '${_clock(bedtime, use24Hour)}.'
-          : 'Ease off the screens and start winding down for the night.',
+          ? currentL10n.notifWindDownBodyTarget(_clock(bedtime, use24Hour))
+          : currentL10n.notifWindDownBody,
     ));
   }
 
@@ -91,11 +91,14 @@ List<SleepReminder> desiredSleepReminders({
     out.add(SleepReminder(
       id: kSleepBedtimeReminderId,
       at: bedtime,
-      title: 'Bedtime 😴',
+      title: currentL10n.notifBedtimeTitle,
       body: wake != null
-          ? 'Head to bed for ~${plan.sleepGoalHours}h before your $shiftLabel — '
-              'wake-up at ${_clock(wake, use24Hour)}.'
-          : 'Head to bed to hit your ${plan.sleepGoalHours}h sleep goal.',
+          ? currentL10n.notifBedtimeBodyWake(
+              plan.sleepGoalHours,
+              shiftLabel,
+              _clock(wake, use24Hour),
+            )
+          : currentL10n.notifBedtimeBody(plan.sleepGoalHours),
     ));
   }
 
@@ -103,16 +106,17 @@ List<SleepReminder> desiredSleepReminders({
 }
 
 String _shiftLabel(ShiftType? type) {
+  final l10n = currentL10n;
   switch (type) {
     case ShiftType.day:
-      return 'day shift';
+      return l10n.notifShiftDay;
     case ShiftType.afternoon:
-      return 'afternoon shift';
+      return l10n.notifShiftAfternoon;
     case ShiftType.night:
-      return 'night shift';
+      return l10n.notifShiftNight;
     case ShiftType.off:
     case null:
-      return 'shift';
+      return l10n.notifShiftGeneric;
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../alarms/alarm_health.dart';
+import '../../l10n/l10n.dart';
 import 'battery_survival_dialog.dart';
 
 /// Step 2 of onboarding. Notifications + Exact Alarms are standard toggles
@@ -95,7 +96,7 @@ class _PermissionsScreenState extends State<PermissionsScreen>
           icon: const Icon(Icons.arrow_back),
           onPressed: widget.onBack,
         ),
-        title: const Text('Permissions'),
+        title: Text(context.l10n.permsTitle),
       ),
       body: SafeArea(
         top: false,
@@ -107,9 +108,7 @@ class _PermissionsScreenState extends State<PermissionsScreen>
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                 child: Text(
-                  'Rostrik needs a few permissions to fire alarms '
-                  'reliably. You can change these later in system '
-                  'settings.',
+                  context.l10n.permsIntro,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -117,16 +116,16 @@ class _PermissionsScreenState extends State<PermissionsScreen>
               ),
               _PermissionTile(
                 icon: Icons.notifications_active_outlined,
-                title: 'Notifications',
-                subtitle: 'Required to show the wake-up screen.',
+                title: context.l10n.permsNotifications,
+                subtitle: context.l10n.permsNotificationsSub,
                 status: _notifications,
                 onTap: () => _request(Permission.notification),
               ),
               const SizedBox(height: 8),
               _PermissionTile(
                 icon: Icons.alarm_outlined,
-                title: 'Exact Alarms',
-                subtitle: 'Lets alarms fire at the exact scheduled time.',
+                title: context.l10n.permsExactAlarms,
+                subtitle: context.l10n.permsExactAlarmsSub,
                 status: _exactAlarms,
                 onTap: () => _request(Permission.scheduleExactAlarm),
                 // Android 12+ surface; iOS treats it as restricted.
@@ -153,7 +152,7 @@ class _PermissionsScreenState extends State<PermissionsScreen>
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: const Text('Continue'),
+                  child: Text(context.l10n.commonContinue),
                 ),
               ),
               const SizedBox(height: 8),
@@ -247,15 +246,15 @@ class _BatteryEducationTile extends StatelessWidget {
           color: granted ? okGreen : scheme.onSurfaceVariant,
         ),
         title: Text(
-          'Battery Unrestricted',
+          context.l10n.permsBatteryUnrestricted,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
         ),
         subtitle: Text(
           granted
-              ? 'Alarms are protected from battery optimisation.'
-              : 'Some phones kill background apps. Tap to fix.',
+              ? context.l10n.permsBatteryGrantedSub
+              : context.l10n.permsBatteryDeniedSub,
         ),
         trailing: granted
             ? _UnrestrictedBadge(color: okGreen)
@@ -289,7 +288,7 @@ class _UnrestrictedBadge extends StatelessWidget {
           Icon(Icons.check_circle, size: 16, color: color),
           const SizedBox(width: 5),
           Text(
-            'Unrestricted',
+            context.l10n.permsUnrestrictedBadge,
             style: theme.textTheme.labelMedium?.copyWith(
               color: color,
               fontWeight: FontWeight.w700,

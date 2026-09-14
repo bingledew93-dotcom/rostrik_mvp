@@ -10,6 +10,7 @@ import '../reminders/reminder_id.dart';
 import '../util/clock.dart';
 import 'entitlement.dart';
 import 'entitlement_store.dart';
+import '../l10n/l10n.dart';
 
 /// Stable sentinel the trial-ending reminder id is derived from, in the same
 /// id-space as activity reminders (astronomically unlikely to collide with a
@@ -154,8 +155,8 @@ class EntitlementService extends ChangeNotifier with WidgetsBindingObserver {
     await _reminders.schedule(
       id: _reminderId,
       at: at,
-      title: 'Your Rostrik trial ends tomorrow',
-      body: 'Unlock full access to keep your shift alarms firing.',
+      title: currentL10n.notifTrialEndsTitle,
+      body: currentL10n.notifTrialEndsBody,
     );
   }
 

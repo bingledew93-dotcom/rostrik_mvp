@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">ورديتك التالية بنظرة سريعة</string>
+    <string name="alarm_fallback_title">منبه</string>
+    <string name="alarm_hint_critical">منبه حرج\nهزّ الهاتف بقوة للإيقاف</string>
+    <string name="alarm_hint_slide">اسحب المقبض أدناه للإيقاف</string>
+    <string name="alarm_snooze_button">غفوة (%1$d د)</string>
+    <string name="alarm_slide_to_dismiss">اسحب للإيقاف</string>
+    <string name="channel_alarm_name">المنبه</string>
+    <string name="channel_alarm_description">يعرض المنبه بملء الشاشة عند حلول موعد منبه الوردية.</string>
+    <string name="channel_alarm_playback_name">تشغيل المنبه</string>
+    <string name="channel_alarm_playback_description">يُبقي المنبه ذا النغمة المخصصة يرن بموثوقية.</string>
+    <string name="channel_sleep_name">أصوات النوم</string>
+    <string name="channel_sleep_description">يستمر في تشغيل صوت النوم والشاشة مطفأة.</string>
+    <string name="channel_reminders_name">التذكيرات</string>
+    <string name="channel_reminders_description">تذكيرات اختيارية للأحداث والمهام وأعياد الميلاد.</string>
+    <string name="sleep_sound_fallback">صوت النوم</string>
+    <string name="sleep_playing">قيد التشغيل</string>
+    <string name="sleep_playing_stops_in">قيد التشغيل · يتوقف بعد %1$d د</string>
+    <string name="sleep_stop">إيقاف</string>
+    <string name="ringtone_picker_title">اختيار نغمة المنبه</string>
+    <string name="ringtone_system_fallback">نغمة النظام</string>
+    <string name="widget_off_rdo">🛌 راحة</string>
+    <string name="widget_no_shifts">لا ورديات بعد</string>
+    <string name="duration_m">%1$d د</string>
+    <string name="duration_h">%1$d س</string>
+    <string name="duration_h_m">%1$d س %2$d د</string>
+    <string name="duration_d">%1$d ي</string>
+    <string name="duration_d_h">%1$d ي %2$d س</string>
+</resources>

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/models/shift.dart';
+import '../l10n/l10n.dart';
 import '../data/models/shift_cycle.dart';
 import '../data/models/shift_type.dart';
 import '../logic/cycle_service.dart';
@@ -168,7 +169,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
       initialDate: _startDate ?? today,
       firstDate: today,
       lastDate: DateTime(today.year + 10, today.month, today.day),
-      helpText: 'Pick the roster start date',
+      helpText: context.l10n.builderPickRosterStart,
     );
     if (!mounted || picked == null) return;
     setState(() => _startDate = DateTime(picked.year, picked.month, picked.day));
@@ -227,6 +228,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     final cycleService = editCycle != null ? context.read<CycleService>() : null;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final l10n = context.l10n;
     final start = _startDate!;
     final name = _nameController.text.trim();
 
@@ -242,7 +244,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     try {
       final shifts = await generator.generateAndPersistCustom(
         label: name.isEmpty
-            ? (editCycle?.label ?? 'Custom roster')
+            ? (editCycle?.label ?? l10n.builderCustomRosterFallback)
             : name,
         startDate: start,
         cycleLengthDays: _cycleLengthDays,
@@ -270,8 +272,8 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
         SnackBar(
           content: Text(
             _isEditing
-                ? 'Roster updated — ${shifts.length} shifts scheduled'
-                : 'Created — ${shifts.length} shifts scheduled',
+                ? l10n.builderRosterUpdated(shifts.length)
+                : l10n.builderRosterCreated(shifts.length),
           ),
         ),
       );
@@ -286,7 +288,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
       if (!mounted) return;
       setState(() {
         _generating = false;
-        _validationError = 'Could not create the roster: $e';
+        _validationError = l10n.builderCouldNotCreate('$e');
       });
     }
   }
@@ -302,6 +304,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     final generator = context.read<ShiftGenerator>();
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final l10n = context.l10n;
 
     final imported = await showImportAiModal(
       context,
@@ -322,14 +325,14 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
         } on RosterGenerationException catch (e) {
           return e.message; // shown inline in the sheet; nothing was written.
         } catch (e) {
-          return 'Could not import the roster: $e';
+          return l10n.builderCouldNotImport('$e');
         }
       },
     );
 
     if (imported == true && mounted) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Roster imported to your calendar')),
+        SnackBar(content: Text(l10n.builderRosterImported)),
       );
       navigator.pop(true);
     }
@@ -348,13 +351,14 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
       initialDate: _startDate ?? today,
       firstDate: today,
       lastDate: DateTime(today.year + 10, today.month, today.day),
-      helpText: 'Pick the start date for the scanned roster',
+      helpText: context.l10n.builderPickScanStart,
     );
     if (!mounted || anchor == null) return;
 
     setState(() => _scanning = true);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final l10n = context.l10n;
 
     final ScanResult result;
     try {
@@ -364,17 +368,18 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _scanning = false);
-      messenger.showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.builderScanFailed('$e'))),
+      );
       return;
     }
     if (!mounted) return;
     setState(() => _scanning = false);
 
     if (result.blocks.isEmpty) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text('No shift times recognised. Try cropping tighter '
-            'around the grid.'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.builderNoTimesRecognised)),
+      );
       return;
     }
 
@@ -385,7 +390,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
           anchorDate: DateTime(anchor.year, anchor.month, anchor.day),
           blocks: ScannedRosterInjection.map(result.blocks),
           sourceImage: result.croppedImage,
-          label: name.isEmpty ? 'Scanned roster' : name,
+          label: name.isEmpty ? l10n.builderScannedRosterFallback : name,
         ),
       ),
     );
@@ -403,7 +408,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
             ListTile(
               key: const ValueKey('roster-scan-camera'),
               leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text('Scan with camera'),
+              title: Text(sheetCtx.l10n.builderScanCamera),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
                 _scanEntry(fromGallery: false);
@@ -412,7 +417,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
             ListTile(
               key: const ValueKey('roster-scan-gallery'),
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Import a screenshot'),
+              title: Text(sheetCtx.l10n.builderImportScreenshot),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
                 _scanEntry(fromGallery: true);
@@ -442,15 +447,17 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _isEditing ? 'Edit Roster' : 'New Shift Roster',
+                          _isEditing
+                              ? context.l10n.builderEditRoster
+                              : context.l10n.builderNewRoster,
                           style: theme.textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           _isEditing
-                              ? 'Change and replace this saved roster'
-                              : 'Set up your shift rotation pattern',
+                              ? context.l10n.builderEditSub
+                              : context.l10n.builderNewSub,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
@@ -460,7 +467,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                   IconButton(
                     key: const ValueKey('roster-close'),
                     icon: const Icon(Icons.close),
-                    tooltip: 'Close',
+                    tooltip: context.l10n.commonClose,
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ],
@@ -474,13 +481,13 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                     key: const ValueKey('roster-name'),
                     controller: _nameController,
                     textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Roster name (e.g. My 14-Day Rotation)',
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      hintText: context.l10n.builderNameHint,
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _sectionLabel(theme, 'CYCLE LENGTH'),
+                  _sectionLabel(theme, context.l10n.builderCycleLength),
                   const SizedBox(height: 8),
                   _buildCycleChips(theme),
                   if (_customLength) ...[
@@ -488,11 +495,11 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                     _buildCustomLengthStepper(theme),
                   ],
                   const SizedBox(height: 24),
-                  _sectionLabel(theme, 'START DATE'),
+                  _sectionLabel(theme, context.l10n.builderStartDate),
                   const SizedBox(height: 8),
                   _buildStartDateField(theme),
                   const SizedBox(height: 24),
-                  _sectionLabel(theme, 'SHIFT BLOCKS'),
+                  _sectionLabel(theme, context.l10n.builderShiftBlocks),
                   const SizedBox(height: 8),
                   _buildBlocksSection(theme),
                   const SizedBox(height: 12),
@@ -502,7 +509,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                         ? null
                         : () => _openBlockSheet(),
                     icon: const Icon(Icons.add),
-                    label: const Text('Add Shift Block'),
+                    label: Text(context.l10n.builderAddShiftBlock),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -526,7 +533,11 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Text(_isEditing ? 'Save Changes' : 'Create Roster'),
+                        : Text(
+                            _isEditing
+                                ? context.l10n.builderSaveChanges
+                                : context.l10n.builderCreateRoster,
+                          ),
                   ),
                   // EDIT mode is a REPLACE: no import/scan escape hatches (those
                   // add separate shifts), just a heads-up that per-shift marks
@@ -535,8 +546,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                   if (_isEditing) ...[
                     const SizedBox(height: 12),
                     Text(
-                      'Saving replaces this roster. Any leave / time-off marks '
-                      'painted on it will reset.',
+                      context.l10n.builderReplaceWarning,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -547,11 +557,11 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                       child: TextButton(
                         key: const ValueKey('roster-back-to-options'),
                         onPressed: () => Navigator.of(context).maybePop(),
-                        child: const Text('Back to options'),
+                        child: Text(context.l10n.builderBackToOptions),
                       ),
                     ),
                     const Divider(height: 32),
-                    _sectionLabel(theme, 'OR IMPORT AN EXISTING ROSTER'),
+                    _sectionLabel(theme, context.l10n.builderOrImport),
                     const SizedBox(height: 10),
                     // AI-bridge import (Phase 2): paste any roster into an AI app,
                     // paste its reply back, and land dated shifts on the calendar.
@@ -560,7 +570,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                       onPressed:
                           (_generating || _scanning) ? null : _openAiImport,
                       icon: const Icon(Icons.auto_awesome, size: 18),
-                      label: const Text('Import via AI'),
+                      label: Text(context.l10n.builderImportViaAi),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -578,8 +588,8 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
                             size: 18),
                         label: Text(
                           _scanning
-                              ? 'Scanning…'
-                              : 'Scan a roster photo instead',
+                              ? context.l10n.builderScanning
+                              : context.l10n.builderScanInstead,
                         ),
                       ),
                     ),
@@ -610,13 +620,13 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
         for (final len in _presetLengths)
           ChoiceChip(
             key: ValueKey('cycle-chip-$len'),
-            label: Text('${len}d'),
+            label: Text(context.l10n.durationDayShort(len)),
             selected: !_customLength && _cycleLengthDays == len,
             onSelected: (_) => _selectPresetLength(len),
           ),
         ChoiceChip(
           key: const ValueKey('cycle-chip-custom'),
-          label: const Text('Custom'),
+          label: Text(context.l10n.builderCustomChip),
           selected: _customLength,
           onSelected: (_) => _selectCustomLength(),
         ),
@@ -627,7 +637,10 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
   Widget _buildCustomLengthStepper(ThemeData theme) {
     return Row(
       children: [
-        Text('Cycle length', style: theme.textTheme.bodyMedium),
+        Text(
+          context.l10n.builderCycleLengthLabel,
+          style: theme.textTheme.bodyMedium,
+        ),
         const Spacer(),
         IconButton(
           key: const ValueKey('cycle-custom-minus'),
@@ -637,7 +650,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
               : null,
         ),
         Text(
-          '$_cycleLengthDays days',
+          context.l10n.builderDaysCount(_cycleLengthDays),
           key: const ValueKey('cycle-custom-value'),
           style: theme.textTheme.titleMedium
               ?.copyWith(fontWeight: FontWeight.w700),
@@ -661,7 +674,9 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
       icon: const Icon(Icons.calendar_today_outlined, size: 18),
       label: Align(
         alignment: Alignment.centerLeft,
-        child: Text(start == null ? 'Pick a date' : formatFullDate(start)),
+        child: Text(
+          start == null ? context.l10n.builderPickADate : formatFullDate(start),
+        ),
       ),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -685,13 +700,13 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
         child: Column(
           children: [
             Text(
-              'No blocks yet',
+              context.l10n.builderNoBlocksYet,
               style: theme.textTheme.titleSmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 4),
             Text(
-              'Add shift blocks to define your rotation',
+              context.l10n.builderNoBlocksSub,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
@@ -727,20 +742,20 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
           ),
         ),
         title: Text('${shiftTypeLabel(block.type)} · $time'),
-        subtitle: Text('Days $days'),
+        subtitle: Text(context.l10n.builderDaysLine(days)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               key: ValueKey('roster-block-edit-$index'),
               icon: const Icon(Icons.edit_outlined),
-              tooltip: 'Edit block',
+              tooltip: context.l10n.builderEditBlock,
               onPressed: () => _openBlockSheet(existingIndex: index),
             ),
             IconButton(
               key: ValueKey('roster-block-delete-$index'),
               icon: const Icon(Icons.delete_outline),
-              tooltip: 'Remove block',
+              tooltip: context.l10n.builderRemoveBlock,
               onPressed: () => _removeBlock(index),
             ),
           ],
@@ -886,7 +901,9 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                widget.existing == null ? 'Add shift block' : 'Edit shift block',
+                widget.existing == null
+                    ? context.l10n.blockAddTitle
+                    : context.l10n.blockEditTitle,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700),
@@ -895,13 +912,19 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
               // Off is excluded — an un-painted day is already Off.
               SegmentedButton<ShiftType>(
                 key: const ValueKey('block-type'),
-                segments: const [
-                  ButtonSegment(value: ShiftType.day, label: Text('Day')),
+                segments: [
+                  ButtonSegment(
+                    value: ShiftType.day,
+                    label: Text(context.l10n.shiftTypeDay),
+                  ),
                   ButtonSegment(
                     value: ShiftType.afternoon,
-                    label: Text('Afternoon'),
+                    label: Text(context.l10n.shiftTypeAfternoon),
                   ),
-                  ButtonSegment(value: ShiftType.night, label: Text('Night')),
+                  ButtonSegment(
+                    value: ShiftType.night,
+                    label: Text(context.l10n.shiftTypeNight),
+                  ),
                 ],
                 selected: {_type},
                 onSelectionChanged: (s) => setState(() => _type = s.single),
@@ -916,7 +939,10 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
                       onPressed: () => _pickTime(start: true),
                       child: Column(
                         children: [
-                          Text('Start', style: theme.textTheme.labelSmall),
+                          Text(
+                            context.l10n.blockStart,
+                            style: theme.textTheme.labelSmall,
+                          ),
                           Text(
                             formatClock(_startMinutes,
                                 use24Hour: widget.use24Hour),
@@ -933,7 +959,10 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
                       onPressed: () => _pickTime(start: false),
                       child: Column(
                         children: [
-                          Text('End', style: theme.textTheme.labelSmall),
+                          Text(
+                            context.l10n.blockEnd,
+                            style: theme.textTheme.labelSmall,
+                          ),
                           Text(
                             formatClock(_endMinutes,
                                 use24Hour: widget.use24Hour),
@@ -949,7 +978,7 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Tap the days this shift covers',
+                  context.l10n.blockTapDays,
                   style: theme.textTheme.labelLarge,
                 ),
               ),
@@ -958,7 +987,7 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
               const SizedBox(height: 8),
               if (_conflictDays.isEmpty)
                 Text(
-                  'Un-tapped days are Off.',
+                  context.l10n.blockUntappedOff,
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 )
@@ -971,9 +1000,9 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'This time overlaps another shift on '
-                        'day ${formatDayIndexRanges(_conflictDays)} — '
-                        'change the time or those days.',
+                        context.l10n.blockOverlap(
+                          formatDayIndexRanges(_conflictDays),
+                        ),
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: scheme.error),
                       ),
@@ -994,7 +1023,9 @@ class _AddShiftBlockSheetState extends State<_AddShiftBlockSheet> {
                         )
                     : null,
                 child: Text(
-                  widget.existing == null ? 'Add block' : 'Save block',
+                  widget.existing == null
+                      ? context.l10n.blockAdd
+                      : context.l10n.blockSave,
                 ),
               ),
             ],

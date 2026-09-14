@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rostrik_mvp/data/models/shift.dart';
 import 'package:rostrik_mvp/data/models/shift_type.dart';
 import 'package:rostrik_mvp/ui/calendar/shift_calendar.dart';
+import 'package:rostrik_mvp/l10n/l10n.dart';
 
 void main() {
   final now = DateTime.now();
@@ -40,6 +41,8 @@ void main() {
     final taps = <(DateTime, List<Shift>)>[];
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: ShiftCalendarView(
             shifts: shifts,
@@ -56,6 +59,8 @@ void main() {
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: ShiftCalendarView(
             shifts: [shift(id: 's15', date: dayInMonth(15))],
@@ -116,6 +121,8 @@ void main() {
         ValueKey('activity-marker-${d.year}-${d.month}-${d.day}');
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: ShiftCalendarView(
             shifts: const [],

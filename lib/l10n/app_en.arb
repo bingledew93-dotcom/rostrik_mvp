@@ -1,0 +1,1135 @@
+{
+  "@@locale": "en",
+  "appTitle": "Rostrik",
+  "legalTitle": "Before you start",
+  "legalBodyOsCaveat": "Rostrik is built to get you up for every shift. One honest heads-up: on any phone, the operating system — not the app — has the final say, and in rare cases it can delay or silence any alarm app (aggressive battery savers, force-stops, or right after system updates).",
+  "legalBodyBackupAdvice": "For shifts you absolutely cannot miss, keep a second alarm as a backup — good practice with any alarm, including the one built into your phone.",
+  "legalReviewAndAccept": "Please review and accept:",
+  "legalPrivacyPolicy": "Privacy Policy",
+  "legalTermsOfUse": "Terms of Use",
+  "legalConsentCheckbox": "I understand the operating system can affect any alarm app, and I accept the Privacy Policy and Terms of Use.",
+  "legalAgreeContinue": "Agree & Continue",
+  "commonSaving": "Saving…",
+  "commonCouldNotOpenLink": "Could not open the link.",
+  "welcomeTagline": "The smart alarm clock built for shift workers.",
+  "welcomeSubTagline": "Alarms that follow your rotating roster — not just weekdays.",
+  "welcomeTrialTitle": "{days}-day free trial",
+  "@welcomeTrialTitle": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "welcomeTrialBody": "Full access to every feature — no card needed. Just a one-time purchase after, never a subscription.",
+  "welcomeGetStarted": "Get Started",
+  "welcomeSkip": "Skip / Set up later",
+  "welcomeTimeFormat": "Time format",
+  "welcomeWeekStarts": "Week starts",
+  "common12h": "12h",
+  "common24h": "24h",
+  "commonSundayShort": "Sun",
+  "commonMondayShort": "Mon",
+  "rosterTypeTitle": "Choose a roster type",
+  "rosterTypeQuestion": "What does your roster look like?",
+  "rosterTypeDay": "Day Shifts",
+  "rosterTypeNight": "Night Shifts",
+  "rosterTypeRotating": "Rotating",
+  "rosterTypeCustom": "Custom",
+  "commonContinue": "Continue",
+  "commonComingSoon": "Coming soon",
+  "permsTitle": "Permissions",
+  "permsIntro": "Rostrik needs a few permissions to fire alarms reliably. You can change these later in system settings.",
+  "permsNotifications": "Notifications",
+  "permsNotificationsSub": "Required to show the wake-up screen.",
+  "permsExactAlarms": "Exact Alarms",
+  "permsExactAlarmsSub": "Lets alarms fire at the exact scheduled time.",
+  "permsBatteryUnrestricted": "Battery Unrestricted",
+  "permsBatteryGrantedSub": "Alarms are protected from battery optimisation.",
+  "permsBatteryDeniedSub": "Some phones kill background apps. Tap to fix.",
+  "permsUnrestrictedBadge": "Unrestricted",
+  "batteryDialogTitle": "Keep alarms alive",
+  "batteryDialogIntro": "Some phones (Samsung, Xiaomi, Oppo, Huawei) aggressively shut down background apps to save battery. If that happens to Rostrik, an alarm can be silenced before it fires.",
+  "batteryDialogMarkUnrestricted": "Mark Rostrik as Unrestricted to stop this:",
+  "batteryStep1": "Open this app’s settings (button below).",
+  "batteryStep2": "Tap Battery (or \"App battery usage\").",
+  "batteryStep3": "Choose Unrestricted (not \"Optimised\" or \"Restricted\").",
+  "batteryStep4": "If you see \"Allow background activity\", switch it on too.",
+  "batteryStep5": "Turn OFF \"Pause app activity if unused\" (or \"Remove permissions if app is unused\") so Android can’t revoke alarm permissions while you’re away.",
+  "commonNotNow": "Not now",
+  "batteryGoToSettings": "Go to Settings",
+  "armEngineTitle": "Arm your alarms",
+  "armEngineRosterReady": "Your roster is ready",
+  "armEngineCycleStarts": "{label} · starts {date}",
+  "@armEngineCycleStarts": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "armEngineSwitchOn": "We'll switch on {summary} wake-up alarms before every matching shift.",
+  "@armEngineSwitchOn": {
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "armEngineArming": "Arming…",
+  "armEngineCta": "Automate My Alarms",
+  "armEngineLeadTimeLabel": "Alarm lead time",
+  "armEngineLeadTimeHelper": "How early the alarm rings before a shift starts.",
+  "shiftTypeDay": "Day",
+  "shiftTypeAfternoon": "Afternoon",
+  "shiftTypeNight": "Night",
+  "shiftTypeOff": "Off",
+  "weekdaysNone": "No days",
+  "weekdaysEveryDay": "Every day",
+  "weekdaysWeekdays": "Weekdays",
+  "weekdaysWeekends": "Weekends",
+  "durationMin": "{m} min",
+  "@durationMin": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "durationH": "{h} h",
+  "@durationH": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHMin": "{h} h {m} min",
+  "@durationHMin": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "durationMinShort": "{m}m",
+  "@durationMinShort": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHShort": "{h}h",
+  "@durationHShort": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "durationHMinShort": "{h}h {m}m",
+  "@durationHMinShort": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "commonClose": "Close",
+  "commonSkip": "Skip",
+  "commonBack": "Back",
+  "commonDone": "Done",
+  "commonNext": "Next",
+  "walkthroughIntroTitle": "A 60-second tour",
+  "walkthroughIntroBodyTwo": "Two things that make Rostrik click. You can skip anytime.",
+  "walkthroughIntroBodyOne": "The thing that makes Rostrik click. You can skip anytime.",
+  "walkthroughPaintLabel": "Paint your roster",
+  "walkthroughPaintDetail": "Tap the days you work — that fast.",
+  "walkthroughShakeLabel": "Shake to dismiss",
+  "walkthroughShakeDetail": "A firm shake switches off a critical alarm.",
+  "walkthroughTryEach": "Tap Next to try each one.",
+  "walkthroughTryIt": "Tap Next to try it.",
+  "walkthroughPaintBody": "Tap the days you work. In the real builder you can add more blocks (afternoons, nights) the same way.",
+  "walkthroughPaintPrompt": "Tap a day to paint a Day shift onto it.",
+  "walkthroughPaintFeedback": "{count, plural, one{Nice! That day is a Day block. Untapped days stay Off — that easy.} other{Nice! Those {count} days are a Day block. Untapped days stay Off — that easy.}}",
+  "@walkthroughPaintFeedback": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "walkthroughShakeBody": "Critical-Shift alarms need a firm, steady shake to switch off, so a half-asleep tap can’t. Give it a go — shake your phone.",
+  "walkthroughShakeSuccess": "You’ve got it!",
+  "walkthroughShakeSuccessDetail": "That’s exactly how you’ll silence a critical alarm.",
+  "walkthroughDoneTitle": "You’re all set",
+  "walkthroughDoneBody": "Build a roster anytime from Manage, and revisit this tour from Settings → Help whenever you like.",
+  "navDashboard": "Dashboard",
+  "navTimeline": "Timeline",
+  "navManage": "Manage",
+  "navAlarms": "Alarms",
+  "navSleep": "Sleep",
+  "onbPatternTitle": "Pick your rotation",
+  "purchaseTrialEnded": "Your free trial has ended",
+  "purchaseBody": "Unlock Rostrik once to keep your shift alarms firing. Your roster, alarms and settings are all safe — they resume the moment you unlock.",
+  "purchaseAlarmsWontRing": "Until then, alarms won’t ring.",
+  "purchaseUnlock": "Unlock full access",
+  "purchaseUnlockWithPrice": "Unlock full access · {price}",
+  "@purchaseUnlockWithPrice": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseRestore": "Restore purchase",
+  "purchaseOneTime": "One-time purchase. No subscription.",
+  "purchaseUnavailable": "Purchases aren’t available right now. Check your connection and try again.",
+  "purchaseCheckingPrevious": "Checking for a previous purchase…",
+  "settingsTitle": "Settings",
+  "settingsLegalAbout": "LEGAL & ABOUT",
+  "settingsHelp": "HELP",
+  "settingsHowItWorks": "How it works",
+  "settingsReplayTourShake": "Replay the quick tour — paint a roster + shake-to-dismiss",
+  "settingsReplayTour": "Replay the quick tour — paint a roster",
+  "settingsScreenTips": "Show screen tips",
+  "settingsScreenTipsSub": "One-time hints on each screen. Turn on to see them again.",
+  "settingsFullAccess": "FULL ACCESS",
+  "settingsFullAccessUnlocked": "Full access unlocked",
+  "settingsThanks": "Thanks for supporting Rostrik.",
+  "settingsTrialDaysLeft": "{days, plural, one{Free trial — 1 day left} other{Free trial — {days} days left}}",
+  "@settingsTrialDaysLeft": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsTrialEnded": "Free trial ended",
+  "settingsUnlockPitch": "Unlock once to keep your shift alarms firing when the trial ends — a one-time purchase, never a subscription.",
+  "settingsRestore": "Restore",
+  "settingsBrandTagline": "Alarms built outside the 9–5",
+  "settingsLeadTime": "Lead time",
+  "settingsLeadTimeSub": "Alarm fires this long before each shift starts.",
+  "settingsSnoozeDuration": "Snooze duration",
+  "settingsSnoozeDurationSub": "How far forward the Snooze button pushes a firing alarm.",
+  "settingsMinutesLabel": "Minutes",
+  "commonMinutes": "{m, plural, one{1 minute} other{{m} minutes}}",
+  "@commonMinutes": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsShiftCycles": "SHIFT CYCLES",
+  "settingsShiftCyclesSub": "Rosters you have generated from a pattern or template.",
+  "settingsAddShiftCycle": "Add Shift Cycle",
+  "settingsNoRosters": "You haven't generated any rosters yet.",
+  "commonDateRange": "{start} – {end}",
+  "@commonDateRange": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "commonEdit": "Edit",
+  "commonDelete": "Delete",
+  "commonCancel": "Cancel",
+  "settingsDeleteRosterTitle": "Delete roster?",
+  "settingsDeleteRosterBody": "Delete \"{label}\"? This will cancel any pending alarms and remove {count, plural, one{1 shift} other{{count} shifts}}.",
+  "@settingsDeleteRosterBody": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsDeletedRoster": "Deleted \"{label}\"",
+  "@settingsDeletedRoster": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commonActive": "Active",
+  "commonUpcoming": "Upcoming",
+  "commonPast": "Past",
+  "settingsWorkHistory": "WORK HISTORY",
+  "settingsWorkHistorySub": "Review and export your completed custom shifts to verify payslips.",
+  "settingsViewWorkHistory": "View & Export Work History",
+  "settingsPreferences": "PREFERENCES",
+  "settingsPreferencesSub": "How your schedule is displayed across the app.",
+  "settingsAppearance": "Appearance",
+  "settingsThemeSystem": "System",
+  "settingsThemeLight": "Light",
+  "settingsThemeDark": "Dark",
+  "settingsThemeSub": "Dark is Rostrik’s default. Light uses a warm cream palette.",
+  "settings24h": "Use 24-Hour Time",
+  "settings24hOn": "Times show as 14:30",
+  "settings24hOff": "Times show as 02:30 PM",
+  "settingsWeekStartTitle": "Start Calendar on Monday",
+  "settingsWeekStartMon": "Weeks begin on Monday",
+  "settingsWeekStartSun": "Weeks begin on Sunday",
+  "settingsTimelineOpensOn": "Timeline opens on",
+  "commonList": "List",
+  "commonMonth": "Month",
+  "settingsCalendar": "CALENDAR",
+  "settingsCalendarSync": "Sync to Google / Device Calendar",
+  "settingsCalendarSyncSub": "Automatically mirror your shifts to a dedicated \"Rostrik Roster\" calendar on your phone.",
+  "settingsCalSyncOff": "Calendar sync off. Upcoming \"Rostrik Roster\" events were cleared.",
+  "settingsCalSyncMirroring": "Mirroring your roster to the \"Rostrik Roster\" calendar…",
+  "settingsCalPermNeeded": "Calendar permission is needed to sync your roster.",
+  "settingsCalBlocked": "Calendar access is blocked. Enable it in system settings to sync.",
+  "settingsCalOpenSettings": "Settings",
+  "settingsCalUnsupported": "Calendar sync isn't available on this device.",
+  "settingsDangerZone": "DANGER ZONE",
+  "settingsDangerZoneSub": "Deletes your roster, alarms, and settings, then restarts onboarding from scratch.",
+  "settingsResetAppData": "Reset App Data",
+  "settingsResetTitle": "Reset app?",
+  "settingsResetBody": "Are you sure? This will delete your roster, alarms, and settings.",
+  "settingsResetConfirm": "Reset",
+  "dashNoUpcomingShifts": "No upcoming shifts",
+  "dashEnjoyTimeOff": "Enjoy your time off.",
+  "dashInProgress": "IN PROGRESS",
+  "dashRotation": "Rotation",
+  "dashAlarmsCantRing": "Alarms can't ring reliably",
+  "dashNotifsOffIssue": "Notifications are off — a ringing alarm can't show its wake screen or be dismissed.",
+  "dashOpenSettings": "Open settings",
+  "dashExactBlockedIssue": "Exact alarms are blocked — wake-ups can't be scheduled at all.",
+  "dashAllow": "Allow",
+  "dashSlideToSkip": "Slide to skip this alarm",
+  "dashSlideToSkipAll": "{count, plural, one{Slide to skip the alarm} other{Slide to skip all {count} alarms}}",
+  "@dashSlideToSkipAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashDismissUpcoming": "Dismiss upcoming alarm · {time}",
+  "@dashDismissUpcoming": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "dashSkipAllForShift": "{count, plural, one{Skip the alarm for this shift} other{Skip all {count} alarms for this shift}}",
+  "@dashSkipAllForShift": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashKeepAlarm": "Keep alarm",
+  "dashMyRotation": "My Rotation",
+  "dashCalendarUpcoming": "Calendar & upcoming shifts",
+  "dashNextShifts": "Next shifts",
+  "dashOpenTimeline": "Open Timeline",
+  "heroStartsIn": "Starts in {countdown}",
+  "@heroStartsIn": {
+    "placeholders": {
+      "countdown": {
+        "type": "String"
+      }
+    }
+  },
+  "heroEndsIn": "Ends in {countdown}",
+  "@heroEndsIn": {
+    "placeholders": {
+      "countdown": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsInPrefix": "Starts in",
+  "heroEndsInPrefix": "Ends in",
+  "heroStartsTodayAt": "Starts today at {time}",
+  "@heroStartsTodayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartedTodayAt": "Started today at {time}",
+  "@heroStartedTodayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsTomorrowAt": "Starts tomorrow at {time}",
+  "@heroStartsTomorrowAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartedYesterdayAt": "Started yesterday at {time}",
+  "@heroStartedYesterdayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsYesterdayAt": "Starts yesterday at {time}",
+  "@heroStartsYesterdayAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartsOnAt": "Starts {date} at {time}",
+  "@heroStartsOnAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "heroStartedOnAt": "Started {date} at {time}",
+  "@heroStartedOnAt": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "shiftTypeDayShift": "Day shift",
+  "shiftTypeAfternoonShift": "Afternoon shift",
+  "shiftTypeNightShift": "Night shift",
+  "heroDayXofY": "Day {x} of {y} — {label}",
+  "@heroDayXofY": {
+    "placeholders": {
+      "x": {
+        "type": "int"
+      },
+      "y": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "heroOffTomorrow": "Off tomorrow",
+  "heroOffInDays": "{days, plural, one{Off in 1 day} other{Off in {days} days}}",
+  "@heroOffInDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "heroBackOnTomorrow": "Back on tomorrow",
+  "heroBackOnInDays": "{days, plural, one{Back on in 1 day} other{Back on in {days} days}}",
+  "@heroBackOnInDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "heroOffRdo": "Off / RDO",
+  "durationDayShort": "{d}d",
+  "@durationDayShort": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
+  "durationDayHourShort": "{d}d {h}h",
+  "@durationDayHourShort": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      },
+      "h": {
+        "type": "int"
+      }
+    }
+  },
+  "alarmsTitle": "Alarms",
+  "alarmsAddTooltip": "Add alarm",
+  "alarmsSortTooltip": "Sort alarms",
+  "alarmsSortByTime": "By time",
+  "alarmsSortByShiftType": "By shift type",
+  "alarmsEmptyTitle": "No alarms yet.",
+  "alarmsEmptyBody": "Tap + to add one.",
+  "alarmsNextAlarm": "NEXT ALARM",
+  "alarmsHolidayMode": "Holiday mode",
+  "alarmsHolidayModeSub": "Alarms are paused — nothing will ring.",
+  "alarmsNoUpcoming": "No upcoming shift alarm",
+  "alarmsNoUpcomingSub": "Add a follows-rotation alarm, or generate a roster.",
+  "alarmsForYourShift": "for your {type} shift · {day}",
+  "@alarmsForYourShift": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "commonToday": "Today",
+  "commonTomorrow": "Tomorrow",
+  "alarmsOffWontRing": "Off — won't ring",
+  "alarmsNoUpcomingRing": "No upcoming ring scheduled",
+  "alarmsNextRing": "Next ring: {day} at {time}",
+  "@alarmsNextRing": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsSwipeToDelete": "Swipe to delete",
+  "alarmsRingsOnceAutoDelete": "Rings once · auto-deletes",
+  "alarmsRingsOnce": "Rings one time only",
+  "alarmsYourShift": "your shift",
+  "alarmsShiftsOfType": "{type} shifts",
+  "@alarmsShiftsOfType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsExactTime": "Exact time · {shift}",
+  "@alarmsExactTime": {
+    "placeholders": {
+      "shift": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsLeadBeforeDefault": "{lead} before {shift} · default",
+  "@alarmsLeadBeforeDefault": {
+    "placeholders": {
+      "lead": {
+        "type": "String"
+      },
+      "shift": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsLeadBefore": "{lead} before {shift}",
+  "@alarmsLeadBefore": {
+    "placeholders": {
+      "lead": {
+        "type": "String"
+      },
+      "shift": {
+        "type": "String"
+      }
+    }
+  },
+  "createEditAlarm": "Edit alarm",
+  "createNewAlarm": "New alarm",
+  "createDefaultLabel": "Wake Up",
+  "createFallbackLabel": "Alarm",
+  "createPickBecomesDefault": "Your pick becomes the default for new alarms.",
+  "createSelectFromFiles": "Select from Files",
+  "createFilesSub": "Pick an audio file saved on your device",
+  "createSelectSystemTone": "Select System Tone",
+  "createSystemToneSub": "Choose from your device's alarm sounds",
+  "createAlarmTiming": "Alarm timing",
+  "createLeadTimeMode": "Lead time",
+  "createExactTimeMode": "Exact time",
+  "createFiresAt": "Fires at {time}",
+  "@createFiresAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "createLeadBeforeShiftStart": "{lead} before shift start",
+  "@createLeadBeforeShiftStart": {
+    "placeholders": {
+      "lead": {
+        "type": "String"
+      }
+    }
+  },
+  "createLinkedShift": "Linked shift",
+  "createRepeatOn": "Repeat on",
+  "createLabelField": "Label",
+  "createLabelHint": "e.g. Wake Up",
+  "createCriticalShift": "Critical shift",
+  "createCriticalShiftSub": "Shake to dismiss · 3-second hold fail-safe",
+  "createRingtone": "Ringtone",
+  "commonStop": "Stop",
+  "commonPlay": "Play",
+  "createVibrate": "Vibrate",
+  "createRepeat": "Repeat",
+  "createRepeatRotation": "Rotation",
+  "createRepeatWeekly": "Weekly",
+  "createRepeatOneTime": "One time",
+  "createPickOneDay": "Pick at least one day",
+  "commonSave": "Save",
+  "commonSaveChanges": "Save changes",
+  "createTimeBeforeShift": "Time before shift",
+  "commonOk": "OK",
+  "sleepTitle": "Sleep",
+  "sleepTargetHeader": "SLEEP TARGET",
+  "sleepTargetSub": "How many hours you want. Rostrik counts back from your next wake-up alarm to set tonight’s bedtime.",
+  "sleepRemindersHeader": "REMINDERS",
+  "sleepWindDownHeader": "WIND-DOWN LEAD",
+  "sleepWindDownSub": "How long before bedtime the wind-down nudge lands.",
+  "sleepSoundsHeader": "SLEEP SOUNDS",
+  "sleepSoundsSub": "White & brown noise to drift off to. Pick an auto-stop timer and tap a sound.",
+  "sleepNothingToPlan": "Nothing to plan tonight",
+  "sleepNothingToPlanSub": "Add a shift to your roster and Rostrik will build a personalised bedtime around your next wake-up.",
+  "sleepTransitionDay": "TRANSITION DAY",
+  "sleepTransitionTitle": "Tomorrow is a Night Shift. Consider sleeping in.",
+  "sleepTransitionBody": "It's a transition day — you have a rest day before nights, so there's no early alarm to chase. Bank extra rest now and let your body drift later tonight.",
+  "sleepRestRecovery": "REST & RECOVERY",
+  "sleepNoEarlyAlarm": "No early alarm to chase",
+  "sleepRestBody": "Your next shift is more than a day away, so there's no wake-up to plan tonight. Sleep on your own clock and bank some recovery — Rostrik will build your bedtime plan as it draws closer.",
+  "sleepTonightsPlan": "TONIGHT'S PLAN",
+  "sleepTargetBedtime": "Target bedtime",
+  "sleepWindDownStat": "Wind-down",
+  "sleepWakeUpStat": "Wake up",
+  "sleepDurationStat": "Duration",
+  "sleepBedtimeReminder": "Bedtime Reminder",
+  "sleepNudgeAtBedtime": "Nudge me at {time} to head to bed",
+  "@sleepNudgeAtBedtime": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepBedtimeSub": "A nudge when it's time to head to bed",
+  "sleepWindDownReminder": "Wind-Down Reminder",
+  "sleepNudgeAtWindDown": "Nudge me at {time} to start winding down",
+  "@sleepNudgeAtWindDown": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepWindDownReminderSub": "An earlier heads-up to start winding down",
+  "commonOff": "Off",
+  "sleepSoundWhiteNoise": "White Noise",
+  "sleepSoundPinkNoise": "Pink Noise",
+  "sleepSoundBrownNoise": "Brown Noise",
+  "sleepSoundFan": "Fan",
+  "sleepSoundOcean": "Ocean",
+  "sleepSoundRain": "Rain",
+  "manageTitle": "Manage",
+  "manageRosterTools": "ROSTER TOOLS",
+  "manageRosterToolsSub": "Build and adjust the shifts that drive your alarms and sleep plan.",
+  "manageGenerateRotation": "Generate Rotation",
+  "manageGenerateRotationSub": "Build a repeating shift pattern from a template.",
+  "manageAddCustomShift": "Add Custom Shift",
+  "manageAddCustomShiftSub": "Drop a single one-off shift onto your roster.",
+  "manageMarkLeave": "Mark Leave / Time Off",
+  "manageMarkLeaveSub": "Paint the days you're off (annual leave, sick) in one go.",
+  "managePauseSchedule": "Pause Schedule",
+  "managePausedSub": "Holiday mode ON — alarms are silenced, your roster is safe.",
+  "manageNotPausedSub": "Holiday mode — silence alarms while you're off-roster.",
+  "markLeaveTitle": "Mark leave",
+  "markLeaveIntro": "Tap the days you’re off, choose a reason, then apply. Alarms on those days won’t fire — your roster stays intact.",
+  "leaveAnnual": "Annual Leave",
+  "leaveSick": "Sick",
+  "leavePublicHoliday": "Public Holiday",
+  "markLeaveReason": "Reason",
+  "markLeaveFallbackReason": "leave",
+  "markLeaveMarked": "{count, plural, one{Marked 1 shift as {reason}.} other{Marked {count} shifts as {reason}.}}",
+  "@markLeaveMarked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "markLeaveSelectDays": "Select days to mark",
+  "markLeaveNoShifts": "No shifts on those days",
+  "markLeaveApplyTo": "{count, plural, one{Apply to 1 shift} other{Apply to {count} shifts}}",
+  "@markLeaveApplyTo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workHistoryTitle": "Work History",
+  "workHistoryExportTooltip": "Export History",
+  "workHistoryExportFailed": "Could not export history: {error}",
+  "@workHistoryExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "workHistoryWorked": "{count, plural, one{1 shift worked} other{{count} shifts worked}}",
+  "@workHistoryWorked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workHistoryHours": "{hours} h",
+  "@workHistoryHours": {
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "commonPaused": "Paused",
+  "workHistoryPausedReason": "Paused · {reason}",
+  "@workHistoryPausedReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "workHistoryRotationBadge": "Rotation",
+  "workHistoryAdHocBadge": "Ad-Hoc",
+  "workHistoryEmptyTitle": "No completed shifts yet",
+  "workHistoryEmptyBody": "Your worked shifts — rotation and custom alike — appear here once they finish, ready to export for payslip verification.",
+  "workHistoryShareSubject": "Rostrik Work History",
+  "workHistoryShareText": "My Rostrik work history export.",
+  "shiftEdAddShift": "Add shift",
+  "shiftEdEditShift": "Edit shift",
+  "shiftEdDate": "Date",
+  "shiftEdPickDate": "Pick date",
+  "shiftEdStarts": "Starts",
+  "shiftEdEnds": "Ends",
+  "shiftEdPickTime": "Pick time",
+  "shiftEdEndsNextDay": "Ends next day",
+  "shiftEdPauseTitle": "Pause / cancel this shift",
+  "shiftEdPausedSub": "Alarm won't fire. Stays on your calendar as a record.",
+  "shiftEdNotPausedSub": "Mark a day off (sick, leave, holiday) without deleting it.",
+  "shiftEdReasonOptional": "Reason (optional)",
+  "dayShifts": "Shifts",
+  "dayActivities": "Activities",
+  "dayAddAnotherShift": "Add another shift",
+  "dayAddActivity": "Add activity",
+  "dayAddActivitySub": "Event, task or birthday",
+  "dayReminder": "Reminder",
+  "actEditActivity": "Edit activity",
+  "actLeadAtTime": "At time",
+  "actLead10Min": "10 min before",
+  "actLead30Min": "30 min before",
+  "actLead1Hour": "1 hour before",
+  "actLead1Day": "1 day before",
+  "actEvent": "Event",
+  "actTask": "Task",
+  "actBirthday": "Birthday",
+  "actTitleField": "Title",
+  "actAllDay": "All day",
+  "actTimeField": "Time",
+  "actRemindMe": "Remind me",
+  "actRemindMeSub": "A gentle notification — separate from your shift alarms.",
+  "actRemindAt": "Remind at",
+  "actReminderPassed": "That time has already passed — this reminder won’t fire.",
+  "actNoteOptional": "Note (optional)",
+  "actCompleted": "Completed",
+  "tipDashboardTitle": "Your dashboard",
+  "tipDashboardBody": "Home base. See your next shift with a live countdown and where you are in your rotation. Tap a tile to jump straight to the details.",
+  "tipTimelineTitle": "Your whole roster",
+  "tipTimelineBody": "Switch between a List and a Month calendar up top. Tap any day to edit a shift — or add an event, task or birthday.",
+  "tipManageTitle": "Build & adjust",
+  "tipManageBody": "Create a rotating roster, add a one-off (overtime) shift, or pause your whole schedule for leave — all from here.",
+  "tipAlarmsTitle": "Your alarms",
+  "tipAlarmsBody": "Every alarm your shifts create, plus any you add yourself. Tap one to change its time or tone, or make it a shake-to-dismiss Critical Shift alarm.",
+  "tipSleepTitle": "Sleep plan",
+  "tipSleepBody": "A wind-down plan that follows your roster: set a sleep goal and get ready for your next shift feeling rested.",
+  "tipReplayHint": "Replay these anytime from Settings › How it works.",
+  "tipDontShow": "Don't show tips",
+  "tipGotIt": "Got it",
+  "timelineListView": "List View",
+  "timelineMonthView": "Month View",
+  "shiftTypeAftShort": "Aft",
+  "timelineNoShifts": "No shifts scheduled. Tap + to add one.",
+  "timelineNoMatch": "No shifts match the {filter} filter.",
+  "@timelineNoMatch": {
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "timelineRestDay": "Rest day",
+  "timelineRestDayReason": "Rest day · {reason}",
+  "@timelineRestDayReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "timelineAllDay": "All day",
+  "calLegendPausedLeave": "Paused / Leave",
+  "calLegendActivity": "Activity",
+  "filterAll": "All",
+  "filterWork": "Work",
+  "criticalHoldToDismiss": "Or hold to dismiss",
+  "patternChoosePattern": "Choose a pattern",
+  "patternRotatingSwings": "Rotating Swings",
+  "patternDaySwings": "Day Only Swings",
+  "patternNightSwings": "Night Only Swings",
+  "patternShiftTimes": "Shift times",
+  "patternGenerate": "Set Day 1 & Generate",
+  "patternSelectDay1": "Select your Next Day 1",
+  "patternDay1Hint": "First day of your {label} block",
+  "@patternDay1Hint": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "patternNextDay1": "Next Day 1",
+  "patternUseThisDate": "Use this date",
+  "patternGenerated": "{count, plural, one{Generated 1 shift} other{Generated {count} shifts}}",
+  "@patternGenerated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "patternGenerationFailed": "Generation failed: {error}",
+  "@patternGenerationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "patternFirstBlockFallback": "first",
+  "patternBuildCustom": "Build custom roster",
+  "patternBuildCustomSub": "Doesn't fit a preset? Compose your own blocks.",
+  "patternBlockDays": "{n, plural, one{1 Day} other{{n} Days}}",
+  "@patternBlockDays": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "patternBlockAfternoons": "{n, plural, one{1 Afternoon} other{{n} Afternoons}}",
+  "@patternBlockAfternoons": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "patternBlockNights": "{n, plural, one{1 Night} other{{n} Nights}}",
+  "@patternBlockNights": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "patternBlockOff": "{n} Off",
+  "@patternBlockOff": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "builderNewRoster": "New Shift Roster",
+  "builderEditRoster": "Edit Roster",
+  "builderNewSub": "Set up your shift rotation pattern",
+  "builderEditSub": "Change and replace this saved roster",
+  "builderNameHint": "Roster name (e.g. My 14-Day Rotation)",
+  "builderCycleLength": "CYCLE LENGTH",
+  "builderStartDate": "START DATE",
+  "builderShiftBlocks": "SHIFT BLOCKS",
+  "builderAddShiftBlock": "Add Shift Block",
+  "builderCreateRoster": "Create Roster",
+  "builderSaveChanges": "Save Changes",
+  "builderReplaceWarning": "Saving replaces this roster. Any leave / time-off marks painted on it will reset.",
+  "builderBackToOptions": "Back to options",
+  "builderOrImport": "OR IMPORT AN EXISTING ROSTER",
+  "builderImportViaAi": "Import via AI",
+  "builderScanning": "Scanning…",
+  "builderScanInstead": "Scan a roster photo instead",
+  "builderCustomChip": "Custom",
+  "builderCycleLengthLabel": "Cycle length",
+  "builderDaysCount": "{n, plural, one{1 day} other{{n} days}}",
+  "@builderDaysCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "builderPickADate": "Pick a date",
+  "builderNoBlocksYet": "No blocks yet",
+  "builderNoBlocksSub": "Add shift blocks to define your rotation",
+  "builderDaysLine": "Days {ranges}",
+  "@builderDaysLine": {
+    "placeholders": {
+      "ranges": {
+        "type": "String"
+      }
+    }
+  },
+  "builderEditBlock": "Edit block",
+  "builderRemoveBlock": "Remove block",
+  "builderPickRosterStart": "Pick the roster start date",
+  "builderPickScanStart": "Pick the start date for the scanned roster",
+  "builderScanCamera": "Scan with camera",
+  "builderImportScreenshot": "Import a screenshot",
+  "builderScanFailed": "Scan failed: {error}",
+  "@builderScanFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "builderNoTimesRecognised": "No shift times recognised. Try cropping tighter around the grid.",
+  "builderCustomRosterFallback": "Custom roster",
+  "builderScannedRosterFallback": "Scanned roster",
+  "builderRosterUpdated": "{count, plural, one{Roster updated — 1 shift scheduled} other{Roster updated — {count} shifts scheduled}}",
+  "@builderRosterUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "builderRosterCreated": "{count, plural, one{Created — 1 shift scheduled} other{Created — {count} shifts scheduled}}",
+  "@builderRosterCreated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "builderCouldNotCreate": "Could not create the roster: {error}",
+  "@builderCouldNotCreate": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "builderRosterImported": "Roster imported to your calendar",
+  "builderCouldNotImport": "Could not import the roster: {error}",
+  "@builderCouldNotImport": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "blockAddTitle": "Add shift block",
+  "blockEditTitle": "Edit shift block",
+  "blockStart": "Start",
+  "blockEnd": "End",
+  "blockTapDays": "Tap the days this shift covers",
+  "blockUntappedOff": "Un-tapped days are Off.",
+  "blockOverlap": "This time overlaps another shift on day {ranges} — change the time or those days.",
+  "@blockOverlap": {
+    "placeholders": {
+      "ranges": {
+        "type": "String"
+      }
+    }
+  },
+  "blockAdd": "Add block",
+  "blockSave": "Save block",
+  "aiPromptCopied": "Prompt copied! Paste it into your AI app along with your roster.",
+  "aiNothingToPaste": "Nothing to paste from the clipboard.",
+  "aiNoValidShifts": "No valid shifts detected. Make sure you used the copied AI prompt.",
+  "aiStep1": "Copy the prompt",
+  "aiCopied": "Copied!",
+  "aiCopyPrompt": "Copy AI Prompt",
+  "aiStep1Sub": "Paste it into ChatGPT, Gemini or any AI app, then add your roster text or a photo/screenshot and send.",
+  "aiStep2": "Paste the AI's reply",
+  "aiPaste": "Paste",
+  "aiParsePreview": "Parse & Preview",
+  "aiStep3": "Review the detected shifts",
+  "aiStep3Sub": "Tap a badge to switch it between Day, Afternoon and Night if the AI got one wrong.",
+  "aiImportDays": "{count, plural, one{Import 1 day} other{Import {count} days}}",
+  "@aiImportDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTitleSub": "Turn any roster text into shifts with the help of an AI app.",
+  "aiSummaryLine": "{count, plural, one{1 day} other{{count} days}} · {working} working · {off} off",
+  "@aiSummaryLine": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "working": {
+        "type": "int"
+      },
+      "off": {
+        "type": "int"
+      }
+    }
+  },
+  "draftReviewTitle": "Review scanned roster",
+  "draftRemovedDay": "Removed {date}",
+  "@draftRemovedDay": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "draftUndo": "Undo",
+  "draftSavedDays": "{count, plural, one{Saved 1 day to your roster} other{Saved {count} days to your roster}}",
+  "@draftSavedDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "draftRosterName": "Roster name",
+  "draftScannedImage": "Scanned image",
+  "draftScannedImageSub": "Tap the image to enlarge and compare",
+  "draftImageError": "Could not display the scanned image.",
+  "draftRemove": "Remove",
+  "draftNoEndTime": "Scanned without an end time — set it to enable Save.",
+  "draftTime": "Time",
+  "draftSetEnd": "Set end",
+  "draftConfirmSave": "Confirm & Save",
+  "notifBeforeYourShift": "Before your {type} shift",
+  "@notifBeforeYourShift": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "notifActivityAt": "{kind} at {time}",
+  "@notifActivityAt": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "notifWindDownTitle": "Time to wind down 🌙",
+  "notifWindDownBodyTarget": "Ease off the screens — target bedtime is {time}.",
+  "@notifWindDownBodyTarget": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "notifWindDownBody": "Ease off the screens and start winding down for the night.",
+  "notifBedtimeTitle": "Bedtime 😴",
+  "notifBedtimeBodyWake": "Head to bed for ~{hours}h before your {shift} — wake-up at {time}.",
+  "@notifBedtimeBodyWake": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "shift": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "notifBedtimeBody": "Head to bed to hit your {hours}h sleep goal.",
+  "@notifBedtimeBody": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "notifShiftDay": "day shift",
+  "notifShiftAfternoon": "afternoon shift",
+  "notifShiftNight": "night shift",
+  "notifShiftGeneric": "shift",
+  "notifTrialEndsTitle": "Your Rostrik trial ends tomorrow",
+  "notifTrialEndsBody": "Unlock full access to keep your shift alarms firing.",
+  "seedWakeUpLabel": "{type} wake-up",
+  "@seedWakeUpLabel": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "seedShiftGeneric": "Shift",
+  "commonListAnd": "{items} & {last}",
+  "@commonListAnd": {
+    "placeholders": {
+      "items": {
+        "type": "String"
+      },
+      "last": {
+        "type": "String"
+      }
+    }
+  },
+  "soundClassic": "Classic",
+  "soundSiren": "Siren",
+  "soundDigital": "Digital",
+  "soundChime": "Chime",
+  "patternFirstResponder": "First Responder Standard",
+  "ocrCropTitle": "Crop to YOUR row only — not the whole team",
+  "draftNameHint": "e.g. May roster"
+}
