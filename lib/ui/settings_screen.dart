@@ -116,7 +116,7 @@ class _LegalAboutSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
         ),
@@ -160,7 +160,7 @@ class _HelpSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
         ),
@@ -263,7 +263,7 @@ class _FullAccessSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
         ),
@@ -392,7 +392,7 @@ class _DebugTrialSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.error,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
         ),
@@ -529,7 +529,7 @@ class _DebugAlarmKitSectionState extends State<_DebugAlarmKitSection> {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.error,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
         ),
@@ -611,7 +611,7 @@ class _BrandingFooter extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: muted.withValues(alpha: 0.55),
               fontWeight: FontWeight.w700,
-              letterSpacing: 3,
+              letterSpacing: labelTracking(context, 3),
             ),
           ),
           const SizedBox(height: 2),
@@ -821,7 +821,7 @@ class _ShiftCyclesSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
           const SizedBox(height: 4),
@@ -1091,7 +1091,7 @@ class _WorkHistorySection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
           const SizedBox(height: 4),
@@ -1142,7 +1142,7 @@ class _PreferencesSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
           const SizedBox(height: 4),
@@ -1326,7 +1326,7 @@ class _CalendarSyncSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
           const SizedBox(height: 4),
@@ -1380,7 +1380,7 @@ class _FactoryResetSection extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: error,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+              letterSpacing: labelTracking(context, 1.2),
             ),
           ),
           const SizedBox(height: 4),

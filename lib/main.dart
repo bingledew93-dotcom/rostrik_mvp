@@ -88,6 +88,7 @@ void syncAlarmsBackgroundEntrypoint() =>
 /// themselves — they keep firing whether the app is alive or not.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  useWesternDigitsInDates();
 
   // Strict portrait lock. The roster/alarm/review UIs are laid out portrait-
   // only and overflow (the yellow/black hazard tape) in landscape. Setting

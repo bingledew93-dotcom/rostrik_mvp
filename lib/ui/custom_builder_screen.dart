@@ -608,7 +608,7 @@ class _CustomBuilderScreenState extends State<CustomBuilderScreen> {
         style: theme.textTheme.labelMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.w700,
-          letterSpacing: 1.0,
+          letterSpacing: labelTracking(context, 1.0),
         ),
       );
 

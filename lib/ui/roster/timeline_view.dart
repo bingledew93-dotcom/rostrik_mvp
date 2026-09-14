@@ -206,7 +206,7 @@ class _MonthHeaderDelegate extends SliverPersistentHeaderDelegate {
         style: theme.textTheme.labelMedium?.copyWith(
           color: theme.colorScheme.primary,
           fontWeight: FontWeight.w800,
-          letterSpacing: 1.3,
+          letterSpacing: labelTracking(context, 1.3),
         ),
       ),
     );
@@ -432,7 +432,7 @@ class ShiftCard extends StatelessWidget {
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: faint.withValues(alpha: 0.85),
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
+                  letterSpacing: labelTracking(context, 0.5),
                 ),
               ),
             ],

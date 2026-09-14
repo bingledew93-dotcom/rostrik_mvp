@@ -119,6 +119,10 @@ class _ShiftCalendarViewState extends State<ShiftCalendarView> {
       firstDay: DateTime(1900),
       lastDay: DateTime(2100, 12, 31),
       calendarFormat: CalendarFormat.month,
+      // Explicit, not the Intl.defaultLocale fallback: reading Localizations
+      // here is what rebuilds the month title and weekday row when the
+      // language changes while this screen is open.
+      locale: Localizations.localeOf(context).toString(),
       rowHeight: widget.compact ? 46 : 60,
       daysOfWeekHeight: widget.compact ? 18 : 16,
       startingDayOfWeek: widget.startWeekOnMonday

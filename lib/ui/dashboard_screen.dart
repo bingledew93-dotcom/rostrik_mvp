@@ -378,7 +378,7 @@ class _UpcomingShiftCard extends StatelessWidget {
               style: theme.textTheme.labelSmall?.copyWith(
                 color: visual.color,
                 fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
+                letterSpacing: labelTracking(context, 1.2),
               ),
             ),
           ),
@@ -447,7 +447,7 @@ class _RotationPositionCard extends StatelessWidget {
                   context.l10n.dashRotation,
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
-                    letterSpacing: 1.0,
+                    letterSpacing: labelTracking(context, 1.0),
                     fontWeight: FontWeight.w600,
                   ),
                 ),

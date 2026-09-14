@@ -222,7 +222,7 @@ class _NextAlarmHero extends StatelessWidget {
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: scheme.primary,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
+                  letterSpacing: labelTracking(context, 1.5),
                 ),
               ),
             ],
