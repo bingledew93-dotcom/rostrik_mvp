@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik कैमरे से आपके छपे हुए रोस्टर की फ़ोटो लेकर डिवाइस पर ही शिफ्ट का समय पढ़ता है।";
+"NSPhotoLibraryUsageDescription" = "Rostrik आपके रोस्टर की सेव की गई फ़ोटो पढ़कर डिवाइस पर ही शिफ्ट का समय इम्पोर्ट कर सकता है।";
+"NSCalendarsUsageDescription" = "Rostrik आपकी शिफ्ट को एक अलग \"Rostrik Roster\" कैलेंडर में कॉपी करता है, ताकि वे आपके बाक़ी इवेंट के साथ दिखें।";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik आपकी शिफ्ट को एक अलग \"Rostrik Roster\" कैलेंडर में कॉपी करता है, ताकि वे आपके बाक़ी इवेंट के साथ दिखें।";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik आपकी शिफ्ट को एक अलग \"Rostrik Roster\" कैलेंडर में जोड़ता है।";
+"NSAppleMusicUsageDescription" = "Rostrik में आप अपनी लाइब्रेरी से कोई गाना कस्टम अलार्म टोन के रूप में चुन सकते हैं।";
+"NSAlarmKitUsageDescription" = "Rostrik अलार्म का इस्तेमाल करता है, ताकि फ़ोन साइलेंट या फ़ोकस मोड में होने पर भी शिफ्ट से पहले का अलार्म बजे।";

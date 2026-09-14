@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">다음 근무를 한눈에</string>
+    <string name="alarm_fallback_title">알람</string>
+    <string name="alarm_hint_critical">중요 알람\n세게 흔들어서 끄세요</string>
+    <string name="alarm_hint_slide">아래 손잡이를 밀어서 끄세요</string>
+    <string name="alarm_snooze_button">다시 알림 (%1$d분)</string>
+    <string name="alarm_slide_to_dismiss">밀어서 끄기</string>
+    <string name="channel_alarm_name">알람</string>
+    <string name="channel_alarm_description">근무 알람 시각이 되면 전체 화면 알람을 표시해요.</string>
+    <string name="channel_alarm_playback_name">알람 재생</string>
+    <string name="channel_alarm_playback_description">직접 고른 알람음이 끊기지 않고 계속 울리게 해요.</string>
+    <string name="channel_sleep_name">수면 사운드</string>
+    <string name="channel_sleep_description">화면이 꺼져도 수면 사운드를 계속 재생해요.</string>
+    <string name="channel_reminders_name">리마인더</string>
+    <string name="channel_reminders_description">이벤트, 할 일, 생일에 대한 선택 알림이에요.</string>
+    <string name="sleep_sound_fallback">수면 사운드</string>
+    <string name="sleep_playing">재생 중</string>
+    <string name="sleep_playing_stops_in">재생 중 · %1$d분 후 정지</string>
+    <string name="sleep_stop">정지</string>
+    <string name="ringtone_picker_title">알람음 선택</string>
+    <string name="ringtone_system_fallback">시스템 소리</string>
+    <string name="widget_off_rdo">🛌 휴무</string>
+    <string name="widget_no_shifts">아직 근무가 없어요</string>
+    <string name="duration_m">%1$d분</string>
+    <string name="duration_h">%1$d시간</string>
+    <string name="duration_h_m">%1$d시간 %2$d분</string>
+    <string name="duration_d">%1$d일</string>
+    <string name="duration_d_h">%1$d일 %2$d시간</string>
+</resources>

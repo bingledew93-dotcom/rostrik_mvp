@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik은 인쇄된 근무표를 촬영해 기기 안에서 근무 시간을 읽기 위해 카메라를 사용해요.";
+"NSPhotoLibraryUsageDescription" = "Rostrik은 저장된 근무표 사진을 읽어 기기 안에서 근무 시간을 가져올 수 있어요.";
+"NSCalendarsUsageDescription" = "Rostrik은 근무를 전용 캘린더 \"Rostrik Roster\"에 옮겨 다른 일정과 함께 보이게 해요.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik은 근무를 전용 캘린더 \"Rostrik Roster\"에 옮겨 다른 일정과 함께 보이게 해요.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik은 근무를 전용 캘린더 \"Rostrik Roster\"에 추가해요.";
+"NSAppleMusicUsageDescription" = "Rostrik에서 보관함의 노래를 알람음으로 고를 수 있어요.";
+"NSAlarmKitUsageDescription" = "Rostrik은 휴대폰이 무음이거나 집중 모드일 때도 근무 전 기상 알람이 울리도록 알람 기능을 사용해요.";
