@@ -831,4 +831,200 @@ class AppLocalizationsEn extends AppLocalizations {
   String durationDayHourShort(int d, int h) {
     return '${d}d ${h}h';
   }
+
+  @override
+  String get alarmsTitle => 'Alarms';
+
+  @override
+  String get alarmsAddTooltip => 'Add alarm';
+
+  @override
+  String get alarmsSortTooltip => 'Sort alarms';
+
+  @override
+  String get alarmsSortByTime => 'By time';
+
+  @override
+  String get alarmsSortByShiftType => 'By shift type';
+
+  @override
+  String get alarmsEmptyTitle => 'No alarms yet.';
+
+  @override
+  String get alarmsEmptyBody => 'Tap + to add one.';
+
+  @override
+  String get alarmsNextAlarm => 'NEXT ALARM';
+
+  @override
+  String get alarmsHolidayMode => 'Holiday mode';
+
+  @override
+  String get alarmsHolidayModeSub => 'Alarms are paused — nothing will ring.';
+
+  @override
+  String get alarmsNoUpcoming => 'No upcoming shift alarm';
+
+  @override
+  String get alarmsNoUpcomingSub =>
+      'Add a follows-rotation alarm, or generate a roster.';
+
+  @override
+  String alarmsForYourShift(String type, String day) {
+    return 'for your $type shift · $day';
+  }
+
+  @override
+  String get commonToday => 'Today';
+
+  @override
+  String get commonTomorrow => 'Tomorrow';
+
+  @override
+  String get alarmsOffWontRing => 'Off — won\'t ring';
+
+  @override
+  String get alarmsNoUpcomingRing => 'No upcoming ring scheduled';
+
+  @override
+  String alarmsNextRing(String day, String time) {
+    return 'Next ring: $day at $time';
+  }
+
+  @override
+  String get alarmsSwipeToDelete => 'Swipe to delete';
+
+  @override
+  String get alarmsRingsOnceAutoDelete => 'Rings once · auto-deletes';
+
+  @override
+  String get alarmsRingsOnce => 'Rings one time only';
+
+  @override
+  String get alarmsYourShift => 'your shift';
+
+  @override
+  String alarmsShiftsOfType(String type) {
+    return '$type shifts';
+  }
+
+  @override
+  String alarmsExactTime(String shift) {
+    return 'Exact time · $shift';
+  }
+
+  @override
+  String alarmsLeadBeforeDefault(String lead, String shift) {
+    return '$lead before $shift · default';
+  }
+
+  @override
+  String alarmsLeadBefore(String lead, String shift) {
+    return '$lead before $shift';
+  }
+
+  @override
+  String get createEditAlarm => 'Edit alarm';
+
+  @override
+  String get createNewAlarm => 'New alarm';
+
+  @override
+  String get createDefaultLabel => 'Wake Up';
+
+  @override
+  String get createFallbackLabel => 'Alarm';
+
+  @override
+  String get createPickBecomesDefault =>
+      'Your pick becomes the default for new alarms.';
+
+  @override
+  String get createSelectFromFiles => 'Select from Files';
+
+  @override
+  String get createFilesSub => 'Pick an audio file saved on your device';
+
+  @override
+  String get createSelectSystemTone => 'Select System Tone';
+
+  @override
+  String get createSystemToneSub => 'Choose from your device\'s alarm sounds';
+
+  @override
+  String get createAlarmTiming => 'Alarm timing';
+
+  @override
+  String get createLeadTimeMode => 'Lead time';
+
+  @override
+  String get createExactTimeMode => 'Exact time';
+
+  @override
+  String createFiresAt(String time) {
+    return 'Fires at $time';
+  }
+
+  @override
+  String createLeadBeforeShiftStart(String lead) {
+    return '$lead before shift start';
+  }
+
+  @override
+  String get createLinkedShift => 'Linked shift';
+
+  @override
+  String get createRepeatOn => 'Repeat on';
+
+  @override
+  String get createLabelField => 'Label';
+
+  @override
+  String get createLabelHint => 'e.g. Wake Up';
+
+  @override
+  String get createCriticalShift => 'Critical shift';
+
+  @override
+  String get createCriticalShiftSub =>
+      'Shake to dismiss · 3-second hold fail-safe';
+
+  @override
+  String get createRingtone => 'Ringtone';
+
+  @override
+  String get commonStop => 'Stop';
+
+  @override
+  String get commonPlay => 'Play';
+
+  @override
+  String get createVibrate => 'Vibrate';
+
+  @override
+  String get createRepeat => 'Repeat';
+
+  @override
+  String get createRepeatRotation => 'Rotation';
+
+  @override
+  String get createRepeatWeekly => 'Weekly';
+
+  @override
+  String get createRepeatOneTime => 'One time';
+
+  @override
+  String get createPickOneDay => 'Pick at least one day';
+
+  @override
+  String get commonSave => 'Save';
+
+  @override
+  String get commonSaveChanges => 'Save changes';
+
+  @override
+  String get createTimeBeforeShift => 'Time before shift';
+
+  @override
+  String get commonOk => 'OK';
 }

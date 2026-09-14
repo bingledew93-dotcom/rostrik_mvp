@@ -1419,6 +1419,360 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{d}d {h}h'**
   String durationDayHourShort(int d, int h);
+
+  /// No description provided for @alarmsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms'**
+  String get alarmsTitle;
+
+  /// No description provided for @alarmsAddTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Add alarm'**
+  String get alarmsAddTooltip;
+
+  /// No description provided for @alarmsSortTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort alarms'**
+  String get alarmsSortTooltip;
+
+  /// No description provided for @alarmsSortByTime.
+  ///
+  /// In en, this message translates to:
+  /// **'By time'**
+  String get alarmsSortByTime;
+
+  /// No description provided for @alarmsSortByShiftType.
+  ///
+  /// In en, this message translates to:
+  /// **'By shift type'**
+  String get alarmsSortByShiftType;
+
+  /// No description provided for @alarmsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No alarms yet.'**
+  String get alarmsEmptyTitle;
+
+  /// No description provided for @alarmsEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap + to add one.'**
+  String get alarmsEmptyBody;
+
+  /// No description provided for @alarmsNextAlarm.
+  ///
+  /// In en, this message translates to:
+  /// **'NEXT ALARM'**
+  String get alarmsNextAlarm;
+
+  /// No description provided for @alarmsHolidayMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Holiday mode'**
+  String get alarmsHolidayMode;
+
+  /// No description provided for @alarmsHolidayModeSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms are paused — nothing will ring.'**
+  String get alarmsHolidayModeSub;
+
+  /// No description provided for @alarmsNoUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming shift alarm'**
+  String get alarmsNoUpcoming;
+
+  /// No description provided for @alarmsNoUpcomingSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a follows-rotation alarm, or generate a roster.'**
+  String get alarmsNoUpcomingSub;
+
+  /// No description provided for @alarmsForYourShift.
+  ///
+  /// In en, this message translates to:
+  /// **'for your {type} shift · {day}'**
+  String alarmsForYourShift(String type, String day);
+
+  /// No description provided for @commonToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get commonToday;
+
+  /// No description provided for @commonTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomorrow'**
+  String get commonTomorrow;
+
+  /// No description provided for @alarmsOffWontRing.
+  ///
+  /// In en, this message translates to:
+  /// **'Off — won\'t ring'**
+  String get alarmsOffWontRing;
+
+  /// No description provided for @alarmsNoUpcomingRing.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming ring scheduled'**
+  String get alarmsNoUpcomingRing;
+
+  /// No description provided for @alarmsNextRing.
+  ///
+  /// In en, this message translates to:
+  /// **'Next ring: {day} at {time}'**
+  String alarmsNextRing(String day, String time);
+
+  /// No description provided for @alarmsSwipeToDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Swipe to delete'**
+  String get alarmsSwipeToDelete;
+
+  /// No description provided for @alarmsRingsOnceAutoDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Rings once · auto-deletes'**
+  String get alarmsRingsOnceAutoDelete;
+
+  /// No description provided for @alarmsRingsOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'Rings one time only'**
+  String get alarmsRingsOnce;
+
+  /// No description provided for @alarmsYourShift.
+  ///
+  /// In en, this message translates to:
+  /// **'your shift'**
+  String get alarmsYourShift;
+
+  /// No description provided for @alarmsShiftsOfType.
+  ///
+  /// In en, this message translates to:
+  /// **'{type} shifts'**
+  String alarmsShiftsOfType(String type);
+
+  /// No description provided for @alarmsExactTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact time · {shift}'**
+  String alarmsExactTime(String shift);
+
+  /// No description provided for @alarmsLeadBeforeDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'{lead} before {shift} · default'**
+  String alarmsLeadBeforeDefault(String lead, String shift);
+
+  /// No description provided for @alarmsLeadBefore.
+  ///
+  /// In en, this message translates to:
+  /// **'{lead} before {shift}'**
+  String alarmsLeadBefore(String lead, String shift);
+
+  /// No description provided for @createEditAlarm.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit alarm'**
+  String get createEditAlarm;
+
+  /// No description provided for @createNewAlarm.
+  ///
+  /// In en, this message translates to:
+  /// **'New alarm'**
+  String get createNewAlarm;
+
+  /// No description provided for @createDefaultLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake Up'**
+  String get createDefaultLabel;
+
+  /// No description provided for @createFallbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarm'**
+  String get createFallbackLabel;
+
+  /// No description provided for @createPickBecomesDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Your pick becomes the default for new alarms.'**
+  String get createPickBecomesDefault;
+
+  /// No description provided for @createSelectFromFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Select from Files'**
+  String get createSelectFromFiles;
+
+  /// No description provided for @createFilesSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick an audio file saved on your device'**
+  String get createFilesSub;
+
+  /// No description provided for @createSelectSystemTone.
+  ///
+  /// In en, this message translates to:
+  /// **'Select System Tone'**
+  String get createSelectSystemTone;
+
+  /// No description provided for @createSystemToneSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from your device\'s alarm sounds'**
+  String get createSystemToneSub;
+
+  /// No description provided for @createAlarmTiming.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarm timing'**
+  String get createAlarmTiming;
+
+  /// No description provided for @createLeadTimeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Lead time'**
+  String get createLeadTimeMode;
+
+  /// No description provided for @createExactTimeMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact time'**
+  String get createExactTimeMode;
+
+  /// No description provided for @createFiresAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Fires at {time}'**
+  String createFiresAt(String time);
+
+  /// No description provided for @createLeadBeforeShiftStart.
+  ///
+  /// In en, this message translates to:
+  /// **'{lead} before shift start'**
+  String createLeadBeforeShiftStart(String lead);
+
+  /// No description provided for @createLinkedShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked shift'**
+  String get createLinkedShift;
+
+  /// No description provided for @createRepeatOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat on'**
+  String get createRepeatOn;
+
+  /// No description provided for @createLabelField.
+  ///
+  /// In en, this message translates to:
+  /// **'Label'**
+  String get createLabelField;
+
+  /// No description provided for @createLabelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Wake Up'**
+  String get createLabelHint;
+
+  /// No description provided for @createCriticalShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical shift'**
+  String get createCriticalShift;
+
+  /// No description provided for @createCriticalShiftSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Shake to dismiss · 3-second hold fail-safe'**
+  String get createCriticalShiftSub;
+
+  /// No description provided for @createRingtone.
+  ///
+  /// In en, this message translates to:
+  /// **'Ringtone'**
+  String get createRingtone;
+
+  /// No description provided for @commonStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get commonStop;
+
+  /// No description provided for @commonPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get commonPlay;
+
+  /// No description provided for @createVibrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Vibrate'**
+  String get createVibrate;
+
+  /// No description provided for @createRepeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat'**
+  String get createRepeat;
+
+  /// No description provided for @createRepeatRotation.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation'**
+  String get createRepeatRotation;
+
+  /// No description provided for @createRepeatWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get createRepeatWeekly;
+
+  /// No description provided for @createRepeatOneTime.
+  ///
+  /// In en, this message translates to:
+  /// **'One time'**
+  String get createRepeatOneTime;
+
+  /// No description provided for @createPickOneDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick at least one day'**
+  String get createPickOneDay;
+
+  /// No description provided for @commonSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get commonSave;
+
+  /// No description provided for @commonSaveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get commonSaveChanges;
+
+  /// No description provided for @createTimeBeforeShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Time before shift'**
+  String get createTimeBeforeShift;
+
+  /// No description provided for @commonOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get commonOk;
 }
 
 class _AppLocalizationsDelegate

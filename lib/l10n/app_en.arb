@@ -488,5 +488,132 @@
         "type": "int"
       }
     }
-  }
+  },
+  "alarmsTitle": "Alarms",
+  "alarmsAddTooltip": "Add alarm",
+  "alarmsSortTooltip": "Sort alarms",
+  "alarmsSortByTime": "By time",
+  "alarmsSortByShiftType": "By shift type",
+  "alarmsEmptyTitle": "No alarms yet.",
+  "alarmsEmptyBody": "Tap + to add one.",
+  "alarmsNextAlarm": "NEXT ALARM",
+  "alarmsHolidayMode": "Holiday mode",
+  "alarmsHolidayModeSub": "Alarms are paused — nothing will ring.",
+  "alarmsNoUpcoming": "No upcoming shift alarm",
+  "alarmsNoUpcomingSub": "Add a follows-rotation alarm, or generate a roster.",
+  "alarmsForYourShift": "for your {type} shift · {day}",
+  "@alarmsForYourShift": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "commonToday": "Today",
+  "commonTomorrow": "Tomorrow",
+  "alarmsOffWontRing": "Off — won't ring",
+  "alarmsNoUpcomingRing": "No upcoming ring scheduled",
+  "alarmsNextRing": "Next ring: {day} at {time}",
+  "@alarmsNextRing": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsSwipeToDelete": "Swipe to delete",
+  "alarmsRingsOnceAutoDelete": "Rings once · auto-deletes",
+  "alarmsRingsOnce": "Rings one time only",
+  "alarmsYourShift": "your shift",
+  "alarmsShiftsOfType": "{type} shifts",
+  "@alarmsShiftsOfType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsExactTime": "Exact time · {shift}",
+  "@alarmsExactTime": {
+    "placeholders": {
+      "shift": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsLeadBeforeDefault": "{lead} before {shift} · default",
+  "@alarmsLeadBeforeDefault": {
+    "placeholders": {
+      "lead": {
+        "type": "String"
+      },
+      "shift": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsLeadBefore": "{lead} before {shift}",
+  "@alarmsLeadBefore": {
+    "placeholders": {
+      "lead": {
+        "type": "String"
+      },
+      "shift": {
+        "type": "String"
+      }
+    }
+  },
+  "createEditAlarm": "Edit alarm",
+  "createNewAlarm": "New alarm",
+  "createDefaultLabel": "Wake Up",
+  "createFallbackLabel": "Alarm",
+  "createPickBecomesDefault": "Your pick becomes the default for new alarms.",
+  "createSelectFromFiles": "Select from Files",
+  "createFilesSub": "Pick an audio file saved on your device",
+  "createSelectSystemTone": "Select System Tone",
+  "createSystemToneSub": "Choose from your device's alarm sounds",
+  "createAlarmTiming": "Alarm timing",
+  "createLeadTimeMode": "Lead time",
+  "createExactTimeMode": "Exact time",
+  "createFiresAt": "Fires at {time}",
+  "@createFiresAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "createLeadBeforeShiftStart": "{lead} before shift start",
+  "@createLeadBeforeShiftStart": {
+    "placeholders": {
+      "lead": {
+        "type": "String"
+      }
+    }
+  },
+  "createLinkedShift": "Linked shift",
+  "createRepeatOn": "Repeat on",
+  "createLabelField": "Label",
+  "createLabelHint": "e.g. Wake Up",
+  "createCriticalShift": "Critical shift",
+  "createCriticalShiftSub": "Shake to dismiss · 3-second hold fail-safe",
+  "createRingtone": "Ringtone",
+  "commonStop": "Stop",
+  "commonPlay": "Play",
+  "createVibrate": "Vibrate",
+  "createRepeat": "Repeat",
+  "createRepeatRotation": "Rotation",
+  "createRepeatWeekly": "Weekly",
+  "createRepeatOneTime": "One time",
+  "createPickOneDay": "Pick at least one day",
+  "commonSave": "Save",
+  "commonSaveChanges": "Save changes",
+  "createTimeBeforeShift": "Time before shift",
+  "commonOk": "OK"
 }
