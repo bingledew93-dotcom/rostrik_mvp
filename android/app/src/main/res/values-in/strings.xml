@@ -3,6 +3,8 @@
     <string name="widget_description">Shift berikutnya dalam sekejap</string>
     <string name="alarm_fallback_title">Alarm</string>
     <string name="alarm_hint_critical">Alarm kritis\nGoyangkan kuat-kuat untuk mematikan</string>
+    <string name="alarm_hint_critical_hold">Alarm kritis\nGoyangkan kuat-kuat, atau tahan tombol selama %1$d detik</string>
+    <string name="alarm_hold_to_dismiss">Tahan %1$d detik untuk mematikan</string>
     <string name="alarm_hint_slide">Geser tuas di bawah untuk mematikan</string>
     <string name="alarm_snooze_button">TUNDA (%1$d MNT)</string>
     <string name="alarm_slide_to_dismiss">Geser untuk mematikan</string>

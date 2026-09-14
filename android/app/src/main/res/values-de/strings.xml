@@ -3,6 +3,8 @@
     <string name="widget_description">Deine nächste Schicht auf einen Blick</string>
     <string name="alarm_fallback_title">Wecker</string>
     <string name="alarm_hint_critical">Kritischer Wecker\nKräftig schütteln zum Beenden</string>
+    <string name="alarm_hint_critical_hold">Kritischer Wecker\nKräftig schütteln oder die Taste %1$d Sekunden halten</string>
+    <string name="alarm_hold_to_dismiss">%1$d Sekunden halten zum Beenden</string>
     <string name="alarm_hint_slide">Schieb den Regler unten zum Beenden</string>
     <string name="alarm_snooze_button">SCHLUMMERN (%1$d MIN.)</string>
     <string name="alarm_slide_to_dismiss">Schieben zum Beenden</string>

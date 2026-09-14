@@ -3,6 +3,8 @@
     <string name="widget_description">Twoja następna zmiana w skrócie</string>
     <string name="alarm_fallback_title">Budzik</string>
     <string name="alarm_hint_critical">Budzik krytyczny\nPotrząśnij mocno, aby wyłączyć</string>
+    <string name="alarm_hint_critical_hold">Budzik krytyczny\nPotrząśnij mocno albo przytrzymaj przycisk przez %1$d sekundy</string>
+    <string name="alarm_hold_to_dismiss">Przytrzymaj przez %1$d sekundy, aby wyłączyć</string>
     <string name="alarm_hint_slide">Przesuń uchwyt poniżej, aby wyłączyć</string>
     <string name="alarm_snooze_button">DRZEMKA (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Przesuń, aby wyłączyć</string>

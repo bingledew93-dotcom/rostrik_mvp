@@ -3,6 +3,8 @@
     <string name="widget_description">Je volgende dienst in één oogopslag</string>
     <string name="alarm_fallback_title">Wekker</string>
     <string name="alarm_hint_critical">Kritieke wekker\nSchud stevig om te stoppen</string>
+    <string name="alarm_hint_critical_hold">Kritieke wekker\nSchud stevig of houd de knop %1$d seconden ingedrukt</string>
+    <string name="alarm_hold_to_dismiss">Houd %1$d seconden ingedrukt om te stoppen</string>
     <string name="alarm_hint_slide">Schuif de knop hieronder om te stoppen</string>
     <string name="alarm_snooze_button">SLUIMEREN (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Schuif om te stoppen</string>

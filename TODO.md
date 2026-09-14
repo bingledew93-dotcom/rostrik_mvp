@@ -342,11 +342,12 @@ heads-up appeared. The user tried to stop it and could not. Findings:
       second alarm takes over mid-ring, the first alarm's notification is
       re-posted without its full-screen intent (audit F4). The superseded case is
       compile-verified only.
-- [ ] Critical-shift copy promises a fallback the Android alarm screen lacks:
-      the create sheet says "Shake to dismiss · hold 3s as fallback", but
-      `AlarmActivity` has no hold-to-dismiss (`HoldToDismiss` exists only in the
-      onboarding walkthrough). Either add the hold to `AlarmActivity` or change
-      the copy — a user who cannot shake is currently left with Snooze only.
+- [x] Critical-shift hold fallback restored on Android. The create sheet
+      promised "hold 3s as fallback" but the native `AlarmActivity` had lost it
+      when it replaced the Flutter wake screen. Now, if a critical alarm is still
+      ringing 3 s after its screen appears, the hint changes and a
+      "Hold for 3 seconds to dismiss" button appears. Device-verified 2026-09-15:
+      reveal after 3 s, a 1 s press does not dismiss, a full hold does.
 - [ ] Check `NotificationManager.canUseFullScreenIntent()` (API 34+). The
       permission is app-op gated from Android 14 and is never verified — if it
       is denied the full-screen alarm silently degrades even on the lock screen,

@@ -3,6 +3,8 @@
     <string name="widget_description">Tu próximo turno, de un vistazo</string>
     <string name="alarm_fallback_title">Alarma</string>
     <string name="alarm_hint_critical">Alarma crítica\nAgita con fuerza para apagar</string>
+    <string name="alarm_hint_critical_hold">Alarma crítica\nAgita con fuerza o mantén pulsado el botón %1$d segundos</string>
+    <string name="alarm_hold_to_dismiss">Mantén pulsado %1$d segundos para apagar</string>
     <string name="alarm_hint_slide">Desliza el control de abajo para apagar</string>
     <string name="alarm_snooze_button">POSPONER (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Desliza para apagar</string>

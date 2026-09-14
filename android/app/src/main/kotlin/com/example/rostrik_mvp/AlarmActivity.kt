@@ -1,5 +1,8 @@
 package com.example.rostrik_mvp
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.BroadcastReceiver
@@ -15,10 +18,14 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -51,11 +58,13 @@ import kotlin.math.sqrt
  *     left, so a tap landing anywhere on the right of the track is ignored
  *     outright. Mirrors the app's swipe-to-confirm convention.
  *   * Critical-shift alarm → Shake-to-dismiss, and the slide handle is HIDDEN.
- *     A must-not-miss alarm must not be swipeable away half-asleep; only a
+ *     A must-not-miss alarm must not be swipeable away half-asleep; a
  *     deliberate, sustained shake ([SHAKE_THRESHOLD_G], [SHAKE_COUNT_REQUIRED] —
- *     a single bump or dropped phone can never reach it) silences it. A critical
- *     alarm on a device with no accelerometer falls back to the slide handle, so
- *     the user is never locked out.
+ *     a single bump or dropped phone can never reach it) silences it. If the
+ *     alarm is still ringing [HOLD_REVEAL_DELAY_MS] later, a hold-to-dismiss
+ *     button appears as the fallback (a [HOLD_TO_DISMISS_MS] unbroken press).
+ *     A critical alarm on a device with no accelerometer falls back to the
+ *     slide handle, so the user is never locked out.
  *
  * (This is what makes the Dart-side "Critical Shift" toggle meaningful: the
  * dismiss difficulty actually changes with it, rather than shake being hardcoded
@@ -88,6 +97,18 @@ class AlarmActivity : Activity(), SensorEventListener {
         // enough that a short, accidental nudge springs back, close enough that
         // the user doesn't have to fight the last pixel to the edge.
         private const val DISMISS_SLIDE_FRACTION = 0.9f
+
+        // ---- Hold-to-dismiss fallback (critical alarms) ---------------------
+        // A critical alarm asks for a shake first. If it is still ringing this
+        // long after the screen appears, the hint changes and a hold button
+        // appears — for anyone who cannot shake the phone (on a stand, a hand
+        // that won't cooperate, a shake that never reaches the threshold). The
+        // original Flutter wake screen had this fallback; the native screen
+        // lost it, while the create sheet still promised it.
+        private const val HOLD_REVEAL_DELAY_MS = 3_000L
+        // How long an unbroken press must last to dismiss. The hint and button
+        // strings take this in seconds, and their translations assume 3.
+        private const val HOLD_TO_DISMISS_MS = 3_000L
     }
 
     private var sensorManager: SensorManager? = null
@@ -132,6 +153,15 @@ class AlarmActivity : Activity(), SensorEventListener {
      *  auto-timeout) can't run the whole teardown twice (double stopService /
      *  double ledger write). Shared by dismiss AND snooze — both are terminal. */
     private var dismissed = false
+
+    /** The hint under the title; reworded when the hold fallback appears. */
+    private var hintView: TextView? = null
+
+    /** The hold-to-dismiss button, built hidden for a shake-mode alarm. */
+    private var holdTrack: View? = null
+
+    private val holdRevealHandler = Handler(Looper.getMainLooper())
+    private val revealHold = Runnable { showHoldFallback() }
 
     /** Receives [AlarmAudioService.ACTION_AUTO_DISMISS] — sent by the service's
      *  15-minute battery fail-safe, and by [AlarmActionReceiver] when the ring
@@ -191,6 +221,7 @@ class AlarmActivity : Activity(), SensorEventListener {
         Log.d(TAG, "dismiss mode: ${if (shakeToDismiss) "shake (critical)" else "slide"}")
 
         setContentView(buildContentView())
+        if (shakeToDismiss) holdRevealHandler.postDelayed(revealHold, HOLD_REVEAL_DELAY_MS)
 
         registerAutoDismissReceiver()
     }
@@ -260,7 +291,8 @@ class AlarmActivity : Activity(), SensorEventListener {
         val mins = if (snoozeMinutes > 0) snoozeMinutes else AlarmRingControl.DEFAULT_SNOOZE_MINUTES
         val hint = TextView(this).apply {
             // Critical-shift alarms (shake mode) deliberately offer NO slide
-            // handle — the only way to silence them is a firm, sustained shake.
+            // handle — a firm, sustained shake, or the hold fallback once it
+            // appears (see [showHoldFallback], which rewords this hint).
             text = getString(
                 if (shakeToDismiss) R.string.alarm_hint_critical
                 else R.string.alarm_hint_slide,
@@ -270,6 +302,7 @@ class AlarmActivity : Activity(), SensorEventListener {
             gravity = Gravity.CENTER
             setPadding(0, dp(16), 0, dp(40))
         }
+        hintView = hint
         // Snooze stays the big, obvious tap target (a groggy worker wanting a few
         // more minutes shouldn't have to perform a precise gesture). The label
         // reflects the user's configured interval, not a hardcoded value.
@@ -291,8 +324,104 @@ class AlarmActivity : Activity(), SensorEventListener {
         // with a working accelerometer dismiss by shake only — no handle.
         if (!shakeToDismiss) {
             root.addView(buildSlideToDismissTrack())
+        } else {
+            root.addView(buildHoldToDismissTrack().also { holdTrack = it })
         }
         return root
+    }
+
+    /** Swaps in the hold instruction and shows the hold button. Idempotent. */
+    private fun showHoldFallback() {
+        if (dismissed) return
+        val track = holdTrack ?: return
+        if (track.visibility == View.VISIBLE) return
+        hintView?.text = getString(R.string.alarm_hint_critical_hold, (HOLD_TO_DISMISS_MS / 1000).toInt())
+        track.alpha = 0f
+        track.visibility = View.VISIBLE
+        track.animate().alpha(1f).setDuration(250).start()
+        Log.d(TAG, "critical alarm: hold-to-dismiss fallback shown")
+    }
+
+    /**
+     * The critical-alarm fallback: a button that dismisses once pressed and held
+     * for [HOLD_TO_DISMISS_MS] without lifting. A fill sweeps across while the
+     * finger is down so progress is visible; lifting early drains it back, so a
+     * brush against the screen can never complete. Built hidden and revealed by
+     * [showHoldFallback].
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun buildHoldToDismissTrack(): FrameLayout {
+        val trackHeight = dp(72)
+        val track = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = trackHeight / 2f
+                setColor(Color.parseColor("#16161C"))
+                setStroke(dp(1), Color.parseColor("#2E2E3A"))
+            }
+            clipToOutline = true
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                trackHeight,
+            ).apply { topMargin = dp(20) }
+        }
+        val fill = View(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = trackHeight / 2f
+                setColor(Color.parseColor("#3A3A48"))
+            }
+            pivotX = 0f
+            scaleX = 0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+        }
+        val holdLabel = TextView(this).apply {
+            text = getString(R.string.alarm_hold_to_dismiss, (HOLD_TO_DISMISS_MS / 1000).toInt())
+            setTextColor(Color.parseColor("#E6E6EC"))
+            textSize = 17f
+            gravity = Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+        }
+        track.addView(fill)
+        track.addView(holdLabel)
+
+        var progress: ValueAnimator? = null
+        track.setOnTouchListener { _, ev ->
+            if (dismissed || track.visibility != View.VISIBLE) return@setOnTouchListener false
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    progress?.cancel()
+                    val from = fill.scaleX
+                    progress = ValueAnimator.ofFloat(from, 1f).apply {
+                        duration = (HOLD_TO_DISMISS_MS * (1f - from)).toLong()
+                        interpolator = LinearInterpolator()
+                        addUpdateListener { fill.scaleX = it.animatedValue as Float }
+                        addListener(object : AnimatorListenerAdapter() {
+                            private var cancelled = false
+                            override fun onAnimationCancel(animation: Animator) { cancelled = true }
+                            override fun onAnimationEnd(animation: Animator) {
+                                if (!cancelled) dismissAlarm("hold")
+                            }
+                        })
+                        start()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    progress?.cancel()
+                    progress = null
+                    fill.animate().scaleX(0f).setDuration(200).start()
+                    true
+                }
+                else -> true
+            }
+        }
+        return track
     }
 
     /**
@@ -549,6 +678,7 @@ class AlarmActivity : Activity(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        holdRevealHandler.removeCallbacks(revealHold)
         if (autoDismissReceiverRegistered) {
             try {
                 unregisterReceiver(autoDismissReceiver)

@@ -3,6 +3,8 @@
     <string name="widget_description">Sonraki vardiyan bir bakışta</string>
     <string name="alarm_fallback_title">Alarm</string>
     <string name="alarm_hint_critical">Kritik alarm\nKapatmak için sertçe salla</string>
+    <string name="alarm_hint_critical_hold">Kritik alarm\nSertçe salla ya da düğmeyi %1$d saniye basılı tut</string>
+    <string name="alarm_hold_to_dismiss">Kapatmak için %1$d saniye basılı tut</string>
     <string name="alarm_hint_slide">Kapatmak için aşağıdaki tutamacı kaydır</string>
     <string name="alarm_snooze_button">ERTELE (%1$d DK)</string>
     <string name="alarm_slide_to_dismiss">Kapatmak için kaydır</string>

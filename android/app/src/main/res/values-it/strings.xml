@@ -3,6 +3,8 @@
     <string name="widget_description">Il tuo prossimo turno a colpo d\'occhio</string>
     <string name="alarm_fallback_title">Sveglia</string>
     <string name="alarm_hint_critical">Sveglia critica\nScuoti con decisione per spegnere</string>
+    <string name="alarm_hint_critical_hold">Sveglia critica\nScuoti con decisione o tieni premuto il pulsante per %1$d secondi</string>
+    <string name="alarm_hold_to_dismiss">Tieni premuto %1$d secondi per spegnere</string>
     <string name="alarm_hint_slide">Scorri la maniglia qui sotto per spegnere</string>
     <string name="alarm_snooze_button">POSTICIPA (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Scorri per spegnere</string>

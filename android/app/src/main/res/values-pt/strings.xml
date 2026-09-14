@@ -3,6 +3,8 @@
     <string name="widget_description">Seu próximo turno num relance</string>
     <string name="alarm_fallback_title">Alarme</string>
     <string name="alarm_hint_critical">Alarme crítico\nChacoalhe com força para desligar</string>
+    <string name="alarm_hint_critical_hold">Alarme crítico\nChacoalhe com força ou segure o botão por %1$d segundos</string>
+    <string name="alarm_hold_to_dismiss">Segure por %1$d segundos para desligar</string>
     <string name="alarm_hint_slide">Deslize o controle abaixo para desligar</string>
     <string name="alarm_snooze_button">SONECA (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Deslize para desligar</string>

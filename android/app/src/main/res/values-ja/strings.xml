@@ -3,6 +3,8 @@
     <string name="widget_description">次のシフトをひと目で</string>
     <string name="alarm_fallback_title">アラーム</string>
     <string name="alarm_hint_critical">重要アラーム\nしっかり振って止めてください</string>
+    <string name="alarm_hint_critical_hold">重要アラーム\nしっかり振るか、ボタンを%1$d秒間長押ししてください</string>
+    <string name="alarm_hold_to_dismiss">%1$d秒間長押しして止める</string>
     <string name="alarm_hint_slide">下のつまみをスライドして止めます</string>
     <string name="alarm_snooze_button">スヌーズ（%1$d 分）</string>
     <string name="alarm_slide_to_dismiss">スライドして止める</string>

@@ -3,6 +3,8 @@
     <string name="widget_description">Votre prochain poste en un coup d\'œil</string>
     <string name="alarm_fallback_title">Alarme</string>
     <string name="alarm_hint_critical">Alarme critique\nSecouez fort pour arrêter</string>
+    <string name="alarm_hint_critical_hold">Alarme critique\nSecouez fort ou maintenez le bouton %1$d secondes</string>
+    <string name="alarm_hold_to_dismiss">Maintenez %1$d secondes pour arrêter</string>
     <string name="alarm_hint_slide">Faites glisser la poignée ci-dessous pour arrêter</string>
     <string name="alarm_snooze_button">RÉPÉTER (%1$d MIN)</string>
     <string name="alarm_slide_to_dismiss">Glissez pour arrêter</string>
