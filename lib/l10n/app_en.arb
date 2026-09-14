@@ -615,5 +615,53 @@
   "commonSave": "Save",
   "commonSaveChanges": "Save changes",
   "createTimeBeforeShift": "Time before shift",
-  "commonOk": "OK"
+  "commonOk": "OK",
+  "sleepTitle": "Sleep",
+  "sleepTargetHeader": "SLEEP TARGET",
+  "sleepTargetSub": "How many hours you want. Rostrik counts back from your next wake-up alarm to set tonight’s bedtime.",
+  "sleepRemindersHeader": "REMINDERS",
+  "sleepWindDownHeader": "WIND-DOWN LEAD",
+  "sleepWindDownSub": "How long before bedtime the wind-down nudge lands.",
+  "sleepSoundsHeader": "SLEEP SOUNDS",
+  "sleepSoundsSub": "White & brown noise to drift off to. Pick an auto-stop timer and tap a sound.",
+  "sleepNothingToPlan": "Nothing to plan tonight",
+  "sleepNothingToPlanSub": "Add a shift to your roster and Rostrik will build a personalised bedtime around your next wake-up.",
+  "sleepTransitionDay": "TRANSITION DAY",
+  "sleepTransitionTitle": "Tomorrow is a Night Shift. Consider sleeping in.",
+  "sleepTransitionBody": "It's a transition day — you have a rest day before nights, so there's no early alarm to chase. Bank extra rest now and let your body drift later tonight.",
+  "sleepRestRecovery": "REST & RECOVERY",
+  "sleepNoEarlyAlarm": "No early alarm to chase",
+  "sleepRestBody": "Your next shift is more than a day away, so there's no wake-up to plan tonight. Sleep on your own clock and bank some recovery — Rostrik will build your bedtime plan as it draws closer.",
+  "sleepTonightsPlan": "TONIGHT'S PLAN",
+  "sleepTargetBedtime": "Target bedtime",
+  "sleepWindDownStat": "Wind-down",
+  "sleepWakeUpStat": "Wake up",
+  "sleepDurationStat": "Duration",
+  "sleepBedtimeReminder": "Bedtime Reminder",
+  "sleepNudgeAtBedtime": "Nudge me at {time} to head to bed",
+  "@sleepNudgeAtBedtime": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepBedtimeSub": "A nudge when it's time to head to bed",
+  "sleepWindDownReminder": "Wind-Down Reminder",
+  "sleepNudgeAtWindDown": "Nudge me at {time} to start winding down",
+  "@sleepNudgeAtWindDown": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepWindDownReminderSub": "An earlier heads-up to start winding down",
+  "commonOff": "Off",
+  "sleepSoundWhiteNoise": "White Noise",
+  "sleepSoundPinkNoise": "Pink Noise",
+  "sleepSoundBrownNoise": "Brown Noise",
+  "sleepSoundFan": "Fan",
+  "sleepSoundOcean": "Ocean",
+  "sleepSoundRain": "Rain"
 }

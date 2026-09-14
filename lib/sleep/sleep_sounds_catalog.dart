@@ -1,5 +1,30 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
+/// Locale-aware display name for a sleep sound, keyed by its stable
+/// [SleepSound.resource]. The catalogue's [SleepSound.label] stays as the
+/// English fallback so an unknown resource still renders something.
+String sleepSoundLabel(SleepSound s) {
+  final l10n = currentL10n;
+  switch (s.resource) {
+    case 'sleep_white_noise':
+      return l10n.sleepSoundWhiteNoise;
+    case 'sleep_pink_noise':
+      return l10n.sleepSoundPinkNoise;
+    case 'sleep_brown_noise':
+      return l10n.sleepSoundBrownNoise;
+    case 'sleep_fan':
+      return l10n.sleepSoundFan;
+    case 'sleep_ocean':
+      return l10n.sleepSoundOcean;
+    case 'sleep_rain':
+      return l10n.sleepSoundRain;
+    default:
+      return s.label;
+  }
+}
+
 /// One selectable sleep sound. [resource] is the Android `res/raw` file name
 /// (without extension) the native [SleepSoundService] loads; [label] and [icon]
 /// are presentation.

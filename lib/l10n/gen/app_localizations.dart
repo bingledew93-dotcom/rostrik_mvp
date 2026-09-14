@@ -1773,6 +1773,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OK'**
   String get commonOk;
+
+  /// No description provided for @sleepTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep'**
+  String get sleepTitle;
+
+  /// No description provided for @sleepTargetHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'SLEEP TARGET'**
+  String get sleepTargetHeader;
+
+  /// No description provided for @sleepTargetSub.
+  ///
+  /// In en, this message translates to:
+  /// **'How many hours you want. Rostrik counts back from your next wake-up alarm to set tonight’s bedtime.'**
+  String get sleepTargetSub;
+
+  /// No description provided for @sleepRemindersHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'REMINDERS'**
+  String get sleepRemindersHeader;
+
+  /// No description provided for @sleepWindDownHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'WIND-DOWN LEAD'**
+  String get sleepWindDownHeader;
+
+  /// No description provided for @sleepWindDownSub.
+  ///
+  /// In en, this message translates to:
+  /// **'How long before bedtime the wind-down nudge lands.'**
+  String get sleepWindDownSub;
+
+  /// No description provided for @sleepSoundsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'SLEEP SOUNDS'**
+  String get sleepSoundsHeader;
+
+  /// No description provided for @sleepSoundsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'White & brown noise to drift off to. Pick an auto-stop timer and tap a sound.'**
+  String get sleepSoundsSub;
+
+  /// No description provided for @sleepNothingToPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to plan tonight'**
+  String get sleepNothingToPlan;
+
+  /// No description provided for @sleepNothingToPlanSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a shift to your roster and Rostrik will build a personalised bedtime around your next wake-up.'**
+  String get sleepNothingToPlanSub;
+
+  /// No description provided for @sleepTransitionDay.
+  ///
+  /// In en, this message translates to:
+  /// **'TRANSITION DAY'**
+  String get sleepTransitionDay;
+
+  /// No description provided for @sleepTransitionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomorrow is a Night Shift. Consider sleeping in.'**
+  String get sleepTransitionTitle;
+
+  /// No description provided for @sleepTransitionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It\'s a transition day — you have a rest day before nights, so there\'s no early alarm to chase. Bank extra rest now and let your body drift later tonight.'**
+  String get sleepTransitionBody;
+
+  /// No description provided for @sleepRestRecovery.
+  ///
+  /// In en, this message translates to:
+  /// **'REST & RECOVERY'**
+  String get sleepRestRecovery;
+
+  /// No description provided for @sleepNoEarlyAlarm.
+  ///
+  /// In en, this message translates to:
+  /// **'No early alarm to chase'**
+  String get sleepNoEarlyAlarm;
+
+  /// No description provided for @sleepRestBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your next shift is more than a day away, so there\'s no wake-up to plan tonight. Sleep on your own clock and bank some recovery — Rostrik will build your bedtime plan as it draws closer.'**
+  String get sleepRestBody;
+
+  /// No description provided for @sleepTonightsPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'TONIGHT\'S PLAN'**
+  String get sleepTonightsPlan;
+
+  /// No description provided for @sleepTargetBedtime.
+  ///
+  /// In en, this message translates to:
+  /// **'Target bedtime'**
+  String get sleepTargetBedtime;
+
+  /// No description provided for @sleepWindDownStat.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind-down'**
+  String get sleepWindDownStat;
+
+  /// No description provided for @sleepWakeUpStat.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake up'**
+  String get sleepWakeUpStat;
+
+  /// No description provided for @sleepDurationStat.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get sleepDurationStat;
+
+  /// No description provided for @sleepBedtimeReminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Bedtime Reminder'**
+  String get sleepBedtimeReminder;
+
+  /// No description provided for @sleepNudgeAtBedtime.
+  ///
+  /// In en, this message translates to:
+  /// **'Nudge me at {time} to head to bed'**
+  String sleepNudgeAtBedtime(String time);
+
+  /// No description provided for @sleepBedtimeSub.
+  ///
+  /// In en, this message translates to:
+  /// **'A nudge when it\'s time to head to bed'**
+  String get sleepBedtimeSub;
+
+  /// No description provided for @sleepWindDownReminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Wind-Down Reminder'**
+  String get sleepWindDownReminder;
+
+  /// No description provided for @sleepNudgeAtWindDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Nudge me at {time} to start winding down'**
+  String sleepNudgeAtWindDown(String time);
+
+  /// No description provided for @sleepWindDownReminderSub.
+  ///
+  /// In en, this message translates to:
+  /// **'An earlier heads-up to start winding down'**
+  String get sleepWindDownReminderSub;
+
+  /// No description provided for @commonOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get commonOff;
+
+  /// No description provided for @sleepSoundWhiteNoise.
+  ///
+  /// In en, this message translates to:
+  /// **'White Noise'**
+  String get sleepSoundWhiteNoise;
+
+  /// No description provided for @sleepSoundPinkNoise.
+  ///
+  /// In en, this message translates to:
+  /// **'Pink Noise'**
+  String get sleepSoundPinkNoise;
+
+  /// No description provided for @sleepSoundBrownNoise.
+  ///
+  /// In en, this message translates to:
+  /// **'Brown Noise'**
+  String get sleepSoundBrownNoise;
+
+  /// No description provided for @sleepSoundFan.
+  ///
+  /// In en, this message translates to:
+  /// **'Fan'**
+  String get sleepSoundFan;
+
+  /// No description provided for @sleepSoundOcean.
+  ///
+  /// In en, this message translates to:
+  /// **'Ocean'**
+  String get sleepSoundOcean;
+
+  /// No description provided for @sleepSoundRain.
+  ///
+  /// In en, this message translates to:
+  /// **'Rain'**
+  String get sleepSoundRain;
 }
 
 class _AppLocalizationsDelegate

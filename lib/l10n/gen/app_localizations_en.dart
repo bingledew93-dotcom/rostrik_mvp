@@ -1027,4 +1027,118 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonOk => 'OK';
+
+  @override
+  String get sleepTitle => 'Sleep';
+
+  @override
+  String get sleepTargetHeader => 'SLEEP TARGET';
+
+  @override
+  String get sleepTargetSub =>
+      'How many hours you want. Rostrik counts back from your next wake-up alarm to set tonight’s bedtime.';
+
+  @override
+  String get sleepRemindersHeader => 'REMINDERS';
+
+  @override
+  String get sleepWindDownHeader => 'WIND-DOWN LEAD';
+
+  @override
+  String get sleepWindDownSub =>
+      'How long before bedtime the wind-down nudge lands.';
+
+  @override
+  String get sleepSoundsHeader => 'SLEEP SOUNDS';
+
+  @override
+  String get sleepSoundsSub =>
+      'White & brown noise to drift off to. Pick an auto-stop timer and tap a sound.';
+
+  @override
+  String get sleepNothingToPlan => 'Nothing to plan tonight';
+
+  @override
+  String get sleepNothingToPlanSub =>
+      'Add a shift to your roster and Rostrik will build a personalised bedtime around your next wake-up.';
+
+  @override
+  String get sleepTransitionDay => 'TRANSITION DAY';
+
+  @override
+  String get sleepTransitionTitle =>
+      'Tomorrow is a Night Shift. Consider sleeping in.';
+
+  @override
+  String get sleepTransitionBody =>
+      'It\'s a transition day — you have a rest day before nights, so there\'s no early alarm to chase. Bank extra rest now and let your body drift later tonight.';
+
+  @override
+  String get sleepRestRecovery => 'REST & RECOVERY';
+
+  @override
+  String get sleepNoEarlyAlarm => 'No early alarm to chase';
+
+  @override
+  String get sleepRestBody =>
+      'Your next shift is more than a day away, so there\'s no wake-up to plan tonight. Sleep on your own clock and bank some recovery — Rostrik will build your bedtime plan as it draws closer.';
+
+  @override
+  String get sleepTonightsPlan => 'TONIGHT\'S PLAN';
+
+  @override
+  String get sleepTargetBedtime => 'Target bedtime';
+
+  @override
+  String get sleepWindDownStat => 'Wind-down';
+
+  @override
+  String get sleepWakeUpStat => 'Wake up';
+
+  @override
+  String get sleepDurationStat => 'Duration';
+
+  @override
+  String get sleepBedtimeReminder => 'Bedtime Reminder';
+
+  @override
+  String sleepNudgeAtBedtime(String time) {
+    return 'Nudge me at $time to head to bed';
+  }
+
+  @override
+  String get sleepBedtimeSub => 'A nudge when it\'s time to head to bed';
+
+  @override
+  String get sleepWindDownReminder => 'Wind-Down Reminder';
+
+  @override
+  String sleepNudgeAtWindDown(String time) {
+    return 'Nudge me at $time to start winding down';
+  }
+
+  @override
+  String get sleepWindDownReminderSub =>
+      'An earlier heads-up to start winding down';
+
+  @override
+  String get commonOff => 'Off';
+
+  @override
+  String get sleepSoundWhiteNoise => 'White Noise';
+
+  @override
+  String get sleepSoundPinkNoise => 'Pink Noise';
+
+  @override
+  String get sleepSoundBrownNoise => 'Brown Noise';
+
+  @override
+  String get sleepSoundFan => 'Fan';
+
+  @override
+  String get sleepSoundOcean => 'Ocean';
+
+  @override
+  String get sleepSoundRain => 'Rain';
 }
