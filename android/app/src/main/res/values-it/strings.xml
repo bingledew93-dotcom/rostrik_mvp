@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Il tuo prossimo turno a colpo d\'occhio</string>
+    <string name="alarm_fallback_title">Sveglia</string>
+    <string name="alarm_hint_critical">Sveglia critica\nScuoti con decisione per spegnere</string>
+    <string name="alarm_hint_slide">Scorri la maniglia qui sotto per spegnere</string>
+    <string name="alarm_snooze_button">POSTICIPA (%1$d MIN)</string>
+    <string name="alarm_slide_to_dismiss">Scorri per spegnere</string>
+    <string name="channel_alarm_name">Sveglia</string>
+    <string name="channel_alarm_description">Mostra la sveglia a schermo intero quando arriva una sveglia di turno.</string>
+    <string name="channel_alarm_playback_name">Riproduzione sveglia</string>
+    <string name="channel_alarm_playback_description">Mantiene in riproduzione in modo affidabile una sveglia con suoneria personalizzata.</string>
+    <string name="channel_sleep_name">Suoni per dormire</string>
+    <string name="channel_sleep_description">Continua a riprodurre un suono per dormire a schermo spento.</string>
+    <string name="channel_reminders_name">Promemoria</string>
+    <string name="channel_reminders_description">Avvisi facoltativi per eventi, attività e compleanni.</string>
+    <string name="sleep_sound_fallback">Suono per dormire</string>
+    <string name="sleep_playing">In riproduzione</string>
+    <string name="sleep_playing_stops_in">In riproduzione · si ferma tra %1$d min</string>
+    <string name="sleep_stop">Stop</string>
+    <string name="ringtone_picker_title">Scegli la suoneria della sveglia</string>
+    <string name="ringtone_system_fallback">Suoneria di sistema</string>
+    <string name="widget_off_rdo">🛌 Riposo</string>
+    <string name="widget_no_shifts">Ancora nessun turno</string>
+    <string name="duration_m">%1$d min</string>
+    <string name="duration_h">%1$d h</string>
+    <string name="duration_h_m">%1$d h %2$d min</string>
+    <string name="duration_d">%1$d g</string>
+    <string name="duration_d_h">%1$d g %2$d h</string>
+</resources>
