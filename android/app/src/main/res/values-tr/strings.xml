@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Sonraki vardiyan bir bakışta</string>
+    <string name="alarm_fallback_title">Alarm</string>
+    <string name="alarm_hint_critical">Kritik alarm\nKapatmak için sertçe salla</string>
+    <string name="alarm_hint_slide">Kapatmak için aşağıdaki tutamacı kaydır</string>
+    <string name="alarm_snooze_button">ERTELE (%1$d DK)</string>
+    <string name="alarm_slide_to_dismiss">Kapatmak için kaydır</string>
+    <string name="channel_alarm_name">Alarm</string>
+    <string name="channel_alarm_description">Vardiya alarmı zamanı geldiğinde tam ekran alarmı gösterir.</string>
+    <string name="channel_alarm_playback_name">Alarm çalma</string>
+    <string name="channel_alarm_playback_description">Özel sesli bir alarmın güvenilir şekilde çalmaya devam etmesini sağlar.</string>
+    <string name="channel_sleep_name">Uyku sesleri</string>
+    <string name="channel_sleep_description">Ekran kapalıyken uyku sesini çalmaya devam ettirir.</string>
+    <string name="channel_reminders_name">Hatırlatıcılar</string>
+    <string name="channel_reminders_description">Etkinlikler, görevler ve doğum günleri için isteğe bağlı hatırlatmalar.</string>
+    <string name="sleep_sound_fallback">Uyku sesi</string>
+    <string name="sleep_playing">Çalıyor</string>
+    <string name="sleep_playing_stops_in">Çalıyor · %1$d dk sonra durur</string>
+    <string name="sleep_stop">Durdur</string>
+    <string name="ringtone_picker_title">Alarm sesi seç</string>
+    <string name="ringtone_system_fallback">Sistem sesi</string>
+    <string name="widget_off_rdo">🛌 İzinli</string>
+    <string name="widget_no_shifts">Henüz vardiya yok</string>
+    <string name="duration_m">%1$d dk</string>
+    <string name="duration_h">%1$d sa</string>
+    <string name="duration_h_m">%1$d sa %2$d dk</string>
+    <string name="duration_d">%1$d g</string>
+    <string name="duration_d_h">%1$d g %2$d sa</string>
+</resources>
