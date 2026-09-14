@@ -1141,4 +1141,206 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sleepSoundRain => 'Rain';
+
+  @override
+  String get manageTitle => 'Manage';
+
+  @override
+  String get manageRosterTools => 'ROSTER TOOLS';
+
+  @override
+  String get manageRosterToolsSub =>
+      'Build and adjust the shifts that drive your alarms and sleep plan.';
+
+  @override
+  String get manageGenerateRotation => 'Generate Rotation';
+
+  @override
+  String get manageGenerateRotationSub =>
+      'Build a repeating shift pattern from a template.';
+
+  @override
+  String get manageAddCustomShift => 'Add Custom Shift';
+
+  @override
+  String get manageAddCustomShiftSub =>
+      'Drop a single one-off shift onto your roster.';
+
+  @override
+  String get manageMarkLeave => 'Mark Leave / Time Off';
+
+  @override
+  String get manageMarkLeaveSub =>
+      'Paint the days you\'re off (annual leave, sick) in one go.';
+
+  @override
+  String get managePauseSchedule => 'Pause Schedule';
+
+  @override
+  String get managePausedSub =>
+      'Holiday mode ON — alarms are silenced, your roster is safe.';
+
+  @override
+  String get manageNotPausedSub =>
+      'Holiday mode — silence alarms while you\'re off-roster.';
+
+  @override
+  String get markLeaveTitle => 'Mark leave';
+
+  @override
+  String get markLeaveIntro =>
+      'Tap the days you’re off, choose a reason, then apply. Alarms on those days won’t fire — your roster stays intact.';
+
+  @override
+  String get leaveAnnual => 'Annual Leave';
+
+  @override
+  String get leaveSick => 'Sick';
+
+  @override
+  String get leavePublicHoliday => 'Public Holiday';
+
+  @override
+  String get markLeaveReason => 'Reason';
+
+  @override
+  String get markLeaveFallbackReason => 'leave';
+
+  @override
+  String markLeaveMarked(int count, String reason) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Marked $count shifts as $reason.',
+      one: 'Marked 1 shift as $reason.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get markLeaveSelectDays => 'Select days to mark';
+
+  @override
+  String get markLeaveNoShifts => 'No shifts on those days';
+
+  @override
+  String markLeaveApplyTo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Apply to $count shifts',
+      one: 'Apply to 1 shift',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get workHistoryTitle => 'Work History';
+
+  @override
+  String get workHistoryExportTooltip => 'Export History';
+
+  @override
+  String workHistoryExportFailed(String error) {
+    return 'Could not export history: $error';
+  }
+
+  @override
+  String workHistoryWorked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count shifts worked',
+      one: '1 shift worked',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String workHistoryHours(String hours) {
+    return '$hours h';
+  }
+
+  @override
+  String get commonPaused => 'Paused';
+
+  @override
+  String workHistoryPausedReason(String reason) {
+    return 'Paused · $reason';
+  }
+
+  @override
+  String get workHistoryRotationBadge => 'Rotation';
+
+  @override
+  String get workHistoryAdHocBadge => 'Ad-Hoc';
+
+  @override
+  String get workHistoryEmptyTitle => 'No completed shifts yet';
+
+  @override
+  String get workHistoryEmptyBody =>
+      'Your worked shifts — rotation and custom alike — appear here once they finish, ready to export for payslip verification.';
+
+  @override
+  String get workHistoryShareSubject => 'Rostrik Work History';
+
+  @override
+  String get workHistoryShareText => 'My Rostrik work history export.';
+
+  @override
+  String get shiftEdAddShift => 'Add shift';
+
+  @override
+  String get shiftEdEditShift => 'Edit shift';
+
+  @override
+  String get shiftEdDate => 'Date';
+
+  @override
+  String get shiftEdPickDate => 'Pick date';
+
+  @override
+  String get shiftEdStarts => 'Starts';
+
+  @override
+  String get shiftEdEnds => 'Ends';
+
+  @override
+  String get shiftEdPickTime => 'Pick time';
+
+  @override
+  String get shiftEdEndsNextDay => 'Ends next day';
+
+  @override
+  String get shiftEdPauseTitle => 'Pause / cancel this shift';
+
+  @override
+  String get shiftEdPausedSub =>
+      'Alarm won\'t fire. Stays on your calendar as a record.';
+
+  @override
+  String get shiftEdNotPausedSub =>
+      'Mark a day off (sick, leave, holiday) without deleting it.';
+
+  @override
+  String get shiftEdReasonOptional => 'Reason (optional)';
+
+  @override
+  String get dayShifts => 'Shifts';
+
+  @override
+  String get dayActivities => 'Activities';
+
+  @override
+  String get dayAddAnotherShift => 'Add another shift';
+
+  @override
+  String get dayAddActivity => 'Add activity';
+
+  @override
+  String get dayAddActivitySub => 'Event, task or birthday';
+
+  @override
+  String get dayReminder => 'Reminder';
 }

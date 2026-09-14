@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../data/models/shift.dart';
+import '../l10n/l10n.dart';
 import '../data/repositories/shift_repository.dart';
 import '../logic/work_history.dart';
 import '../state/app_preferences.dart';
@@ -55,9 +56,10 @@ class _WorkHistoryScreenState extends State<WorkHistoryScreen> {
   Future<void> _export() async {
     final history = _history;
     if (history == null || history.isEmpty || _exporting) return;
-    // Capture the messenger before the async gap — BuildContext must not be
-    // used across an await.
+    // Capture the messenger + l10n before the async gap — BuildContext must
+    // not be used across an await.
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     setState(() => _exporting = true);
     try {
       final csv = workHistoryCsv(history);
@@ -66,7 +68,7 @@ class _WorkHistoryScreenState extends State<WorkHistoryScreen> {
       // No success snackbar — the native share sheet IS the confirmation.
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not export history: $e')),
+        SnackBar(content: Text(l10n.workHistoryExportFailed('$e'))),
       );
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -79,11 +81,11 @@ class _WorkHistoryScreenState extends State<WorkHistoryScreen> {
     final canExport = history != null && history.isNotEmpty && !_exporting;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Work History'),
+        title: Text(context.l10n.workHistoryTitle),
         actions: [
           IconButton(
             key: const ValueKey('work-history-export'),
-            tooltip: 'Export History',
+            tooltip: context.l10n.workHistoryExportTooltip,
             icon: _exporting
                 ? const SizedBox(
                     width: 18,
@@ -167,13 +169,13 @@ class _SummaryBanner extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '$shiftCount shift${shiftCount == 1 ? '' : 's'} worked',
+              context.l10n.workHistoryWorked(shiftCount),
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           Text(
-            '${formatDecimalHours(totalMinutes)} h',
+            context.l10n.workHistoryHours(formatDecimalHours(totalMinutes)),
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.primary,
               fontWeight: FontWeight.w700,
@@ -246,8 +248,10 @@ class _HistoryTile extends StatelessWidget {
                         Flexible(
                           child: Text(
                             shift.pauseReason == null
-                                ? 'Paused'
-                                : 'Paused · ${shift.pauseReason}',
+                                ? context.l10n.commonPaused
+                                : context.l10n.workHistoryPausedReason(
+                                    shift.pauseReason!,
+                                  ),
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w700,
@@ -263,7 +267,8 @@ class _HistoryTile extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              '${formatDecimalHours(workedMinutes(shift))} h',
+              context.l10n
+                  .workHistoryHours(formatDecimalHours(workedMinutes(shift))),
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w700,
@@ -289,12 +294,12 @@ class _TypeBadge extends StatelessWidget {
     final theme = Theme.of(context);
     final (label, bg, fg) = isAdHoc
         ? (
-            kAdHocShiftLabel,
+            context.l10n.workHistoryAdHocBadge,
             theme.colorScheme.primaryContainer,
             theme.colorScheme.onPrimaryContainer,
           )
         : (
-            kRotationShiftLabel,
+            context.l10n.workHistoryRotationBadge,
             theme.colorScheme.surfaceContainerHighest,
             theme.colorScheme.onSurfaceVariant,
           );
@@ -334,14 +339,13 @@ class _EmptyHistory extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'No completed shifts yet',
+              context.l10n.workHistoryEmptyTitle,
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Your worked shifts — rotation and custom alike — appear here '
-              'once they finish, ready to export for payslip verification.',
+              context.l10n.workHistoryEmptyBody,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -366,8 +370,8 @@ Future<void> shareWorkHistoryCsv(String csv, String filename) async {
   await SharePlus.instance.share(
     ShareParams(
       files: [XFile(file.path, mimeType: 'text/csv')],
-      subject: 'Rostrik Work History',
-      text: 'My Rostrik work history export.',
+      subject: currentL10n.workHistoryShareSubject,
+      text: currentL10n.workHistoryShareText,
     ),
   );
 }

@@ -1977,6 +1977,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Rain'**
   String get sleepSoundRain;
+
+  /// No description provided for @manageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get manageTitle;
+
+  /// No description provided for @manageRosterTools.
+  ///
+  /// In en, this message translates to:
+  /// **'ROSTER TOOLS'**
+  String get manageRosterTools;
+
+  /// No description provided for @manageRosterToolsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Build and adjust the shifts that drive your alarms and sleep plan.'**
+  String get manageRosterToolsSub;
+
+  /// No description provided for @manageGenerateRotation.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate Rotation'**
+  String get manageGenerateRotation;
+
+  /// No description provided for @manageGenerateRotationSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Build a repeating shift pattern from a template.'**
+  String get manageGenerateRotationSub;
+
+  /// No description provided for @manageAddCustomShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Custom Shift'**
+  String get manageAddCustomShift;
+
+  /// No description provided for @manageAddCustomShiftSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop a single one-off shift onto your roster.'**
+  String get manageAddCustomShiftSub;
+
+  /// No description provided for @manageMarkLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark Leave / Time Off'**
+  String get manageMarkLeave;
+
+  /// No description provided for @manageMarkLeaveSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Paint the days you\'re off (annual leave, sick) in one go.'**
+  String get manageMarkLeaveSub;
+
+  /// No description provided for @managePauseSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause Schedule'**
+  String get managePauseSchedule;
+
+  /// No description provided for @managePausedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Holiday mode ON — alarms are silenced, your roster is safe.'**
+  String get managePausedSub;
+
+  /// No description provided for @manageNotPausedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Holiday mode — silence alarms while you\'re off-roster.'**
+  String get manageNotPausedSub;
+
+  /// No description provided for @markLeaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark leave'**
+  String get markLeaveTitle;
+
+  /// No description provided for @markLeaveIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the days you’re off, choose a reason, then apply. Alarms on those days won’t fire — your roster stays intact.'**
+  String get markLeaveIntro;
+
+  /// No description provided for @leaveAnnual.
+  ///
+  /// In en, this message translates to:
+  /// **'Annual Leave'**
+  String get leaveAnnual;
+
+  /// No description provided for @leaveSick.
+  ///
+  /// In en, this message translates to:
+  /// **'Sick'**
+  String get leaveSick;
+
+  /// No description provided for @leavePublicHoliday.
+  ///
+  /// In en, this message translates to:
+  /// **'Public Holiday'**
+  String get leavePublicHoliday;
+
+  /// No description provided for @markLeaveReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get markLeaveReason;
+
+  /// No description provided for @markLeaveFallbackReason.
+  ///
+  /// In en, this message translates to:
+  /// **'leave'**
+  String get markLeaveFallbackReason;
+
+  /// No description provided for @markLeaveMarked.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Marked 1 shift as {reason}.} other{Marked {count} shifts as {reason}.}}'**
+  String markLeaveMarked(int count, String reason);
+
+  /// No description provided for @markLeaveSelectDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Select days to mark'**
+  String get markLeaveSelectDays;
+
+  /// No description provided for @markLeaveNoShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'No shifts on those days'**
+  String get markLeaveNoShifts;
+
+  /// No description provided for @markLeaveApplyTo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Apply to 1 shift} other{Apply to {count} shifts}}'**
+  String markLeaveApplyTo(int count);
+
+  /// No description provided for @workHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Work History'**
+  String get workHistoryTitle;
+
+  /// No description provided for @workHistoryExportTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Export History'**
+  String get workHistoryExportTooltip;
+
+  /// No description provided for @workHistoryExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export history: {error}'**
+  String workHistoryExportFailed(String error);
+
+  /// No description provided for @workHistoryWorked.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 shift worked} other{{count} shifts worked}}'**
+  String workHistoryWorked(int count);
+
+  /// No description provided for @workHistoryHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String workHistoryHours(String hours);
+
+  /// No description provided for @commonPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get commonPaused;
+
+  /// No description provided for @workHistoryPausedReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused · {reason}'**
+  String workHistoryPausedReason(String reason);
+
+  /// No description provided for @workHistoryRotationBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotation'**
+  String get workHistoryRotationBadge;
+
+  /// No description provided for @workHistoryAdHocBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Ad-Hoc'**
+  String get workHistoryAdHocBadge;
+
+  /// No description provided for @workHistoryEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No completed shifts yet'**
+  String get workHistoryEmptyTitle;
+
+  /// No description provided for @workHistoryEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your worked shifts — rotation and custom alike — appear here once they finish, ready to export for payslip verification.'**
+  String get workHistoryEmptyBody;
+
+  /// No description provided for @workHistoryShareSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Rostrik Work History'**
+  String get workHistoryShareSubject;
+
+  /// No description provided for @workHistoryShareText.
+  ///
+  /// In en, this message translates to:
+  /// **'My Rostrik work history export.'**
+  String get workHistoryShareText;
+
+  /// No description provided for @shiftEdAddShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Add shift'**
+  String get shiftEdAddShift;
+
+  /// No description provided for @shiftEdEditShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit shift'**
+  String get shiftEdEditShift;
+
+  /// No description provided for @shiftEdDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get shiftEdDate;
+
+  /// No description provided for @shiftEdPickDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick date'**
+  String get shiftEdPickDate;
+
+  /// No description provided for @shiftEdStarts.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts'**
+  String get shiftEdStarts;
+
+  /// No description provided for @shiftEdEnds.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends'**
+  String get shiftEdEnds;
+
+  /// No description provided for @shiftEdPickTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick time'**
+  String get shiftEdPickTime;
+
+  /// No description provided for @shiftEdEndsNextDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends next day'**
+  String get shiftEdEndsNextDay;
+
+  /// No description provided for @shiftEdPauseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause / cancel this shift'**
+  String get shiftEdPauseTitle;
+
+  /// No description provided for @shiftEdPausedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarm won\'t fire. Stays on your calendar as a record.'**
+  String get shiftEdPausedSub;
+
+  /// No description provided for @shiftEdNotPausedSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark a day off (sick, leave, holiday) without deleting it.'**
+  String get shiftEdNotPausedSub;
+
+  /// No description provided for @shiftEdReasonOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (optional)'**
+  String get shiftEdReasonOptional;
+
+  /// No description provided for @dayShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'Shifts'**
+  String get dayShifts;
+
+  /// No description provided for @dayActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Activities'**
+  String get dayActivities;
+
+  /// No description provided for @dayAddAnotherShift.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another shift'**
+  String get dayAddAnotherShift;
+
+  /// No description provided for @dayAddActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Add activity'**
+  String get dayAddActivity;
+
+  /// No description provided for @dayAddActivitySub.
+  ///
+  /// In en, this message translates to:
+  /// **'Event, task or birthday'**
+  String get dayAddActivitySub;
+
+  /// No description provided for @dayReminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder'**
+  String get dayReminder;
 }
 
 class _AppLocalizationsDelegate

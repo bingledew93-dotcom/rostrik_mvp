@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/models/calendar_activity.dart';
+import '../l10n/l10n.dart';
 import '../data/models/shift.dart';
 import '../data/models/shift_type.dart';
 import '../state/app_preferences.dart';
@@ -70,7 +71,7 @@ class _DayActionsSheet extends StatelessWidget {
               ),
             ),
 
-            _SectionLabel('Shifts'),
+            _SectionLabel(context.l10n.dayShifts),
             for (var i = 0; i < shiftsOnDate.length; i++)
               _ShiftTile(
                 key: ValueKey('day-shift-$i'),
@@ -88,7 +89,11 @@ class _DayActionsSheet extends StatelessWidget {
             ListTile(
               key: const ValueKey('day-add-shift'),
               leading: const Icon(Icons.add),
-              title: Text(shiftsOnDate.isEmpty ? 'Add shift' : 'Add another shift'),
+              title: Text(
+                shiftsOnDate.isEmpty
+                    ? context.l10n.shiftEdAddShift
+                    : context.l10n.dayAddAnotherShift,
+              ),
               onTap: () {
                 _close();
                 showShiftEditorModal(parentContext, initialDate: date);
@@ -97,7 +102,7 @@ class _DayActionsSheet extends StatelessWidget {
 
             const Divider(height: 8),
 
-            _SectionLabel('Activities'),
+            _SectionLabel(context.l10n.dayActivities),
             for (var i = 0; i < activitiesOnDate.length; i++)
               _ActivityTile(
                 key: ValueKey('day-activity-$i'),
@@ -115,8 +120,8 @@ class _DayActionsSheet extends StatelessWidget {
             ListTile(
               key: const ValueKey('day-add-activity'),
               leading: const Icon(Icons.add),
-              title: const Text('Add activity'),
-              subtitle: const Text('Event, task or birthday'),
+              title: Text(context.l10n.dayAddActivity),
+              subtitle: Text(context.l10n.dayAddActivitySub),
               onTap: () {
                 _close();
                 showActivityEditorModal(parentContext, date: date);
@@ -168,10 +173,13 @@ class _ShiftTile extends StatelessWidget {
     final theme = Theme.of(context);
     final visual = visualFor(shift.type);
     final isOff = shift.type == ShiftType.off;
+    final pauseReason = shift.pauseReason;
     final subtitle = shift.isPaused
-        ? 'Paused${shift.pauseReason != null && shift.pauseReason!.isNotEmpty ? ' · ${shift.pauseReason}' : ''}'
+        ? (pauseReason != null && pauseReason.isNotEmpty
+            ? context.l10n.workHistoryPausedReason(pauseReason)
+            : context.l10n.commonPaused)
         : isOff
-            ? 'Off'
+            ? context.l10n.shiftTypeOff
             : '${formatClock(shift.startMinutes, use24Hour: use24Hour)}'
                 ' – ${formatClock(shift.endMinutes, use24Hour: use24Hour)}';
     return ListTile(
@@ -183,7 +191,7 @@ class _ShiftTile extends StatelessWidget {
           shape: BoxShape.circle,
         ),
       ),
-      title: Text('${shiftTypeLabel(shift.type)} shift'),
+      title: Text(context.l10n.dashHeroShift(shiftTypeLabel(shift.type))),
       subtitle: Text(
         subtitle,
         style: theme.textTheme.bodySmall?.copyWith(
@@ -222,7 +230,7 @@ class _ActivityTile extends StatelessWidget {
     final bits = <String>[
       if (!activity.isAllDay)
         formatClock(activity.timeMinutes!, use24Hour: use24Hour),
-      if (activity.hasReminder) 'Reminder',
+      if (activity.hasReminder) context.l10n.dayReminder,
     ];
     final done = activity.kind == ActivityKind.task && activity.isDone;
     return ListTile(

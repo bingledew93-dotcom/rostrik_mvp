@@ -663,5 +663,104 @@
   "sleepSoundBrownNoise": "Brown Noise",
   "sleepSoundFan": "Fan",
   "sleepSoundOcean": "Ocean",
-  "sleepSoundRain": "Rain"
+  "sleepSoundRain": "Rain",
+  "manageTitle": "Manage",
+  "manageRosterTools": "ROSTER TOOLS",
+  "manageRosterToolsSub": "Build and adjust the shifts that drive your alarms and sleep plan.",
+  "manageGenerateRotation": "Generate Rotation",
+  "manageGenerateRotationSub": "Build a repeating shift pattern from a template.",
+  "manageAddCustomShift": "Add Custom Shift",
+  "manageAddCustomShiftSub": "Drop a single one-off shift onto your roster.",
+  "manageMarkLeave": "Mark Leave / Time Off",
+  "manageMarkLeaveSub": "Paint the days you're off (annual leave, sick) in one go.",
+  "managePauseSchedule": "Pause Schedule",
+  "managePausedSub": "Holiday mode ON — alarms are silenced, your roster is safe.",
+  "manageNotPausedSub": "Holiday mode — silence alarms while you're off-roster.",
+  "markLeaveTitle": "Mark leave",
+  "markLeaveIntro": "Tap the days you’re off, choose a reason, then apply. Alarms on those days won’t fire — your roster stays intact.",
+  "leaveAnnual": "Annual Leave",
+  "leaveSick": "Sick",
+  "leavePublicHoliday": "Public Holiday",
+  "markLeaveReason": "Reason",
+  "markLeaveFallbackReason": "leave",
+  "markLeaveMarked": "{count, plural, one{Marked 1 shift as {reason}.} other{Marked {count} shifts as {reason}.}}",
+  "@markLeaveMarked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "markLeaveSelectDays": "Select days to mark",
+  "markLeaveNoShifts": "No shifts on those days",
+  "markLeaveApplyTo": "{count, plural, one{Apply to 1 shift} other{Apply to {count} shifts}}",
+  "@markLeaveApplyTo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workHistoryTitle": "Work History",
+  "workHistoryExportTooltip": "Export History",
+  "workHistoryExportFailed": "Could not export history: {error}",
+  "@workHistoryExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "workHistoryWorked": "{count, plural, one{1 shift worked} other{{count} shifts worked}}",
+  "@workHistoryWorked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workHistoryHours": "{hours} h",
+  "@workHistoryHours": {
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      }
+    }
+  },
+  "commonPaused": "Paused",
+  "workHistoryPausedReason": "Paused · {reason}",
+  "@workHistoryPausedReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "workHistoryRotationBadge": "Rotation",
+  "workHistoryAdHocBadge": "Ad-Hoc",
+  "workHistoryEmptyTitle": "No completed shifts yet",
+  "workHistoryEmptyBody": "Your worked shifts — rotation and custom alike — appear here once they finish, ready to export for payslip verification.",
+  "workHistoryShareSubject": "Rostrik Work History",
+  "workHistoryShareText": "My Rostrik work history export.",
+  "shiftEdAddShift": "Add shift",
+  "shiftEdEditShift": "Edit shift",
+  "shiftEdDate": "Date",
+  "shiftEdPickDate": "Pick date",
+  "shiftEdStarts": "Starts",
+  "shiftEdEnds": "Ends",
+  "shiftEdPickTime": "Pick time",
+  "shiftEdEndsNextDay": "Ends next day",
+  "shiftEdPauseTitle": "Pause / cancel this shift",
+  "shiftEdPausedSub": "Alarm won't fire. Stays on your calendar as a record.",
+  "shiftEdNotPausedSub": "Mark a day off (sick, leave, holiday) without deleting it.",
+  "shiftEdReasonOptional": "Reason (optional)",
+  "dayShifts": "Shifts",
+  "dayActivities": "Activities",
+  "dayAddAnotherShift": "Add another shift",
+  "dayAddActivity": "Add activity",
+  "dayAddActivitySub": "Event, task or birthday",
+  "dayReminder": "Reminder"
 }

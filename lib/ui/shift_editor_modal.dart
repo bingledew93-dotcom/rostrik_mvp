@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/models/shift.dart';
+import '../l10n/l10n.dart';
 import '../data/models/shift_type.dart';
 import '../data/repositories/shift_repository.dart';
 import '../state/app_preferences.dart';
@@ -92,11 +93,11 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
   late final TextEditingController _reasonController;
 
   /// Quick-pick pause reasons; the user can also type a custom one.
-  static const List<String> _pauseReasonPresets = [
-    'Sick',
-    'Annual Leave',
-    'Public Holiday',
-  ];
+  static List<String> get _pauseReasonPresets => [
+        currentL10n.leaveSick,
+        currentL10n.leaveAnnual,
+        currentL10n.leavePublicHoliday,
+      ];
 
   @override
   void initState() {
@@ -242,11 +243,11 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
         SwitchListTile(
           key: const ValueKey('shift-editor-pause-toggle'),
           contentPadding: EdgeInsets.zero,
-          title: const Text('Pause / cancel this shift'),
+          title: Text(context.l10n.shiftEdPauseTitle),
           subtitle: Text(
             _isPaused
-                ? "Alarm won't fire. Stays on your calendar as a record."
-                : 'Mark a day off (sick, leave, holiday) without deleting it.',
+                ? context.l10n.shiftEdPausedSub
+                : context.l10n.shiftEdNotPausedSub,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -258,7 +259,10 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
           const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text('Reason', style: theme.textTheme.labelLarge),
+            child: Text(
+              context.l10n.markLeaveReason,
+              style: theme.textTheme.labelLarge,
+            ),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -279,9 +283,9 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
             key: const ValueKey('shift-editor-pause-reason'),
             controller: _reasonController,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Reason (optional)',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: context.l10n.shiftEdReasonOptional,
+              border: const OutlineInputBorder(),
               isDense: true,
             ),
           ),
@@ -301,7 +305,9 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              widget.existing == null ? 'Add shift' : 'Edit shift',
+              widget.existing == null
+                  ? context.l10n.shiftEdAddShift
+                  : context.l10n.shiftEdEditShift,
               style: theme.textTheme.titleLarge,
               textAlign: TextAlign.center,
             ),
@@ -320,15 +326,17 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
             const SizedBox(height: 12),
 
             _PickerRow(
-              label: 'Date',
-              valueLabel: _date == null ? 'Pick date' : formatShiftDate(_date!),
+              label: context.l10n.shiftEdDate,
+              valueLabel: _date == null
+                  ? context.l10n.shiftEdPickDate
+                  : formatShiftDate(_date!),
               onPressed: _pickDate,
             ),
             if (!_isOff) ...[
               _PickerRow(
-                label: 'Starts',
+                label: context.l10n.shiftEdStarts,
                 valueLabel: _start == null
-                    ? 'Pick time'
+                    ? context.l10n.shiftEdPickTime
                     : formatClockOfDay(
                         _start!,
                         use24Hour: AppPreferences.use24HourOf(context),
@@ -336,9 +344,9 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
                 onPressed: _pickStart,
               ),
               _PickerRow(
-                label: 'Ends',
+                label: context.l10n.shiftEdEnds,
                 valueLabel: _end == null
-                    ? 'Pick time'
+                    ? context.l10n.shiftEdPickTime
                     : formatClockOfDay(
                         _end!,
                         use24Hour: AppPreferences.use24HourOf(context),
@@ -349,7 +357,7 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    'Ends next day',
+                    context.l10n.shiftEdEndsNextDay,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -369,12 +377,12 @@ class _ShiftEditorModalState extends State<ShiftEditorModal> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(context.l10n.commonCancel),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _canSave ? _save : null,
-                  child: const Text('Save'),
+                  child: Text(context.l10n.commonSave),
                 ),
               ],
             ),

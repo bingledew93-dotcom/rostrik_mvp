@@ -5,6 +5,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../data/models/shift.dart';
 import '../../data/models/shift_type.dart';
 import '../../data/repositories/shift_repository.dart';
+import '../../l10n/l10n.dart';
 import '../../logic/leave_marking.dart';
 import '../../state/app_preferences.dart';
 
@@ -26,11 +27,13 @@ class MarkLeaveScreen extends StatefulWidget {
 }
 
 class _MarkLeaveScreenState extends State<MarkLeaveScreen> {
-  static const List<String> _reasonPresets = [
-    'Annual Leave',
-    'Sick',
-    'Public Holiday',
-  ];
+  // currentL10n (not context.l10n): the first preset seeds the controller in
+  // initState, where inherited-widget lookups are off-limits.
+  static List<String> get _reasonPresets => [
+        currentL10n.leaveAnnual,
+        currentL10n.leaveSick,
+        currentL10n.leavePublicHoliday,
+      ];
 
   final Set<DateTime> _selectedDays = <DateTime>{};
   late final TextEditingController _reasonController;
@@ -85,9 +88,10 @@ class _MarkLeaveScreenState extends State<MarkLeaveScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          'Marked ${targets.length} '
-          'shift${targets.length == 1 ? '' : 's'} as '
-          '${reason.isEmpty ? 'leave' : reason}.',
+          currentL10n.markLeaveMarked(
+            targets.length,
+            reason.isEmpty ? currentL10n.markLeaveFallbackReason : reason,
+          ),
         ),
       ),
     );
@@ -107,7 +111,7 @@ class _MarkLeaveScreenState extends State<MarkLeaveScreen> {
     final startWeekOnMonday = AppPreferences.startWeekOnMondayOf(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mark leave')),
+      appBar: AppBar(title: Text(context.l10n.markLeaveTitle)),
       body: SafeArea(
         top: false,
         child: Column(
@@ -115,14 +119,14 @@ class _MarkLeaveScreenState extends State<MarkLeaveScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Text(
-                'Tap the days you’re off, choose a reason, then apply. '
-                'Alarms on those days won’t fire — your roster stays intact.',
+                context.l10n.markLeaveIntro,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
             TableCalendar<void>(
+              locale: Localizations.localeOf(context).toString(),
               focusedDay: _focusedDay,
               firstDay: DateTime(DateTime.now().year - 1),
               lastDay: DateTime(DateTime.now().year + 1, 12, 31),
@@ -166,7 +170,10 @@ class _MarkLeaveScreenState extends State<MarkLeaveScreen> {
                   children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Reason', style: theme.textTheme.labelLarge),
+                      child: Text(
+                        context.l10n.markLeaveReason,
+                        style: theme.textTheme.labelLarge,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -188,9 +195,9 @@ class _MarkLeaveScreenState extends State<MarkLeaveScreen> {
                       key: const ValueKey('mark-leave-reason-field'),
                       controller: _reasonController,
                       textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        labelText: 'Reason',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.markLeaveReason,
+                        border: const OutlineInputBorder(),
                         isDense: true,
                       ),
                     ),
@@ -210,10 +217,9 @@ class _MarkLeaveScreenState extends State<MarkLeaveScreen> {
                     child: Text(
                       targets.isEmpty
                           ? (_selectedDays.isEmpty
-                              ? 'Select days to mark'
-                              : 'No shifts on those days')
-                          : 'Apply to ${targets.length} '
-                              'shift${targets.length == 1 ? '' : 's'}',
+                              ? context.l10n.markLeaveSelectDays
+                              : context.l10n.markLeaveNoShifts)
+                          : context.l10n.markLeaveApplyTo(targets.length),
                     ),
                   ),
                 ),

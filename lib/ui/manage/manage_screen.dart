@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/l10n.dart';
 import '../../state/app_preferences.dart';
 import '../pattern_picker_screen.dart';
 import '../settings_screen.dart';
@@ -28,11 +29,11 @@ class ManageScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage'),
+        title: Text(context.l10n.manageTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings',
+            tooltip: context.l10n.settingsTitle,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
@@ -44,11 +45,10 @@ class ManageScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            const _SectionHeader('ROSTER TOOLS'),
+            _SectionHeader(context.l10n.manageRosterTools),
             const SizedBox(height: 4),
             Text(
-              'Build and adjust the shifts that drive your alarms and sleep '
-              'plan.',
+              context.l10n.manageRosterToolsSub,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -57,8 +57,8 @@ class ManageScreen extends StatelessWidget {
             _ActionCard(
               key: const ValueKey('manage-generate-rotation'),
               icon: Icons.event_repeat,
-              title: 'Generate Rotation',
-              subtitle: 'Build a repeating shift pattern from a template.',
+              title: context.l10n.manageGenerateRotation,
+              subtitle: context.l10n.manageGenerateRotationSub,
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const PatternPickerScreen()),
@@ -68,8 +68,8 @@ class ManageScreen extends StatelessWidget {
             _ActionCard(
               key: const ValueKey('manage-add-custom-shift'),
               icon: Icons.add_circle_outline,
-              title: 'Add Custom Shift',
-              subtitle: 'Drop a single one-off shift onto your roster.',
+              title: context.l10n.manageAddCustomShift,
+              subtitle: context.l10n.manageAddCustomShiftSub,
               trailing: const Icon(Icons.chevron_right),
               // The quick-add modal that used to hang off the Timeline FAB now
               // lives here, on the manipulation hub.
@@ -79,9 +79,8 @@ class ManageScreen extends StatelessWidget {
             _ActionCard(
               key: const ValueKey('manage-mark-leave'),
               icon: Icons.beach_access_outlined,
-              title: 'Mark Leave / Time Off',
-              subtitle: 'Paint the days you\'re off (annual leave, sick) in one '
-                  'go.',
+              title: context.l10n.manageMarkLeave,
+              subtitle: context.l10n.manageMarkLeaveSub,
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const MarkLeaveScreen()),
@@ -208,10 +207,10 @@ class _PauseScheduleCard extends StatelessWidget {
     final paused = AppPreferences.isSchedulePausedOf(context);
     return _ActionCard(
       icon: paused ? Icons.pause_circle : Icons.pause_circle_outline,
-      title: 'Pause Schedule',
+      title: context.l10n.managePauseSchedule,
       subtitle: paused
-          ? 'Holiday mode ON — alarms are silenced, your roster is safe.'
-          : "Holiday mode — silence alarms while you're off-roster.",
+          ? context.l10n.managePausedSub
+          : context.l10n.manageNotPausedSub,
       trailing: Switch(
         key: const ValueKey('manage-pause-toggle'),
         value: paused,
