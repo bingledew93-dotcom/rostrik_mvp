@@ -821,5 +821,238 @@
   "filterAll": "All",
   "filterWork": "Work",
   "criticalHoldToDismiss": "Or hold to dismiss",
-  "patternChoosePattern": "Choose a pattern"
+  "patternChoosePattern": "Choose a pattern",
+  "patternRotatingSwings": "Rotating Swings",
+  "patternDaySwings": "Day Only Swings",
+  "patternNightSwings": "Night Only Swings",
+  "patternShiftTimes": "Shift times",
+  "patternGenerate": "Set Day 1 & Generate",
+  "patternSelectDay1": "Select your Next Day 1",
+  "patternDay1Hint": "First day of your {label} block",
+  "@patternDay1Hint": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "patternNextDay1": "Next Day 1",
+  "patternUseThisDate": "Use this date",
+  "patternGenerated": "{count, plural, one{Generated 1 shift} other{Generated {count} shifts}}",
+  "@patternGenerated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "patternGenerationFailed": "Generation failed: {error}",
+  "@patternGenerationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "patternFirstBlockFallback": "first",
+  "patternBuildCustom": "Build custom roster",
+  "patternBuildCustomSub": "Doesn't fit a preset? Compose your own blocks.",
+  "patternBlockDays": "{n, plural, one{1 Day} other{{n} Days}}",
+  "@patternBlockDays": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "patternBlockAfternoons": "{n, plural, one{1 Afternoon} other{{n} Afternoons}}",
+  "@patternBlockAfternoons": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "patternBlockNights": "{n, plural, one{1 Night} other{{n} Nights}}",
+  "@patternBlockNights": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "patternBlockOff": "{n} Off",
+  "@patternBlockOff": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "builderNewRoster": "New Shift Roster",
+  "builderEditRoster": "Edit Roster",
+  "builderNewSub": "Set up your shift rotation pattern",
+  "builderEditSub": "Change and replace this saved roster",
+  "builderNameHint": "Roster name (e.g. My 14-Day Rotation)",
+  "builderCycleLength": "CYCLE LENGTH",
+  "builderStartDate": "START DATE",
+  "builderShiftBlocks": "SHIFT BLOCKS",
+  "builderAddShiftBlock": "Add Shift Block",
+  "builderCreateRoster": "Create Roster",
+  "builderSaveChanges": "Save Changes",
+  "builderReplaceWarning": "Saving replaces this roster. Any leave / time-off marks painted on it will reset.",
+  "builderBackToOptions": "Back to options",
+  "builderOrImport": "OR IMPORT AN EXISTING ROSTER",
+  "builderImportViaAi": "Import via AI",
+  "builderScanning": "Scanning…",
+  "builderScanInstead": "Scan a roster photo instead",
+  "builderCustomChip": "Custom",
+  "builderCycleLengthLabel": "Cycle length",
+  "builderDaysCount": "{n, plural, one{1 day} other{{n} days}}",
+  "@builderDaysCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "builderPickADate": "Pick a date",
+  "builderNoBlocksYet": "No blocks yet",
+  "builderNoBlocksSub": "Add shift blocks to define your rotation",
+  "builderDaysLine": "Days {ranges}",
+  "@builderDaysLine": {
+    "placeholders": {
+      "ranges": {
+        "type": "String"
+      }
+    }
+  },
+  "builderEditBlock": "Edit block",
+  "builderRemoveBlock": "Remove block",
+  "builderPickRosterStart": "Pick the roster start date",
+  "builderPickScanStart": "Pick the start date for the scanned roster",
+  "builderScanCamera": "Scan with camera",
+  "builderImportScreenshot": "Import a screenshot",
+  "builderScanFailed": "Scan failed: {error}",
+  "@builderScanFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "builderNoTimesRecognised": "No shift times recognised. Try cropping tighter around the grid.",
+  "builderCustomRosterFallback": "Custom roster",
+  "builderScannedRosterFallback": "Scanned roster",
+  "builderRosterUpdated": "{count, plural, one{Roster updated — 1 shift scheduled} other{Roster updated — {count} shifts scheduled}}",
+  "@builderRosterUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "builderRosterCreated": "{count, plural, one{Created — 1 shift scheduled} other{Created — {count} shifts scheduled}}",
+  "@builderRosterCreated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "builderCouldNotCreate": "Could not create the roster: {error}",
+  "@builderCouldNotCreate": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "builderRosterImported": "Roster imported to your calendar",
+  "builderCouldNotImport": "Could not import the roster: {error}",
+  "@builderCouldNotImport": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "blockAddTitle": "Add shift block",
+  "blockEditTitle": "Edit shift block",
+  "blockStart": "Start",
+  "blockEnd": "End",
+  "blockTapDays": "Tap the days this shift covers",
+  "blockUntappedOff": "Un-tapped days are Off.",
+  "blockOverlap": "This time overlaps another shift on day {ranges} — change the time or those days.",
+  "@blockOverlap": {
+    "placeholders": {
+      "ranges": {
+        "type": "String"
+      }
+    }
+  },
+  "blockAdd": "Add block",
+  "blockSave": "Save block",
+  "aiPromptCopied": "Prompt copied! Paste it into your AI app along with your roster.",
+  "aiNothingToPaste": "Nothing to paste from the clipboard.",
+  "aiNoValidShifts": "No valid shifts detected. Make sure you used the copied AI prompt.",
+  "aiStep1": "Copy the prompt",
+  "aiCopied": "Copied!",
+  "aiCopyPrompt": "Copy AI Prompt",
+  "aiStep1Sub": "Paste it into ChatGPT, Gemini or any AI app, then add your roster text or a photo/screenshot and send.",
+  "aiStep2": "Paste the AI's reply",
+  "aiPaste": "Paste",
+  "aiParsePreview": "Parse & Preview",
+  "aiStep3": "Review the detected shifts",
+  "aiStep3Sub": "Tap a badge to switch it between Day, Afternoon and Night if the AI got one wrong.",
+  "aiImportDays": "{count, plural, one{Import 1 day} other{Import {count} days}}",
+  "@aiImportDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTitleSub": "Turn any roster text into shifts with the help of an AI app.",
+  "aiSummaryLine": "{count, plural, one{1 day} other{{count} days}} · {working} working · {off} off",
+  "@aiSummaryLine": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "working": {
+        "type": "int"
+      },
+      "off": {
+        "type": "int"
+      }
+    }
+  },
+  "draftReviewTitle": "Review scanned roster",
+  "draftRemovedDay": "Removed {date}",
+  "@draftRemovedDay": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "draftUndo": "Undo",
+  "draftSavedDays": "{count, plural, one{Saved 1 day to your roster} other{Saved {count} days to your roster}}",
+  "@draftSavedDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "draftRosterName": "Roster name",
+  "draftScannedImage": "Scanned image",
+  "draftScannedImageSub": "Tap the image to enlarge and compare",
+  "draftImageError": "Could not display the scanned image.",
+  "draftRemove": "Remove",
+  "draftNoEndTime": "Scanned without an end time — set it to enable Save.",
+  "draftTime": "Time",
+  "draftSetEnd": "Set end",
+  "draftConfirmSave": "Confirm & Save"
 }

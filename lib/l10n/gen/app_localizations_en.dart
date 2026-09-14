@@ -1490,4 +1490,394 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get patternChoosePattern => 'Choose a pattern';
+
+  @override
+  String get patternRotatingSwings => 'Rotating Swings';
+
+  @override
+  String get patternDaySwings => 'Day Only Swings';
+
+  @override
+  String get patternNightSwings => 'Night Only Swings';
+
+  @override
+  String get patternShiftTimes => 'Shift times';
+
+  @override
+  String get patternGenerate => 'Set Day 1 & Generate';
+
+  @override
+  String get patternSelectDay1 => 'Select your Next Day 1';
+
+  @override
+  String patternDay1Hint(String label) {
+    return 'First day of your $label block';
+  }
+
+  @override
+  String get patternNextDay1 => 'Next Day 1';
+
+  @override
+  String get patternUseThisDate => 'Use this date';
+
+  @override
+  String patternGenerated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Generated $count shifts',
+      one: 'Generated 1 shift',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String patternGenerationFailed(String error) {
+    return 'Generation failed: $error';
+  }
+
+  @override
+  String get patternFirstBlockFallback => 'first';
+
+  @override
+  String get patternBuildCustom => 'Build custom roster';
+
+  @override
+  String get patternBuildCustomSub =>
+      'Doesn\'t fit a preset? Compose your own blocks.';
+
+  @override
+  String patternBlockDays(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n Days',
+      one: '1 Day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String patternBlockAfternoons(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n Afternoons',
+      one: '1 Afternoon',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String patternBlockNights(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n Nights',
+      one: '1 Night',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String patternBlockOff(int n) {
+    return '$n Off';
+  }
+
+  @override
+  String get builderNewRoster => 'New Shift Roster';
+
+  @override
+  String get builderEditRoster => 'Edit Roster';
+
+  @override
+  String get builderNewSub => 'Set up your shift rotation pattern';
+
+  @override
+  String get builderEditSub => 'Change and replace this saved roster';
+
+  @override
+  String get builderNameHint => 'Roster name (e.g. My 14-Day Rotation)';
+
+  @override
+  String get builderCycleLength => 'CYCLE LENGTH';
+
+  @override
+  String get builderStartDate => 'START DATE';
+
+  @override
+  String get builderShiftBlocks => 'SHIFT BLOCKS';
+
+  @override
+  String get builderAddShiftBlock => 'Add Shift Block';
+
+  @override
+  String get builderCreateRoster => 'Create Roster';
+
+  @override
+  String get builderSaveChanges => 'Save Changes';
+
+  @override
+  String get builderReplaceWarning =>
+      'Saving replaces this roster. Any leave / time-off marks painted on it will reset.';
+
+  @override
+  String get builderBackToOptions => 'Back to options';
+
+  @override
+  String get builderOrImport => 'OR IMPORT AN EXISTING ROSTER';
+
+  @override
+  String get builderImportViaAi => 'Import via AI';
+
+  @override
+  String get builderScanning => 'Scanning…';
+
+  @override
+  String get builderScanInstead => 'Scan a roster photo instead';
+
+  @override
+  String get builderCustomChip => 'Custom';
+
+  @override
+  String get builderCycleLengthLabel => 'Cycle length';
+
+  @override
+  String builderDaysCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get builderPickADate => 'Pick a date';
+
+  @override
+  String get builderNoBlocksYet => 'No blocks yet';
+
+  @override
+  String get builderNoBlocksSub => 'Add shift blocks to define your rotation';
+
+  @override
+  String builderDaysLine(String ranges) {
+    return 'Days $ranges';
+  }
+
+  @override
+  String get builderEditBlock => 'Edit block';
+
+  @override
+  String get builderRemoveBlock => 'Remove block';
+
+  @override
+  String get builderPickRosterStart => 'Pick the roster start date';
+
+  @override
+  String get builderPickScanStart =>
+      'Pick the start date for the scanned roster';
+
+  @override
+  String get builderScanCamera => 'Scan with camera';
+
+  @override
+  String get builderImportScreenshot => 'Import a screenshot';
+
+  @override
+  String builderScanFailed(String error) {
+    return 'Scan failed: $error';
+  }
+
+  @override
+  String get builderNoTimesRecognised =>
+      'No shift times recognised. Try cropping tighter around the grid.';
+
+  @override
+  String get builderCustomRosterFallback => 'Custom roster';
+
+  @override
+  String get builderScannedRosterFallback => 'Scanned roster';
+
+  @override
+  String builderRosterUpdated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Roster updated — $count shifts scheduled',
+      one: 'Roster updated — 1 shift scheduled',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String builderRosterCreated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Created — $count shifts scheduled',
+      one: 'Created — 1 shift scheduled',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String builderCouldNotCreate(String error) {
+    return 'Could not create the roster: $error';
+  }
+
+  @override
+  String get builderRosterImported => 'Roster imported to your calendar';
+
+  @override
+  String builderCouldNotImport(String error) {
+    return 'Could not import the roster: $error';
+  }
+
+  @override
+  String get blockAddTitle => 'Add shift block';
+
+  @override
+  String get blockEditTitle => 'Edit shift block';
+
+  @override
+  String get blockStart => 'Start';
+
+  @override
+  String get blockEnd => 'End';
+
+  @override
+  String get blockTapDays => 'Tap the days this shift covers';
+
+  @override
+  String get blockUntappedOff => 'Un-tapped days are Off.';
+
+  @override
+  String blockOverlap(String ranges) {
+    return 'This time overlaps another shift on day $ranges — change the time or those days.';
+  }
+
+  @override
+  String get blockAdd => 'Add block';
+
+  @override
+  String get blockSave => 'Save block';
+
+  @override
+  String get aiPromptCopied =>
+      'Prompt copied! Paste it into your AI app along with your roster.';
+
+  @override
+  String get aiNothingToPaste => 'Nothing to paste from the clipboard.';
+
+  @override
+  String get aiNoValidShifts =>
+      'No valid shifts detected. Make sure you used the copied AI prompt.';
+
+  @override
+  String get aiStep1 => 'Copy the prompt';
+
+  @override
+  String get aiCopied => 'Copied!';
+
+  @override
+  String get aiCopyPrompt => 'Copy AI Prompt';
+
+  @override
+  String get aiStep1Sub =>
+      'Paste it into ChatGPT, Gemini or any AI app, then add your roster text or a photo/screenshot and send.';
+
+  @override
+  String get aiStep2 => 'Paste the AI\'s reply';
+
+  @override
+  String get aiPaste => 'Paste';
+
+  @override
+  String get aiParsePreview => 'Parse & Preview';
+
+  @override
+  String get aiStep3 => 'Review the detected shifts';
+
+  @override
+  String get aiStep3Sub =>
+      'Tap a badge to switch it between Day, Afternoon and Night if the AI got one wrong.';
+
+  @override
+  String aiImportDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Import $count days',
+      one: 'Import 1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get aiTitleSub =>
+      'Turn any roster text into shifts with the help of an AI app.';
+
+  @override
+  String aiSummaryLine(int count, int working, int off) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0 · $working working · $off off';
+  }
+
+  @override
+  String get draftReviewTitle => 'Review scanned roster';
+
+  @override
+  String draftRemovedDay(String date) {
+    return 'Removed $date';
+  }
+
+  @override
+  String get draftUndo => 'Undo';
+
+  @override
+  String draftSavedDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Saved $count days to your roster',
+      one: 'Saved 1 day to your roster',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get draftRosterName => 'Roster name';
+
+  @override
+  String get draftScannedImage => 'Scanned image';
+
+  @override
+  String get draftScannedImageSub => 'Tap the image to enlarge and compare';
+
+  @override
+  String get draftImageError => 'Could not display the scanned image.';
+
+  @override
+  String get draftRemove => 'Remove';
+
+  @override
+  String get draftNoEndTime =>
+      'Scanned without an end time — set it to enable Save.';
+
+  @override
+  String get draftTime => 'Time';
+
+  @override
+  String get draftSetEnd => 'Set end';
+
+  @override
+  String get draftConfirmSave => 'Confirm & Save';
 }

@@ -2571,6 +2571,570 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose a pattern'**
   String get patternChoosePattern;
+
+  /// No description provided for @patternRotatingSwings.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotating Swings'**
+  String get patternRotatingSwings;
+
+  /// No description provided for @patternDaySwings.
+  ///
+  /// In en, this message translates to:
+  /// **'Day Only Swings'**
+  String get patternDaySwings;
+
+  /// No description provided for @patternNightSwings.
+  ///
+  /// In en, this message translates to:
+  /// **'Night Only Swings'**
+  String get patternNightSwings;
+
+  /// No description provided for @patternShiftTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift times'**
+  String get patternShiftTimes;
+
+  /// No description provided for @patternGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Set Day 1 & Generate'**
+  String get patternGenerate;
+
+  /// No description provided for @patternSelectDay1.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your Next Day 1'**
+  String get patternSelectDay1;
+
+  /// No description provided for @patternDay1Hint.
+  ///
+  /// In en, this message translates to:
+  /// **'First day of your {label} block'**
+  String patternDay1Hint(String label);
+
+  /// No description provided for @patternNextDay1.
+  ///
+  /// In en, this message translates to:
+  /// **'Next Day 1'**
+  String get patternNextDay1;
+
+  /// No description provided for @patternUseThisDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this date'**
+  String get patternUseThisDate;
+
+  /// No description provided for @patternGenerated.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Generated 1 shift} other{Generated {count} shifts}}'**
+  String patternGenerated(int count);
+
+  /// No description provided for @patternGenerationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation failed: {error}'**
+  String patternGenerationFailed(String error);
+
+  /// No description provided for @patternFirstBlockFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'first'**
+  String get patternFirstBlockFallback;
+
+  /// No description provided for @patternBuildCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Build custom roster'**
+  String get patternBuildCustom;
+
+  /// No description provided for @patternBuildCustomSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Doesn\'t fit a preset? Compose your own blocks.'**
+  String get patternBuildCustomSub;
+
+  /// No description provided for @patternBlockDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{1 Day} other{{n} Days}}'**
+  String patternBlockDays(int n);
+
+  /// No description provided for @patternBlockAfternoons.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{1 Afternoon} other{{n} Afternoons}}'**
+  String patternBlockAfternoons(int n);
+
+  /// No description provided for @patternBlockNights.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{1 Night} other{{n} Nights}}'**
+  String patternBlockNights(int n);
+
+  /// No description provided for @patternBlockOff.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} Off'**
+  String patternBlockOff(int n);
+
+  /// No description provided for @builderNewRoster.
+  ///
+  /// In en, this message translates to:
+  /// **'New Shift Roster'**
+  String get builderNewRoster;
+
+  /// No description provided for @builderEditRoster.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Roster'**
+  String get builderEditRoster;
+
+  /// No description provided for @builderNewSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up your shift rotation pattern'**
+  String get builderNewSub;
+
+  /// No description provided for @builderEditSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Change and replace this saved roster'**
+  String get builderEditSub;
+
+  /// No description provided for @builderNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Roster name (e.g. My 14-Day Rotation)'**
+  String get builderNameHint;
+
+  /// No description provided for @builderCycleLength.
+  ///
+  /// In en, this message translates to:
+  /// **'CYCLE LENGTH'**
+  String get builderCycleLength;
+
+  /// No description provided for @builderStartDate.
+  ///
+  /// In en, this message translates to:
+  /// **'START DATE'**
+  String get builderStartDate;
+
+  /// No description provided for @builderShiftBlocks.
+  ///
+  /// In en, this message translates to:
+  /// **'SHIFT BLOCKS'**
+  String get builderShiftBlocks;
+
+  /// No description provided for @builderAddShiftBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Shift Block'**
+  String get builderAddShiftBlock;
+
+  /// No description provided for @builderCreateRoster.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Roster'**
+  String get builderCreateRoster;
+
+  /// No description provided for @builderSaveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Changes'**
+  String get builderSaveChanges;
+
+  /// No description provided for @builderReplaceWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving replaces this roster. Any leave / time-off marks painted on it will reset.'**
+  String get builderReplaceWarning;
+
+  /// No description provided for @builderBackToOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to options'**
+  String get builderBackToOptions;
+
+  /// No description provided for @builderOrImport.
+  ///
+  /// In en, this message translates to:
+  /// **'OR IMPORT AN EXISTING ROSTER'**
+  String get builderOrImport;
+
+  /// No description provided for @builderImportViaAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Import via AI'**
+  String get builderImportViaAi;
+
+  /// No description provided for @builderScanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning…'**
+  String get builderScanning;
+
+  /// No description provided for @builderScanInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a roster photo instead'**
+  String get builderScanInstead;
+
+  /// No description provided for @builderCustomChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get builderCustomChip;
+
+  /// No description provided for @builderCycleLengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cycle length'**
+  String get builderCycleLengthLabel;
+
+  /// No description provided for @builderDaysCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{1 day} other{{n} days}}'**
+  String builderDaysCount(int n);
+
+  /// No description provided for @builderPickADate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date'**
+  String get builderPickADate;
+
+  /// No description provided for @builderNoBlocksYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No blocks yet'**
+  String get builderNoBlocksYet;
+
+  /// No description provided for @builderNoBlocksSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Add shift blocks to define your rotation'**
+  String get builderNoBlocksSub;
+
+  /// No description provided for @builderDaysLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Days {ranges}'**
+  String builderDaysLine(String ranges);
+
+  /// No description provided for @builderEditBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit block'**
+  String get builderEditBlock;
+
+  /// No description provided for @builderRemoveBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove block'**
+  String get builderRemoveBlock;
+
+  /// No description provided for @builderPickRosterStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the roster start date'**
+  String get builderPickRosterStart;
+
+  /// No description provided for @builderPickScanStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the start date for the scanned roster'**
+  String get builderPickScanStart;
+
+  /// No description provided for @builderScanCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan with camera'**
+  String get builderScanCamera;
+
+  /// No description provided for @builderImportScreenshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Import a screenshot'**
+  String get builderImportScreenshot;
+
+  /// No description provided for @builderScanFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan failed: {error}'**
+  String builderScanFailed(String error);
+
+  /// No description provided for @builderNoTimesRecognised.
+  ///
+  /// In en, this message translates to:
+  /// **'No shift times recognised. Try cropping tighter around the grid.'**
+  String get builderNoTimesRecognised;
+
+  /// No description provided for @builderCustomRosterFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom roster'**
+  String get builderCustomRosterFallback;
+
+  /// No description provided for @builderScannedRosterFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanned roster'**
+  String get builderScannedRosterFallback;
+
+  /// No description provided for @builderRosterUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Roster updated — 1 shift scheduled} other{Roster updated — {count} shifts scheduled}}'**
+  String builderRosterUpdated(int count);
+
+  /// No description provided for @builderRosterCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Created — 1 shift scheduled} other{Created — {count} shifts scheduled}}'**
+  String builderRosterCreated(int count);
+
+  /// No description provided for @builderCouldNotCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create the roster: {error}'**
+  String builderCouldNotCreate(String error);
+
+  /// No description provided for @builderRosterImported.
+  ///
+  /// In en, this message translates to:
+  /// **'Roster imported to your calendar'**
+  String get builderRosterImported;
+
+  /// No description provided for @builderCouldNotImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not import the roster: {error}'**
+  String builderCouldNotImport(String error);
+
+  /// No description provided for @blockAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add shift block'**
+  String get blockAddTitle;
+
+  /// No description provided for @blockEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit shift block'**
+  String get blockEditTitle;
+
+  /// No description provided for @blockStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get blockStart;
+
+  /// No description provided for @blockEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get blockEnd;
+
+  /// No description provided for @blockTapDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the days this shift covers'**
+  String get blockTapDays;
+
+  /// No description provided for @blockUntappedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Un-tapped days are Off.'**
+  String get blockUntappedOff;
+
+  /// No description provided for @blockOverlap.
+  ///
+  /// In en, this message translates to:
+  /// **'This time overlaps another shift on day {ranges} — change the time or those days.'**
+  String blockOverlap(String ranges);
+
+  /// No description provided for @blockAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add block'**
+  String get blockAdd;
+
+  /// No description provided for @blockSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save block'**
+  String get blockSave;
+
+  /// No description provided for @aiPromptCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt copied! Paste it into your AI app along with your roster.'**
+  String get aiPromptCopied;
+
+  /// No description provided for @aiNothingToPaste.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to paste from the clipboard.'**
+  String get aiNothingToPaste;
+
+  /// No description provided for @aiNoValidShifts.
+  ///
+  /// In en, this message translates to:
+  /// **'No valid shifts detected. Make sure you used the copied AI prompt.'**
+  String get aiNoValidShifts;
+
+  /// No description provided for @aiStep1.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the prompt'**
+  String get aiStep1;
+
+  /// No description provided for @aiCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied!'**
+  String get aiCopied;
+
+  /// No description provided for @aiCopyPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy AI Prompt'**
+  String get aiCopyPrompt;
+
+  /// No description provided for @aiStep1Sub.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste it into ChatGPT, Gemini or any AI app, then add your roster text or a photo/screenshot and send.'**
+  String get aiStep1Sub;
+
+  /// No description provided for @aiStep2.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste the AI\'s reply'**
+  String get aiStep2;
+
+  /// No description provided for @aiPaste.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get aiPaste;
+
+  /// No description provided for @aiParsePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Parse & Preview'**
+  String get aiParsePreview;
+
+  /// No description provided for @aiStep3.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the detected shifts'**
+  String get aiStep3;
+
+  /// No description provided for @aiStep3Sub.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a badge to switch it between Day, Afternoon and Night if the AI got one wrong.'**
+  String get aiStep3Sub;
+
+  /// No description provided for @aiImportDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Import 1 day} other{Import {count} days}}'**
+  String aiImportDays(int count);
+
+  /// No description provided for @aiTitleSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn any roster text into shifts with the help of an AI app.'**
+  String get aiTitleSub;
+
+  /// No description provided for @aiSummaryLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 day} other{{count} days}} · {working} working · {off} off'**
+  String aiSummaryLine(int count, int working, int off);
+
+  /// No description provided for @draftReviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review scanned roster'**
+  String get draftReviewTitle;
+
+  /// No description provided for @draftRemovedDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed {date}'**
+  String draftRemovedDay(String date);
+
+  /// No description provided for @draftUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get draftUndo;
+
+  /// No description provided for @draftSavedDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Saved 1 day to your roster} other{Saved {count} days to your roster}}'**
+  String draftSavedDays(int count);
+
+  /// No description provided for @draftRosterName.
+  ///
+  /// In en, this message translates to:
+  /// **'Roster name'**
+  String get draftRosterName;
+
+  /// No description provided for @draftScannedImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanned image'**
+  String get draftScannedImage;
+
+  /// No description provided for @draftScannedImageSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the image to enlarge and compare'**
+  String get draftScannedImageSub;
+
+  /// No description provided for @draftImageError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not display the scanned image.'**
+  String get draftImageError;
+
+  /// No description provided for @draftRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get draftRemove;
+
+  /// No description provided for @draftNoEndTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanned without an end time — set it to enable Save.'**
+  String get draftNoEndTime;
+
+  /// No description provided for @draftTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get draftTime;
+
+  /// No description provided for @draftSetEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'Set end'**
+  String get draftSetEnd;
+
+  /// No description provided for @draftConfirmSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm & Save'**
+  String get draftConfirmSave;
 }
 
 class _AppLocalizationsDelegate

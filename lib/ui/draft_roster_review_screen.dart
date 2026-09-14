@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../l10n/l10n.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -121,9 +122,9 @@ class _DraftRosterReviewViewState extends State<_DraftRosterReviewView> {
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text('Removed ${formatShiftDate(day.date)}'),
+        content: Text(context.l10n.draftRemovedDay(formatShiftDate(day.date))),
         action: SnackBarAction(
-          label: 'Undo',
+          label: context.l10n.draftUndo,
           onPressed: () => controller.insertAt(removed.index, removed.block),
         ),
       ),
@@ -140,7 +141,7 @@ class _DraftRosterReviewViewState extends State<_DraftRosterReviewView> {
     if (!mounted) return;
     if (ok) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Saved $count days to your roster')),
+        SnackBar(content: Text(currentL10n.draftSavedDays(count))),
       );
       // pop(true) mirrors CustomBuilderScreen's contract so the pattern picker
       // fires its onGenerated after a scan round-trip.
@@ -157,7 +158,7 @@ class _DraftRosterReviewViewState extends State<_DraftRosterReviewView> {
     final days = controller.days;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Review scanned roster')),
+      appBar: AppBar(title: Text(context.l10n.draftReviewTitle)),
       body: SafeArea(
         top: false,
         child: Column(
@@ -170,7 +171,10 @@ class _DraftRosterReviewViewState extends State<_DraftRosterReviewView> {
                     _ImageReferencePanel(bytes: controller.sourceImage!),
                     const SizedBox(height: 16),
                   ],
-                  Text('Roster name', style: theme.textTheme.titleMedium),
+                  Text(
+                    context.l10n.draftRosterName,
+                    style: theme.textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _nameController,
@@ -241,8 +245,8 @@ class _ImageReferencePanel extends StatelessWidget {
       child: ExpansionTile(
         initiallyExpanded: true,
         leading: const Icon(Icons.image_outlined),
-        title: const Text('Scanned image'),
-        subtitle: const Text('Tap the image to enlarge and compare'),
+        title: Text(context.l10n.draftScannedImage),
+        subtitle: Text(context.l10n.draftScannedImageSub),
         childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         children: [
           InkWell(
@@ -257,7 +261,7 @@ class _ImageReferencePanel extends StatelessWidget {
                 errorBuilder: (_, _, _) => Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'Could not display the scanned image.',
+                    context.l10n.draftImageError,
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
@@ -342,7 +346,7 @@ class _DraftDayRow extends StatelessWidget {
             Icon(Icons.delete_outline, color: theme.colorScheme.onErrorContainer),
             const SizedBox(width: 8),
             Text(
-              'Remove',
+              context.l10n.draftRemove,
               style: TextStyle(color: theme.colorScheme.onErrorContainer),
             ),
           ],
@@ -383,7 +387,7 @@ class _DraftDayRow extends StatelessWidget {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          'Scanned without an end time — set it to enable Save.',
+                          context.l10n.draftNoEndTime,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: theme.colorScheme.error),
                         ),
@@ -512,7 +516,9 @@ class _TimeRow extends StatelessWidget {
     final use24Hour = AppPreferences.use24HourOf(context);
     return Row(
       children: [
-        Expanded(child: Text('Time', style: theme.textTheme.bodyLarge)),
+        Expanded(
+          child: Text(context.l10n.draftTime, style: theme.textTheme.bodyLarge),
+        ),
         OutlinedButton(
           onPressed: onPickStartTime,
           child: Text(formatClock(startMinutes, use24Hour: use24Hour)),
@@ -535,7 +541,7 @@ class _TimeRow extends StatelessWidget {
               : null,
           child: Text(
             needsEndTime
-                ? 'Set end'
+                ? context.l10n.draftSetEnd
                 : formatClock(endMinutes, use24Hour: use24Hour),
           ),
         ),
@@ -648,7 +654,7 @@ class _BottomBar extends StatelessWidget {
                   width: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Confirm & Save'),
+              : Text(context.l10n.draftConfirmSave),
         ),
       ),
     );
