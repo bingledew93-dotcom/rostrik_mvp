@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Deine nächste Schicht auf einen Blick</string>
+    <string name="alarm_fallback_title">Wecker</string>
+    <string name="alarm_hint_critical">Kritischer Wecker\nKräftig schütteln zum Beenden</string>
+    <string name="alarm_hint_slide">Schieb den Regler unten zum Beenden</string>
+    <string name="alarm_snooze_button">SCHLUMMERN (%1$d MIN.)</string>
+    <string name="alarm_slide_to_dismiss">Schieben zum Beenden</string>
+    <string name="channel_alarm_name">Wecker</string>
+    <string name="channel_alarm_description">Zeigt den Vollbild-Wecker, wenn ein Schichtwecker fällig ist.</string>
+    <string name="channel_alarm_playback_name">Weckerwiedergabe</string>
+    <string name="channel_alarm_playback_description">Hält einen klingelnden Wecker mit eigenem Ton zuverlässig am Laufen.</string>
+    <string name="channel_sleep_name">Schlafgeräusche</string>
+    <string name="channel_sleep_description">Spielt ein Schlafgeräusch bei ausgeschaltetem Bildschirm weiter.</string>
+    <string name="channel_reminders_name">Erinnerungen</string>
+    <string name="channel_reminders_description">Optionale Hinweise für Ereignisse, Aufgaben und Geburtstage.</string>
+    <string name="sleep_sound_fallback">Schlafgeräusch</string>
+    <string name="sleep_playing">Wird abgespielt</string>
+    <string name="sleep_playing_stops_in">Wird abgespielt · stoppt in %1$d Min.</string>
+    <string name="sleep_stop">Stopp</string>
+    <string name="ringtone_picker_title">Weckerton wählen</string>
+    <string name="ringtone_system_fallback">Systemton</string>
+    <string name="widget_off_rdo">🛌 Frei</string>
+    <string name="widget_no_shifts">Noch keine Schichten</string>
+    <string name="duration_m">%1$d Min.</string>
+    <string name="duration_h">%1$d Std.</string>
+    <string name="duration_h_m">%1$d Std. %2$d Min.</string>
+    <string name="duration_d">%1$d T.</string>
+    <string name="duration_d_h">%1$d T. %2$d Std.</string>
+</resources>

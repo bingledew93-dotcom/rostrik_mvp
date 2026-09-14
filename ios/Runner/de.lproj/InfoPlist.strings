@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik nutzt die Kamera, um deinen gedruckten Dienstplan zu fotografieren und die Schichtzeiten auf deinem Gerät auszulesen.";
+"NSPhotoLibraryUsageDescription" = "Rostrik kann ein gespeichertes Foto deines Dienstplans lesen, um die Schichtzeiten auf deinem Gerät zu importieren.";
+"NSCalendarsUsageDescription" = "Rostrik überträgt deine Schichten in einen eigenen Kalender „Rostrik Roster“, damit sie neben deinen anderen Terminen erscheinen.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik überträgt deine Schichten in einen eigenen Kalender „Rostrik Roster“, damit sie neben deinen anderen Terminen erscheinen.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik trägt deine Schichten in einen eigenen Kalender „Rostrik Roster“ ein.";
+"NSAppleMusicUsageDescription" = "Mit Rostrik kannst du einen Song aus deiner Mediathek als eigenen Weckerton wählen.";
+"NSAlarmKitUsageDescription" = "Rostrik nutzt Wecker, damit dein Weckruf vor der Schicht auch im Lautlos- oder Fokus-Modus klingelt.";
