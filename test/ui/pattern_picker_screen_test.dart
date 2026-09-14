@@ -51,7 +51,8 @@ void main() {
         ],
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: PatternPickerScreen()),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PatternPickerScreen()),
       ),
     );
     await tester.pumpAndSettle();

@@ -37,7 +37,8 @@ void main() {
         value: generator,
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: CustomBuilderScreen()),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: CustomBuilderScreen()),
       ),
     );
     await tester.pumpAndSettle();

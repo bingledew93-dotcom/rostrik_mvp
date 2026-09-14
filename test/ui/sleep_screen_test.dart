@@ -59,7 +59,8 @@ void main() {
         ],
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: SleepScreen()),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SleepScreen()),
       ),
     );
     await tester.pump();

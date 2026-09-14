@@ -9,7 +9,8 @@ void main() {
   Widget host(Widget child) =>
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: Scaffold(body: Center(child: child)));
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: Center(child: child)));
 
   group('HoldToDismiss', () {
     testWidgets('holding for the full duration dismisses', (tester) async {

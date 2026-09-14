@@ -52,7 +52,8 @@ void main() {
         ],
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: TimelineScreen()),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: TimelineScreen()),
       ),
     );
     await tester.pump();

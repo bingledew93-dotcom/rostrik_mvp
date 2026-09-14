@@ -44,7 +44,8 @@ void main() {
         ],
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: AlarmsScreen()),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: AlarmsScreen()),
       ),
     );
     await tester.pump();

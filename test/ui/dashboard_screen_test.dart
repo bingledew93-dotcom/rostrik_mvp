@@ -58,7 +58,8 @@ void main() {
         ],
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: DashboardScreen(healthProbe: healthProbe)),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: DashboardScreen(healthProbe: healthProbe)),
       ),
     );
     await tester.pump();

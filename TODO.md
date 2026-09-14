@@ -345,6 +345,44 @@ Note `./gradlew` directly does not inherit Flutter's setting — it needs
 
 ---
 
+## 2.6 Internationalisation — shipped 2026-09-15
+
+15 languages: en, es, pt (Brazilian), de, fr, it, nl, pl, tr, id, vi, ja, ko,
+hi, ar. Locale follows the device; Android 13+ and iOS also offer a per-app
+language picker in system settings.
+
+Where strings live (all three must stay in step):
+- Flutter UI + notification copy: `lib/l10n/app_<lang>.arb` (template
+  `app_en.arb`), generated into `lib/l10n/gen` by `flutter gen-l10n`.
+- Native Android (alarm screen, notification channels, widget):
+  `android/app/src/main/res/values-<lang>/strings.xml` (Indonesian is
+  `values-in`).
+- Native iOS (permission prompts, AlarmKit Stop/Snooze):
+  `ios/Runner/<lang>.lproj/{InfoPlist,Localizable}.strings`.
+
+Guards: `test/l10n/catalogue_completeness_test.dart` fails if any language is
+missing a key or mangles a placeholder; `test/l10n/locale_layout_smoke_test.dart`
+renders 11 key screens in every language at 360dp and fails on overflow.
+
+Follow-ups:
+- [ ] Native-speaker review. Translations are machine-authored with care for
+      tone and terminology but unreviewed — prioritise the markets with real
+      installs (Play Console → Statistics → by country). Cheapest high-value
+      check: the legal consent screen and the purchase wall.
+- [ ] Privacy Policy and Terms of Use pages are English-only; the consent
+      screen is translated but links to English documents.
+- [ ] Store listings per language (Play custom store listings, App Store
+      localizations) — separate from the app; screenshots too.
+- [ ] Arabic on device: Flutter mirrors the UI automatically, but the native
+      Android alarm screen stays left-to-right (`supportsRtl` is off on
+      purpose until the slide-to-dismiss track is tested mirrored).
+- [ ] Already-armed alarms keep the old language's notification text after a
+      device-language change until the next reconcile (next app open, or boot).
+- [ ] Adding a string: add it to `app_en.arb` AND all 14 other ARBs, or the
+      completeness test fails. Same idea for native strings.
+
+---
+
 ## 3. Tech debt worth clearing
 
 - [ ] **Reclaim ~3.9 MB from the Android bundle** (IOS_SETUP.md §4.1). Move the

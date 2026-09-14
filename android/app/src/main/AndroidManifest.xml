@@ -70,6 +70,7 @@
     <application
         android:label="Rostrik"
         android:name="${applicationName}"
+        android:localeConfig="@xml/locales_config"
         android:icon="@mipmap/ic_launcher">
         <!-- LARGE-SCREEN RESIZABILITY OPT-OUT (Play Console: "Remove
              resizability and orientation restrictions in your app to support

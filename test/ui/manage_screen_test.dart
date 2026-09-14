@@ -34,7 +34,8 @@ void main() {
         ],
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: ManageScreen()),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ManageScreen()),
       ),
     );
     await tester.pump();

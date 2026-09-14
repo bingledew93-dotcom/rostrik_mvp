@@ -48,7 +48,8 @@ void main() {
         value: repo,
         child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,home: WorkHistoryScreen(exporter: exporter)),
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: WorkHistoryScreen(exporter: exporter)),
       ),
     );
     await tester.pumpAndSettle();
