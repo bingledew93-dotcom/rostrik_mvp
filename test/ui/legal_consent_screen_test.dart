@@ -24,7 +24,7 @@ void main() {
       (tester) async {
     await pumpConsent(tester, onAccepted: () {});
 
-    expect(find.text('Before you rely on Rostrik'), findsOneWidget);
+    expect(find.text('Before you start'), findsOneWidget);
 
     final checkbox = tester.widget<CheckboxListTile>(
       find.byKey(const ValueKey('legal-consent-checkbox')),

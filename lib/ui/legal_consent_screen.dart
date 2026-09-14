@@ -7,10 +7,15 @@ import '../legal/legal.dart';
 /// The legal consent gate — the FIRST screen a user (or a returning user after a
 /// legal-docs bump) sees, before onboarding or the dashboard.
 ///
-/// It makes the safety-critical caveat explicit: Rostrik is a *backup* alarm
-/// layered on top of an OS that can delay or suppress it, so the user must not
-/// treat it as their only wake-up. Consent is an UNTICKED checkbox + an
-/// "Agree & Continue" button that stays disabled until it's ticked.
+/// It makes the safety-critical caveat explicit — the OS, not the app, has
+/// the final say over any alarm, so safety-critical wake-ups deserve a second,
+/// independent backup — while framing Rostrik itself with confidence. The
+/// caveat is deliberately worded as universal to ALL alarm apps: early copy
+/// called Rostrik "a BACKUP alarm", which read as "this app doesn't work" and
+/// measurably scared new users off (field feedback 2026-09-14). The strong
+/// liability wording lives in the linked Terms of Use, not here. Consent is an
+/// UNTICKED checkbox + an "Agree & Continue" button that stays disabled until
+/// it's ticked.
 ///
 /// On agreement it records `acceptedLegalVersion` + `acceptedLegalAt` in
 /// `shared_preferences` (the source of truth the `main()` router reads), then
@@ -67,10 +72,10 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 8),
-              Icon(Icons.gavel_outlined, size: 48, color: scheme.primary),
+              Icon(Icons.alarm_on_rounded, size: 48, color: scheme.primary),
               const SizedBox(height: 16),
               Text(
-                'Before you rely on Rostrik',
+                'Before you start',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -84,10 +89,12 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Rostrik is a BACKUP alarm. Your phone’s operating '
-                        'system can still delay, silence, or kill alarms — '
-                        'especially after updates, in battery-saver, or if the '
-                        'app is force-stopped.',
+                        'Rostrik is built to get you up for every shift. One '
+                        'honest heads-up: on any phone, the operating system — '
+                        'not the app — has the final say, and in rare cases it '
+                        'can delay or silence any alarm app (aggressive '
+                        'battery savers, force-stops, or right after system '
+                        'updates).',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: scheme.onSurface,
                           height: 1.4,
@@ -95,9 +102,9 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Always keep a second, independent alarm for anything '
-                        'safety-critical (getting to work, medication, '
-                        'childcare). Do not depend on Rostrik alone.',
+                        'For shifts you absolutely cannot miss, keep a second '
+                        'alarm as a backup — good practice with any alarm, '
+                        'including the one built into your phone.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                           height: 1.4,
@@ -133,9 +140,8 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
                 title: Text(
-                  'I understand Rostrik is a backup alarm — not a replacement '
-                  'for my phone’s primary alarm — and I accept the Privacy '
-                  'Policy and Terms of Use.',
+                  'I understand the operating system can affect any alarm '
+                  'app, and I accept the Privacy Policy and Terms of Use.',
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
