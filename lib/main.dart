@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'alarms/alarm_backend_info.dart';
 import 'alarms/alarm_sync_service.dart';
 import 'alarms/alarmkit_bringup.dart';
+import 'alarms/background_sync_entrypoint.dart' as background_sync;
 import 'alarms/main_isolate_liveness.dart';
 import 'alarms/native_alarm_scheduler.dart';
 import 'alarms/pending_alarm_delete_guard.dart';
@@ -48,6 +49,19 @@ final navigatorKey = GlobalKey<NavigatorState>();
 /// `clearPendingDismissals`) — the firing-alarm UI is the native AlarmActivity,
 /// so the old `alarmFired` / WakeUpScreen routing is gone.
 const _alarmRoutingChannel = MethodChannel('rostrik/alarm_routing');
+
+/// Headless alarm re-sync, started by name from `AlarmSyncWorker.kt` and
+/// `AppDelegate.swift`. It MUST live in this file: both native callers name
+/// only the function, and the engine resolves a bare name against the root
+/// library — `main.dart`. The implementation stayed in
+/// `alarms/background_sync_entrypoint.dart` from May to September 2026 with
+/// nothing importing it, so it was never even compiled in: every background
+/// run found no entrypoint, timed out after 30s and retried forever, and the
+/// 14-day window roll only happened when the user opened the app.
+/// `test/alarms/background_entrypoint_wiring_test.dart` guards all three names.
+@pragma('vm:entry-point')
+void syncAlarmsBackgroundEntrypoint() =>
+    background_sync.syncAlarmsBackgroundEntrypoint();
 
 /// Bootstrap order is load-bearing:
 ///   1. Bind the Flutter engine.
