@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik gebruikt de camera om je geprinte rooster te fotograferen en de diensttijden op je apparaat uit te lezen.";
+"NSPhotoLibraryUsageDescription" = "Rostrik kan een opgeslagen foto van je rooster lezen om diensttijden op je apparaat te importeren.";
+"NSCalendarsUsageDescription" = "Rostrik zet je diensten in een aparte agenda \"Rostrik Roster\", zodat ze naast je andere afspraken staan.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik zet je diensten in een aparte agenda \"Rostrik Roster\", zodat ze naast je andere afspraken staan.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik zet je diensten in een aparte agenda \"Rostrik Roster\".";
+"NSAppleMusicUsageDescription" = "Met Rostrik kun je een nummer uit je bibliotheek kiezen als eigen wekkergeluid.";
+"NSAlarmKitUsageDescription" = "Rostrik gebruikt wekkers zodat je wekker vóór je dienst ook afgaat als je telefoon op stil of in een focusmodus staat.";

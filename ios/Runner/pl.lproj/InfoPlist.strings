@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik używa aparatu, aby sfotografować wydrukowany grafik i odczytać godziny zmian na urządzeniu.";
+"NSPhotoLibraryUsageDescription" = "Rostrik może odczytać zapisane zdjęcie grafiku, aby zaimportować godziny zmian na urządzeniu.";
+"NSCalendarsUsageDescription" = "Rostrik kopiuje zmiany do osobnego kalendarza „Rostrik Roster”, żeby były widoczne obok innych wydarzeń.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik kopiuje zmiany do osobnego kalendarza „Rostrik Roster”, żeby były widoczne obok innych wydarzeń.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik dodaje zmiany do osobnego kalendarza „Rostrik Roster”.";
+"NSAppleMusicUsageDescription" = "Rostrik pozwala wybrać utwór z biblioteki jako własny dźwięk budzika.";
+"NSAlarmKitUsageDescription" = "Rostrik używa budzików, żeby pobudka przed zmianą zadzwoniła nawet przy wyciszonym telefonie lub w trybie skupienia.";

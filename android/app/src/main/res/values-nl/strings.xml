@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Je volgende dienst in één oogopslag</string>
+    <string name="alarm_fallback_title">Wekker</string>
+    <string name="alarm_hint_critical">Kritieke wekker\nSchud stevig om te stoppen</string>
+    <string name="alarm_hint_slide">Schuif de knop hieronder om te stoppen</string>
+    <string name="alarm_snooze_button">SLUIMEREN (%1$d MIN)</string>
+    <string name="alarm_slide_to_dismiss">Schuif om te stoppen</string>
+    <string name="channel_alarm_name">Wekker</string>
+    <string name="channel_alarm_description">Toont de wekker op volledig scherm als een dienstwekker afgaat.</string>
+    <string name="channel_alarm_playback_name">Wekker afspelen</string>
+    <string name="channel_alarm_playback_description">Laat een wekker met eigen beltoon betrouwbaar doorspelen.</string>
+    <string name="channel_sleep_name">Slaapgeluiden</string>
+    <string name="channel_sleep_description">Laat een slaapgeluid doorspelen met het scherm uit.</string>
+    <string name="channel_reminders_name">Herinneringen</string>
+    <string name="channel_reminders_description">Optionele seintjes voor afspraken, taken en verjaardagen.</string>
+    <string name="sleep_sound_fallback">Slaapgeluid</string>
+    <string name="sleep_playing">Speelt af</string>
+    <string name="sleep_playing_stops_in">Speelt af · stopt over %1$d min</string>
+    <string name="sleep_stop">Stop</string>
+    <string name="ringtone_picker_title">Wekkergeluid kiezen</string>
+    <string name="ringtone_system_fallback">Systeemgeluid</string>
+    <string name="widget_off_rdo">🛌 Vrij</string>
+    <string name="widget_no_shifts">Nog geen diensten</string>
+    <string name="duration_m">%1$d min</string>
+    <string name="duration_h">%1$d u</string>
+    <string name="duration_h_m">%1$d u %2$d min</string>
+    <string name="duration_d">%1$d d</string>
+    <string name="duration_d_h">%1$d d %2$d u</string>
+</resources>
