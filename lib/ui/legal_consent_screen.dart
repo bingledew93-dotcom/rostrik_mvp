@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/l10n.dart';
 import '../legal/legal.dart';
 
 /// The legal consent gate — the FIRST screen a user (or a returning user after a
@@ -55,7 +56,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
     );
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the link.')),
+        SnackBar(content: Text(context.l10n.commonCouldNotOpenLink)),
       );
     }
   }
@@ -64,6 +65,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = context.l10n;
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -75,7 +77,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
               Icon(Icons.alarm_on_rounded, size: 48, color: scheme.primary),
               const SizedBox(height: 16),
               Text(
-                'Before you start',
+                l10n.legalTitle,
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -89,12 +91,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Rostrik is built to get you up for every shift. One '
-                        'honest heads-up: on any phone, the operating system — '
-                        'not the app — has the final say, and in rare cases it '
-                        'can delay or silence any alarm app (aggressive '
-                        'battery savers, force-stops, or right after system '
-                        'updates).',
+                        l10n.legalBodyOsCaveat,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: scheme.onSurface,
                           height: 1.4,
@@ -102,9 +99,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'For shifts you absolutely cannot miss, keep a second '
-                        'alarm as a backup — good practice with any alarm, '
-                        'including the one built into your phone.',
+                        l10n.legalBodyBackupAdvice,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                           height: 1.4,
@@ -112,18 +107,18 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Please review and accept:',
+                        l10n.legalReviewAndAccept,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),
                       _LegalLink(
-                        label: 'Privacy Policy',
+                        label: l10n.legalPrivacyPolicy,
                         onTap: () => _openUrl(kPrivacyPolicyUrl),
                       ),
                       _LegalLink(
-                        label: 'Terms of Use',
+                        label: l10n.legalTermsOfUse,
                         onTap: () => _openUrl(kTermsOfUseUrl),
                       ),
                     ],
@@ -140,8 +135,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
                 title: Text(
-                  'I understand the operating system can affect any alarm '
-                  'app, and I accept the Privacy Policy and Terms of Use.',
+                  l10n.legalConsentCheckbox,
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
@@ -162,7 +156,9 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: Text(_saving ? 'Saving…' : 'Agree & Continue'),
+                  child: Text(
+                    _saving ? l10n.commonSaving : l10n.legalAgreeContinue,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),

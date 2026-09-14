@@ -21,6 +21,7 @@ import 'calendar_sync/device_calendar_service.dart';
 import 'data/repositories/app_alarm_repository.dart';
 import 'data/repositories/shift_repository.dart';
 import 'data/storage/local_storage.dart';
+import 'l10n/l10n.dart';
 import 'legal/legal.dart';
 import 'logic/adhoc_archive.dart';
 import 'purchase/entitlement_service.dart';
@@ -538,6 +539,12 @@ class RostrikApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Rostrik',
+      // i18n: every user-visible string lives in lib/l10n/app_<locale>.arb
+      // (compile-checked via gen-l10n). The locale follows the device; the
+      // resolver in lib/l10n/l10n.dart gives services/isolates the SAME
+      // resolution for notification text.
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       navigatorKey: navigatorKey,
       // No corner "DEBUG" ribbon on dev installs. Release builds never show
       // it, but field-testing happens on debug builds too and the banner

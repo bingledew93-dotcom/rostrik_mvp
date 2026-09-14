@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any # version is pinned by flutter_localizations
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -100,6 +103,7 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  generate: true
 
   # Stay on CocoaPods only. Runner.xcodeproj predates Flutter's SPM
   # auto-migration and already has a working Podfile/Podfile.lock (see

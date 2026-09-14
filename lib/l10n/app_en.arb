@@ -1,0 +1,14 @@
+{
+  "@@locale": "en",
+  "appTitle": "Rostrik",
+  "legalTitle": "Before you start",
+  "legalBodyOsCaveat": "Rostrik is built to get you up for every shift. One honest heads-up: on any phone, the operating system — not the app — has the final say, and in rare cases it can delay or silence any alarm app (aggressive battery savers, force-stops, or right after system updates).",
+  "legalBodyBackupAdvice": "For shifts you absolutely cannot miss, keep a second alarm as a backup — good practice with any alarm, including the one built into your phone.",
+  "legalReviewAndAccept": "Please review and accept:",
+  "legalPrivacyPolicy": "Privacy Policy",
+  "legalTermsOfUse": "Terms of Use",
+  "legalConsentCheckbox": "I understand the operating system can affect any alarm app, and I accept the Privacy Policy and Terms of Use.",
+  "legalAgreeContinue": "Agree & Continue",
+  "commonSaving": "Saving…",
+  "commonCouldNotOpenLink": "Could not open the link."
+}
