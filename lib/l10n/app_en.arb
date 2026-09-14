@@ -309,14 +309,6 @@
   "settingsResetConfirm": "Reset",
   "dashNoUpcomingShifts": "No upcoming shifts",
   "dashEnjoyTimeOff": "Enjoy your time off.",
-  "dashHeroShift": "{type} shift",
-  "@dashHeroShift": {
-    "placeholders": {
-      "type": {
-        "type": "String"
-      }
-    }
-  },
   "dashInProgress": "IN PROGRESS",
   "dashRotation": "Rotation",
   "dashAlarmsCantRing": "Alarms can't ring reliably",

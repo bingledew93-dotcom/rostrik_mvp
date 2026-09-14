@@ -1,0 +1,7 @@
+"NSCameraUsageDescription" = "Rostrik usa la cámara para fotografiar tu calendario de turnos impreso y leer los horarios en tu dispositivo.";
+"NSPhotoLibraryUsageDescription" = "Rostrik puede leer una foto guardada de tus turnos para importar los horarios en tu dispositivo.";
+"NSCalendarsUsageDescription" = "Rostrik copia tus turnos en un calendario \"Rostrik Roster\" dedicado para que aparezcan junto a tus otros eventos.";
+"NSCalendarsFullAccessUsageDescription" = "Rostrik copia tus turnos en un calendario \"Rostrik Roster\" dedicado para que aparezcan junto a tus otros eventos.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Rostrik añade tus turnos a un calendario \"Rostrik Roster\" dedicado.";
+"NSAppleMusicUsageDescription" = "Rostrik te permite elegir una canción de tu biblioteca como tono de alarma personalizado.";
+"NSAlarmKitUsageDescription" = "Rostrik usa alarmas para que tu despertar antes del turno suene aunque el teléfono esté en silencio o en un modo de concentración.";

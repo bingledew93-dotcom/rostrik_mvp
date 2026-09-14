@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Tu próximo turno, de un vistazo</string>
+    <string name="alarm_fallback_title">Alarma</string>
+    <string name="alarm_hint_critical">Alarma crítica\nAgita con fuerza para apagar</string>
+    <string name="alarm_hint_slide">Desliza el control de abajo para apagar</string>
+    <string name="alarm_snooze_button">POSPONER (%1$d MIN)</string>
+    <string name="alarm_slide_to_dismiss">Desliza para apagar</string>
+    <string name="channel_alarm_name">Alarma</string>
+    <string name="channel_alarm_description">Muestra la alarma a pantalla completa cuando toca una alarma de turno.</string>
+    <string name="channel_alarm_playback_name">Reproducción de alarma</string>
+    <string name="channel_alarm_playback_description">Mantiene sonando de forma fiable una alarma con tono personalizado.</string>
+    <string name="channel_sleep_name">Sonidos para dormir</string>
+    <string name="channel_sleep_description">Mantiene un sonido para dormir con la pantalla apagada.</string>
+    <string name="channel_reminders_name">Recordatorios</string>
+    <string name="channel_reminders_description">Avisos opcionales para eventos, tareas y cumpleaños.</string>
+    <string name="sleep_sound_fallback">Sonido para dormir</string>
+    <string name="sleep_playing">Reproduciendo</string>
+    <string name="sleep_playing_stops_in">Reproduciendo · se detiene en %1$d min</string>
+    <string name="sleep_stop">Detener</string>
+    <string name="ringtone_picker_title">Elige el tono de alarma</string>
+    <string name="ringtone_system_fallback">Tono del sistema</string>
+    <string name="widget_off_rdo">🛌 Libre / Descanso</string>
+    <string name="widget_no_shifts">Aún no hay turnos</string>
+    <string name="duration_m">%1$d min</string>
+    <string name="duration_h">%1$d h</string>
+    <string name="duration_h_m">%1$d h %2$d min</string>
+    <string name="duration_d">%1$d d</string>
+    <string name="duration_d_h">%1$d d %2$d h</string>
+</resources>

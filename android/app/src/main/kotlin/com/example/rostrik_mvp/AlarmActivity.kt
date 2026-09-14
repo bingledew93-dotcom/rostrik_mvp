@@ -290,11 +290,10 @@ class AlarmActivity : Activity(), SensorEventListener {
         val hint = TextView(this).apply {
             // Critical-shift alarms (shake mode) deliberately offer NO slide
             // handle — the only way to silence them is a firm, sustained shake.
-            text = if (shakeToDismiss) {
-                "Critical alarm\nShake firmly to dismiss"
-            } else {
-                "Slide the handle below to dismiss"
-            }
+            text = getString(
+                if (shakeToDismiss) R.string.alarm_hint_critical
+                else R.string.alarm_hint_slide,
+            )
             setTextColor(Color.parseColor("#B0B0B8"))
             textSize = 16f
             gravity = Gravity.CENTER
@@ -304,7 +303,7 @@ class AlarmActivity : Activity(), SensorEventListener {
         // more minutes shouldn't have to perform a precise gesture). The label
         // reflects the user's configured interval, not a hardcoded value.
         val snoozeButton = Button(this).apply {
-            text = "SNOOZE ($mins MIN)"
+            text = getString(R.string.alarm_snooze_button, mins)
             textSize = 18f
             setOnClickListener { snoozeAlarm() }
             layoutParams = LinearLayout.LayoutParams(
@@ -357,7 +356,7 @@ class AlarmActivity : Activity(), SensorEventListener {
 
         // Centred prompt that fades out as the handle advances.
         val slideLabel = TextView(this).apply {
-            text = "Slide to dismiss"
+            text = getString(R.string.alarm_slide_to_dismiss)
             setTextColor(Color.parseColor("#9A9AA6"))
             textSize = 17f
             gravity = Gravity.CENTER

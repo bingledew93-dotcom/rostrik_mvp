@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.res.Resources
 import android.graphics.Color
 import android.util.Log
 import android.widget.RemoteViews
@@ -111,10 +112,10 @@ class RostrikWidgetProvider : HomeWidgetProvider() {
         // empty state for a widget added on a fresh install.
         val badge = segment?.badge
             ?: widgetData.getString(KEY_BADGE, null)
-            ?: "🛌 Off / RDO"
-        val main = segment?.mainTextAt(now)
+            ?: context.getString(R.string.widget_off_rdo)
+        val main = segment?.mainTextAt(context.resources, now)
             ?: widgetData.getString(KEY_MAIN, null)
-            ?: "No shifts yet"
+            ?: context.getString(R.string.widget_no_shifts)
         val accent = accentColor(segment?.shiftType ?: widgetData.getString(KEY_SHIFT_TYPE, null))
 
         for (widgetId in appWidgetIds) {
@@ -196,11 +197,11 @@ class RostrikWidgetProvider : HomeWidgetProvider() {
          * static ones (the rotation fallback and the empty state) are already
          * final.
          */
-        fun mainTextAt(now: Long): String {
+        fun mainTextAt(res: Resources, now: Long): String {
             val target = countdownTo
             val prefix = countdownPrefix
             if (target == null || prefix == null) return staticMain
-            return "$prefix ${formatCountdown(target - now)}"
+            return "$prefix ${formatCountdown(res, target - now)}"
         }
     }
 
@@ -320,18 +321,28 @@ class RostrikWidgetProvider : HomeWidgetProvider() {
          * lock-step: a divergence here shows up as the widget and the in-app
          * Hero Card disagreeing about the same shift.
          */
-        internal fun formatCountdown(remainingMs: Long): String {
-            if (remainingMs <= 0L) return "0m"
+        internal fun formatCountdown(res: Resources, remainingMs: Long): String {
+            if (remainingMs <= 0L) return res.getString(R.string.duration_m, 0)
             val totalMinutes = remainingMs / MINUTE_MS
-            if (totalMinutes < 60L) return "${totalMinutes}m"
-            if (totalMinutes < 60L * 24L) {
-                val h = totalMinutes / 60L
-                val m = totalMinutes % 60L
-                return if (m == 0L) "${h}h" else "${h}h ${m}m"
+            if (totalMinutes < 60L) {
+                return res.getString(R.string.duration_m, totalMinutes.toInt())
             }
-            val days = totalMinutes / (60L * 24L)
-            val hoursRem = (totalMinutes - days * 60L * 24L) / 60L
-            return if (hoursRem == 0L) "${days}d" else "${days}d ${hoursRem}h"
+            if (totalMinutes < 60L * 24L) {
+                val h = (totalMinutes / 60L).toInt()
+                val m = (totalMinutes % 60L).toInt()
+                return if (m == 0) {
+                    res.getString(R.string.duration_h, h)
+                } else {
+                    res.getString(R.string.duration_h_m, h, m)
+                }
+            }
+            val days = (totalMinutes / (60L * 24L)).toInt()
+            val hoursRem = ((totalMinutes - days * 60L * 24L) / 60L).toInt()
+            return if (hoursRem == 0) {
+                res.getString(R.string.duration_d, days)
+            } else {
+                res.getString(R.string.duration_d_h, days, hoursRem)
+            }
         }
 
         /**

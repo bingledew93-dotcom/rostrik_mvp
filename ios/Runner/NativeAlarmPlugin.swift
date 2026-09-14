@@ -369,7 +369,7 @@ final class ForegroundAlarmPresenter: NSObject, UNUserNotificationCenterDelegate
     center.delegate = shared
     let snooze = UNNotificationAction(
       identifier: snoozeActionIdentifier,
-      title: "Snooze",
+      title: String(localized: "Snooze"),
       options: [])
     center.setNotificationCategories([
       UNNotificationCategory(

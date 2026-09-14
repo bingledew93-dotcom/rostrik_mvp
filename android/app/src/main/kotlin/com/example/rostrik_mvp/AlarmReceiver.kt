@@ -143,14 +143,18 @@ class AlarmReceiver : BroadcastReceiver() {
          *    * both → "03:00 AM · Before your Night shift"
          *    * time only → "03:00 AM"
          *    * neither (legacy/preview) → "Alarm". */
-        fun notificationDetail(displayTime: String?, body: String?): String {
+        fun notificationDetail(
+            ctx: Context,
+            displayTime: String?,
+            body: String?,
+        ): String {
             val time = displayTime?.takeIf { it.isNotBlank() }
             val context = body?.takeIf { it.isNotBlank() }
             return when {
                 time != null && context != null -> "$time · $context"
                 time != null -> time
                 context != null -> context
-                else -> "Alarm"
+                else -> ctx.getString(R.string.alarm_fallback_title)
             }
         }
     }
@@ -299,7 +303,7 @@ class AlarmReceiver : BroadcastReceiver() {
         }
         val notification = builder
             .setContentTitle(label)
-            .setContentText(notificationDetail(displayTime, body))
+            .setContentText(notificationDetail(context, displayTime, body))
             .setSmallIcon(R.drawable.ic_stat_alarm)
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true)
@@ -326,10 +330,10 @@ class AlarmReceiver : BroadcastReceiver() {
         // owns the audio + haptics — we must not double up.
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Alarm",
+            context.getString(R.string.channel_alarm_name),
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-            description = "Fires the full-screen alarm when a shift alarm is due."
+            description = context.getString(R.string.channel_alarm_description)
             setSound(null, null)
             enableVibration(false)
             setBypassDnd(true)

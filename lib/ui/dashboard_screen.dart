@@ -332,7 +332,7 @@ class _UpcomingShiftCard extends StatelessWidget {
             const SizedBox(width: 12),
             Flexible(
               child: Text(
-                context.l10n.dashHeroShift(heroTypeLabel(shift.type)),
+                heroTypeLabelShort(shift.type),
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: visual.color,
                   fontWeight: FontWeight.w700,

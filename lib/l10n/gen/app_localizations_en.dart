@@ -654,11 +654,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashEnjoyTimeOff => 'Enjoy your time off.';
 
   @override
-  String dashHeroShift(String type) {
-    return '$type shift';
-  }
-
-  @override
   String get dashInProgress => 'IN PROGRESS';
 
   @override

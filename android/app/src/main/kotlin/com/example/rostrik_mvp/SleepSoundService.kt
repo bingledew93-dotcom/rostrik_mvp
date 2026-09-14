@@ -97,7 +97,8 @@ class SleepSoundService : Service() {
         when (intent?.action) {
             ACTION_PLAY -> {
                 val resource = intent.getStringExtra(EXTRA_RESOURCE)
-                label = intent.getStringExtra(EXTRA_LABEL) ?: "Sleep sound"
+                label = intent.getStringExtra(EXTRA_LABEL)
+                    ?: getString(R.string.sleep_sound_fallback)
                 val timerMinutes = intent.getIntExtra(EXTRA_TIMER_MINUTES, 0)
                 // Go foreground first (well within the 5s deadline) so the process
                 // is pinned before we prepare audio.
@@ -291,10 +292,10 @@ class SleepSoundService : Service() {
         if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Sleep sounds",
+            getString(R.string.channel_sleep_name),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Keeps a sleep sound playing with the screen off."
+            description = getString(R.string.channel_sleep_description)
             setSound(null, null)
             enableVibration(false)
             setShowBadge(false)
@@ -318,9 +319,9 @@ class SleepSoundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val subtitle = if (timerMinutes > 0) {
-            "Playing · stops in ${timerMinutes}m"
+            getString(R.string.sleep_playing_stops_in, timerMinutes)
         } else {
-            "Playing"
+            getString(R.string.sleep_playing)
         }
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
@@ -335,7 +336,8 @@ class SleepSoundService : Service() {
             .setOngoing(true)
             .setContentIntent(openPi)
             .addAction(
-                Notification.Action.Builder(null, "Stop", stopPi).build(),
+                Notification.Action.Builder(null, getString(R.string.sleep_stop), stopPi)
+                    .build(),
             )
             .build()
     }

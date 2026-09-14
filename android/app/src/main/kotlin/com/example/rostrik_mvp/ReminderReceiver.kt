@@ -43,7 +43,6 @@ class ReminderReceiver : BroadcastReceiver() {
         // shift-alarm channel. Default importance makes a normal notification
         // sound/peek without hijacking the screen.
         private const val CHANNEL_ID = "rostrik_activity_reminders"
-        private const val CHANNEL_NAME = "Reminders"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -106,10 +105,10 @@ class ReminderReceiver : BroadcastReceiver() {
         // must respect Do-Not-Disturb, unlike a shift alarm.
         val channel = NotificationChannel(
             CHANNEL_ID,
-            CHANNEL_NAME,
+            context.getString(R.string.channel_reminders_name),
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "Optional nudges for calendar events, tasks and birthdays."
+            description = context.getString(R.string.channel_reminders_description)
         }
         mgr.createNotificationChannel(channel)
     }

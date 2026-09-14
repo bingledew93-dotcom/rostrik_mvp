@@ -9,6 +9,7 @@ import 'activity_editor_modal.dart';
 import 'roster/shift_visuals.dart';
 import 'shift_editor_modal.dart';
 import 'shift_format.dart';
+import 'dashboard_hero.dart' show heroTypeLabelShort;
 
 /// The calendar-day chooser (Phase 3). Tapping a day in the Month view opens
 /// this sheet, which lets the day double as a normal calendar: edit/add a SHIFT,
@@ -191,7 +192,7 @@ class _ShiftTile extends StatelessWidget {
           shape: BoxShape.circle,
         ),
       ),
-      title: Text(context.l10n.dashHeroShift(shiftTypeLabel(shift.type))),
+      title: Text(heroTypeLabelShort(shift.type)),
       subtitle: Text(
         subtitle,
         style: theme.textTheme.bodySmall?.copyWith(

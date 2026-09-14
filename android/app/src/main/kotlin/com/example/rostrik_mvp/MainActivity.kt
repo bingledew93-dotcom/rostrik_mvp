@@ -307,7 +307,10 @@ class MainActivity : FlutterActivity() {
             putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
             putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select alarm tone")
+            putExtra(
+                RingtoneManager.EXTRA_RINGTONE_TITLE,
+                getString(R.string.ringtone_picker_title),
+            )
             if (!currentUri.isNullOrEmpty()) {
                 putExtra(
                     RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
@@ -352,7 +355,7 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "ringtone title lookup failed", e)
             null
-        } ?: "System tone"
+        } ?: getString(R.string.ringtone_system_fallback)
         pending.success(mapOf("uri" to uri.toString(), "title" to title))
     }
 
