@@ -531,6 +531,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{h}h {m}m'**
   String durationHMinShort(int h, int m);
+
+  /// No description provided for @commonClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get commonClose;
+
+  /// No description provided for @commonSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get commonSkip;
+
+  /// No description provided for @commonBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get commonBack;
+
+  /// No description provided for @commonDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get commonDone;
+
+  /// No description provided for @commonNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get commonNext;
+
+  /// No description provided for @walkthroughIntroTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A 60-second tour'**
+  String get walkthroughIntroTitle;
+
+  /// No description provided for @walkthroughIntroBodyTwo.
+  ///
+  /// In en, this message translates to:
+  /// **'Two things that make Rostrik click. You can skip anytime.'**
+  String get walkthroughIntroBodyTwo;
+
+  /// No description provided for @walkthroughIntroBodyOne.
+  ///
+  /// In en, this message translates to:
+  /// **'The thing that makes Rostrik click. You can skip anytime.'**
+  String get walkthroughIntroBodyOne;
+
+  /// No description provided for @walkthroughPaintLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Paint your roster'**
+  String get walkthroughPaintLabel;
+
+  /// No description provided for @walkthroughPaintDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the days you work — that fast.'**
+  String get walkthroughPaintDetail;
+
+  /// No description provided for @walkthroughShakeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Shake to dismiss'**
+  String get walkthroughShakeLabel;
+
+  /// No description provided for @walkthroughShakeDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'A firm shake switches off a critical alarm.'**
+  String get walkthroughShakeDetail;
+
+  /// No description provided for @walkthroughTryEach.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Next to try each one.'**
+  String get walkthroughTryEach;
+
+  /// No description provided for @walkthroughTryIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Next to try it.'**
+  String get walkthroughTryIt;
+
+  /// No description provided for @walkthroughPaintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the days you work. In the real builder you can add more blocks (afternoons, nights) the same way.'**
+  String get walkthroughPaintBody;
+
+  /// No description provided for @walkthroughPaintPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a day to paint a Day shift onto it.'**
+  String get walkthroughPaintPrompt;
+
+  /// No description provided for @walkthroughPaintFeedback.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Nice! That day is a Day block. Untapped days stay Off — that easy.} other{Nice! Those {count} days are a Day block. Untapped days stay Off — that easy.}}'**
+  String walkthroughPaintFeedback(int count);
+
+  /// No description provided for @walkthroughShakeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical-Shift alarms need a firm, steady shake to switch off, so a half-asleep tap can’t. Give it a go — shake your phone.'**
+  String get walkthroughShakeBody;
+
+  /// No description provided for @walkthroughShakeSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'You’ve got it!'**
+  String get walkthroughShakeSuccess;
+
+  /// No description provided for @walkthroughShakeSuccessDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'That’s exactly how you’ll silence a critical alarm.'**
+  String get walkthroughShakeSuccessDetail;
+
+  /// No description provided for @walkthroughDoneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re all set'**
+  String get walkthroughDoneTitle;
+
+  /// No description provided for @walkthroughDoneBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Build a roster anytime from Manage, and revisit this tour from Settings → Help whenever you like.'**
+  String get walkthroughDoneBody;
+
+  /// No description provided for @navDashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Dashboard'**
+  String get navDashboard;
+
+  /// No description provided for @navTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get navTimeline;
+
+  /// No description provided for @navManage.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get navManage;
+
+  /// No description provided for @navAlarms.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms'**
+  String get navAlarms;
+
+  /// No description provided for @navSleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep'**
+  String get navSleep;
+
+  /// No description provided for @onbPatternTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick your rotation'**
+  String get onbPatternTitle;
+
+  /// No description provided for @purchaseTrialEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Your free trial has ended'**
+  String get purchaseTrialEnded;
+
+  /// No description provided for @purchaseBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Rostrik once to keep your shift alarms firing. Your roster, alarms and settings are all safe — they resume the moment you unlock.'**
+  String get purchaseBody;
+
+  /// No description provided for @purchaseAlarmsWontRing.
+  ///
+  /// In en, this message translates to:
+  /// **'Until then, alarms won’t ring.'**
+  String get purchaseAlarmsWontRing;
+
+  /// No description provided for @purchaseUnlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock full access'**
+  String get purchaseUnlock;
+
+  /// No description provided for @purchaseUnlockWithPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock full access · {price}'**
+  String purchaseUnlockWithPrice(String price);
+
+  /// No description provided for @purchaseRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore purchase'**
+  String get purchaseRestore;
+
+  /// No description provided for @purchaseOneTime.
+  ///
+  /// In en, this message translates to:
+  /// **'One-time purchase. No subscription.'**
+  String get purchaseOneTime;
+
+  /// No description provided for @purchaseUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchases aren’t available right now. Check your connection and try again.'**
+  String get purchaseUnavailable;
+
+  /// No description provided for @purchaseCheckingPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for a previous purchase…'**
+  String get purchaseCheckingPrevious;
 }
 
 class _AppLocalizationsDelegate

@@ -144,5 +144,56 @@
         "type": "int"
       }
     }
-  }
+  },
+  "commonClose": "Close",
+  "commonSkip": "Skip",
+  "commonBack": "Back",
+  "commonDone": "Done",
+  "commonNext": "Next",
+  "walkthroughIntroTitle": "A 60-second tour",
+  "walkthroughIntroBodyTwo": "Two things that make Rostrik click. You can skip anytime.",
+  "walkthroughIntroBodyOne": "The thing that makes Rostrik click. You can skip anytime.",
+  "walkthroughPaintLabel": "Paint your roster",
+  "walkthroughPaintDetail": "Tap the days you work — that fast.",
+  "walkthroughShakeLabel": "Shake to dismiss",
+  "walkthroughShakeDetail": "A firm shake switches off a critical alarm.",
+  "walkthroughTryEach": "Tap Next to try each one.",
+  "walkthroughTryIt": "Tap Next to try it.",
+  "walkthroughPaintBody": "Tap the days you work. In the real builder you can add more blocks (afternoons, nights) the same way.",
+  "walkthroughPaintPrompt": "Tap a day to paint a Day shift onto it.",
+  "walkthroughPaintFeedback": "{count, plural, one{Nice! That day is a Day block. Untapped days stay Off — that easy.} other{Nice! Those {count} days are a Day block. Untapped days stay Off — that easy.}}",
+  "@walkthroughPaintFeedback": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "walkthroughShakeBody": "Critical-Shift alarms need a firm, steady shake to switch off, so a half-asleep tap can’t. Give it a go — shake your phone.",
+  "walkthroughShakeSuccess": "You’ve got it!",
+  "walkthroughShakeSuccessDetail": "That’s exactly how you’ll silence a critical alarm.",
+  "walkthroughDoneTitle": "You’re all set",
+  "walkthroughDoneBody": "Build a roster anytime from Manage, and revisit this tour from Settings → Help whenever you like.",
+  "navDashboard": "Dashboard",
+  "navTimeline": "Timeline",
+  "navManage": "Manage",
+  "navAlarms": "Alarms",
+  "navSleep": "Sleep",
+  "onbPatternTitle": "Pick your rotation",
+  "purchaseTrialEnded": "Your free trial has ended",
+  "purchaseBody": "Unlock Rostrik once to keep your shift alarms firing. Your roster, alarms and settings are all safe — they resume the moment you unlock.",
+  "purchaseAlarmsWontRing": "Until then, alarms won’t ring.",
+  "purchaseUnlock": "Unlock full access",
+  "purchaseUnlockWithPrice": "Unlock full access · {price}",
+  "@purchaseUnlockWithPrice": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseRestore": "Restore purchase",
+  "purchaseOneTime": "One-time purchase. No subscription.",
+  "purchaseUnavailable": "Purchases aren’t available right now. Check your connection and try again.",
+  "purchaseCheckingPrevious": "Checking for a previous purchase…"
 }

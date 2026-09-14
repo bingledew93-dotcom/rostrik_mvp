@@ -109,6 +109,10 @@ String shiftTypeLabel(ShiftType type) {
 String weekdayShort(int weekday) =>
     DateFormat.E().format(DateTime(2024, 1, weekday));
 
+/// Localized single-letter weekday for a `DateTime.weekday` index: "M" (en).
+String weekdayNarrow(int weekday) =>
+    DateFormat('EEEEE').format(DateTime(2024, 1, weekday));
+
 /// Human-readable weekday set for a weekly alarm, from its packed
 /// `weekdaysBitmask`. Collapses the common runs into idiomatic copy — all seven
 /// → "Every day", Mon–Fri → "Weekdays", Sat+Sun → "Weekends" — and otherwise

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import 'entitlement_service.dart';
 
 /// The full-lock wall shown once the 14-day trial lapses without a purchase
@@ -28,12 +29,7 @@ class _PurchaseGateState extends State<PurchaseGate> {
     setState(() => _busy = false);
     if (!launched) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Purchases aren’t available right now. Check your connection and '
-            'try again.',
-          ),
-        ),
+        SnackBar(content: Text(context.l10n.purchaseUnavailable)),
       );
     }
     // On success the purchase completes asynchronously; the service notifies and
@@ -42,19 +38,20 @@ class _PurchaseGateState extends State<PurchaseGate> {
 
   Future<void> _restore() async {
     final messenger = ScaffoldMessenger.of(context);
+    final message = context.l10n.purchaseCheckingPrevious;
     await widget.service.restore();
     if (!mounted) return;
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Checking for a previous purchase…')),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final price = widget.service.price;
-    final unlockLabel =
-        price == null ? 'Unlock full access' : 'Unlock full access · $price';
+    final unlockLabel = price == null
+        ? l10n.purchaseUnlock
+        : l10n.purchaseUnlockWithPrice(price);
 
     return Scaffold(
       body: SafeArea(
@@ -78,23 +75,21 @@ class _PurchaseGateState extends State<PurchaseGate> {
               ),
               const SizedBox(height: 28),
               Text(
-                'Your free trial has ended',
+                l10n.purchaseTrialEnded,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
               Text(
-                'Unlock Rostrik once to keep your shift alarms firing. Your '
-                'roster, alarms and settings are all safe — they resume the '
-                'moment you unlock.',
+                l10n.purchaseBody,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyLarge
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
               Text(
-                'Until then, alarms won’t ring.',
+                l10n.purchaseAlarmsWontRing,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.error,
@@ -130,7 +125,7 @@ class _PurchaseGateState extends State<PurchaseGate> {
                 key: const ValueKey('purchase-restore'),
                 onPressed: _busy ? null : _restore,
                 child: Text(
-                  'Restore purchase',
+                  l10n.purchaseRestore,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -139,7 +134,7 @@ class _PurchaseGateState extends State<PurchaseGate> {
               ),
               const SizedBox(height: 4),
               Text(
-                'One-time purchase. No subscription.',
+                l10n.purchaseOneTime,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant

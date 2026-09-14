@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/shift_type.dart';
+import '../../l10n/l10n.dart';
 import '../app_theme.dart';
+import '../shift_format.dart';
 import '../../alarms/alarm_capabilities.dart';
 import '../critical_dismiss_controls.dart';
 import '../roster/shift_visuals.dart';
@@ -96,7 +98,9 @@ class _WalkthroughFlowState extends State<WalkthroughFlow> {
                   TextButton(
                     key: const ValueKey('walkthrough-skip'),
                     onPressed: widget.onFinish,
-                    child: Text(isLast ? 'Close' : 'Skip'),
+                    child: Text(
+                      isLast ? context.l10n.commonClose : context.l10n.commonSkip,
+                    ),
                   ),
                 ],
               ),
@@ -126,7 +130,7 @@ class _WalkthroughFlowState extends State<WalkthroughFlow> {
                     TextButton(
                       key: const ValueKey('walkthrough-back'),
                       onPressed: () => _goTo(_page - 1),
-                      child: const Text('Back'),
+                      child: Text(context.l10n.commonBack),
                     ),
                   const Spacer(),
                   SizedBox(
@@ -146,7 +150,11 @@ class _WalkthroughFlowState extends State<WalkthroughFlow> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      child: Text(isLast ? 'Done' : 'Next'),
+                      child: Text(
+                        isLast
+                            ? context.l10n.commonDone
+                            : context.l10n.commonNext,
+                      ),
                     ),
                   ),
                 ],
@@ -250,30 +258,31 @@ class _IntroPage extends StatelessWidget {
     // go — otherwise the tour opens by promising a feature the device cannot
     // deliver, before the lesson it would have practised is even reached.
     final teachesShake = AlarmCapabilities.current.shakeToDismiss;
+    final l10n = context.l10n;
     return _LessonPage(
       icon: Icons.waving_hand_outlined,
-      title: 'A 60-second tour',
+      title: l10n.walkthroughIntroTitle,
       body: teachesShake
-          ? 'Two things that make Rostrik click. You can skip anytime.'
-          : 'The thing that makes Rostrik click. You can skip anytime.',
+          ? l10n.walkthroughIntroBodyTwo
+          : l10n.walkthroughIntroBodyOne,
       child: Column(
         children: [
           _FeatureRow(
             icon: Icons.brush_outlined,
-            label: 'Paint your roster',
-            detail: 'Tap the days you work — that fast.',
+            label: l10n.walkthroughPaintLabel,
+            detail: l10n.walkthroughPaintDetail,
           ),
           if (teachesShake) ...[
             const SizedBox(height: 12),
             _FeatureRow(
               icon: Icons.vibration,
-              label: 'Shake to dismiss',
-              detail: 'A firm shake switches off a critical alarm.',
+              label: l10n.walkthroughShakeLabel,
+              detail: l10n.walkthroughShakeDetail,
             ),
           ],
           const SizedBox(height: 4),
           Text(
-            teachesShake ? 'Tap Next to try each one.' : 'Tap Next to try it.',
+            teachesShake ? l10n.walkthroughTryEach : l10n.walkthroughTryIt,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -344,7 +353,6 @@ class _PainterPracticePage extends StatefulWidget {
 }
 
 class _PainterPracticePageState extends State<_PainterPracticePage> {
-  static const _labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   final Set<int> _painted = {};
 
   void _toggle(int i) => setState(() {
@@ -354,27 +362,26 @@ class _PainterPracticePageState extends State<_PainterPracticePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final dayColor = visualFor(ShiftType.day).color;
     final count = _painted.length;
     final feedback = count == 0
-        ? 'Tap a day to paint a Day shift onto it.'
-        : 'Nice! ${count == 1 ? 'That day is' : 'Those $count days are'} a '
-            'Day block. Untapped days stay Off — that easy.';
+        ? l10n.walkthroughPaintPrompt
+        : l10n.walkthroughPaintFeedback(count);
 
     return _LessonPage(
       icon: Icons.brush_outlined,
-      title: 'Paint your roster',
-      body: 'Tap the days you work. In the real builder you can add more '
-          'blocks (afternoons, nights) the same way.',
+      title: l10n.walkthroughPaintLabel,
+      body: l10n.walkthroughPaintBody,
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              for (var i = 0; i < _labels.length; i++)
+              for (var i = 0; i < 7; i++)
                 _PracticeCell(
                   key: ValueKey('practice-day-$i'),
-                  label: _labels[i],
+                  label: weekdayNarrow(i + 1),
                   painted: _painted.contains(i),
                   color: dayColor,
                   onTap: () => _toggle(i),
@@ -471,9 +478,8 @@ class _ShakePracticePageState extends State<_ShakePracticePage> {
     final theme = Theme.of(context);
     return _LessonPage(
       icon: Icons.vibration,
-      title: 'Shake to dismiss',
-      body: 'Critical-Shift alarms need a firm, steady shake to switch off, so '
-          'a half-asleep tap can’t. Give it a go — shake your phone.',
+      title: context.l10n.walkthroughShakeLabel,
+      body: context.l10n.walkthroughShakeBody,
       child: _done
           ? Container(
               key: const ValueKey('shake-success'),
@@ -489,13 +495,13 @@ class _ShakePracticePageState extends State<_ShakePracticePage> {
                       color: theme.colorScheme.primary, size: 40),
                   const SizedBox(height: 10),
                   Text(
-                    'You’ve got it!',
+                    context.l10n.walkthroughShakeSuccess,
                     style: theme.textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'That’s exactly how you’ll silence a critical alarm.',
+                    context.l10n.walkthroughShakeSuccessDetail,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -529,11 +535,10 @@ class _DonePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _LessonPage(
+    return _LessonPage(
       icon: Icons.check_circle_outline,
-      title: 'You’re all set',
-      body: 'Build a roster anytime from Manage, and revisit this tour from '
-          'Settings → Help whenever you like.',
+      title: context.l10n.walkthroughDoneTitle,
+      body: context.l10n.walkthroughDoneBody,
     );
   }
 }

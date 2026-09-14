@@ -259,4 +259,136 @@ class AppLocalizationsEn extends AppLocalizations {
   String durationHMinShort(int h, int m) {
     return '${h}h ${m}m';
   }
+
+  @override
+  String get commonClose => 'Close';
+
+  @override
+  String get commonSkip => 'Skip';
+
+  @override
+  String get commonBack => 'Back';
+
+  @override
+  String get commonDone => 'Done';
+
+  @override
+  String get commonNext => 'Next';
+
+  @override
+  String get walkthroughIntroTitle => 'A 60-second tour';
+
+  @override
+  String get walkthroughIntroBodyTwo =>
+      'Two things that make Rostrik click. You can skip anytime.';
+
+  @override
+  String get walkthroughIntroBodyOne =>
+      'The thing that makes Rostrik click. You can skip anytime.';
+
+  @override
+  String get walkthroughPaintLabel => 'Paint your roster';
+
+  @override
+  String get walkthroughPaintDetail => 'Tap the days you work — that fast.';
+
+  @override
+  String get walkthroughShakeLabel => 'Shake to dismiss';
+
+  @override
+  String get walkthroughShakeDetail =>
+      'A firm shake switches off a critical alarm.';
+
+  @override
+  String get walkthroughTryEach => 'Tap Next to try each one.';
+
+  @override
+  String get walkthroughTryIt => 'Tap Next to try it.';
+
+  @override
+  String get walkthroughPaintBody =>
+      'Tap the days you work. In the real builder you can add more blocks (afternoons, nights) the same way.';
+
+  @override
+  String get walkthroughPaintPrompt =>
+      'Tap a day to paint a Day shift onto it.';
+
+  @override
+  String walkthroughPaintFeedback(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Nice! Those $count days are a Day block. Untapped days stay Off — that easy.',
+      one: 'Nice! That day is a Day block. Untapped days stay Off — that easy.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get walkthroughShakeBody =>
+      'Critical-Shift alarms need a firm, steady shake to switch off, so a half-asleep tap can’t. Give it a go — shake your phone.';
+
+  @override
+  String get walkthroughShakeSuccess => 'You’ve got it!';
+
+  @override
+  String get walkthroughShakeSuccessDetail =>
+      'That’s exactly how you’ll silence a critical alarm.';
+
+  @override
+  String get walkthroughDoneTitle => 'You’re all set';
+
+  @override
+  String get walkthroughDoneBody =>
+      'Build a roster anytime from Manage, and revisit this tour from Settings → Help whenever you like.';
+
+  @override
+  String get navDashboard => 'Dashboard';
+
+  @override
+  String get navTimeline => 'Timeline';
+
+  @override
+  String get navManage => 'Manage';
+
+  @override
+  String get navAlarms => 'Alarms';
+
+  @override
+  String get navSleep => 'Sleep';
+
+  @override
+  String get onbPatternTitle => 'Pick your rotation';
+
+  @override
+  String get purchaseTrialEnded => 'Your free trial has ended';
+
+  @override
+  String get purchaseBody =>
+      'Unlock Rostrik once to keep your shift alarms firing. Your roster, alarms and settings are all safe — they resume the moment you unlock.';
+
+  @override
+  String get purchaseAlarmsWontRing => 'Until then, alarms won’t ring.';
+
+  @override
+  String get purchaseUnlock => 'Unlock full access';
+
+  @override
+  String purchaseUnlockWithPrice(String price) {
+    return 'Unlock full access · $price';
+  }
+
+  @override
+  String get purchaseRestore => 'Restore purchase';
+
+  @override
+  String get purchaseOneTime => 'One-time purchase. No subscription.';
+
+  @override
+  String get purchaseUnavailable =>
+      'Purchases aren’t available right now. Check your connection and try again.';
+
+  @override
+  String get purchaseCheckingPrevious => 'Checking for a previous purchase…';
 }
