@@ -5,3 +5,7 @@ output-class: AppLocalizations
 output-dir: lib/l10n/gen
 nullable-getter: false
 untranslated-messages-file: build/untranslated_messages.json
+# English first: Flutter falls back to the FIRST supported locale when the
+# device speaks none of ours, and the generated list is otherwise
+# alphabetical — which made Arabic the fallback for every unsupported language.
+preferred-supported-locales: [en]
