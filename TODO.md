@@ -340,8 +340,19 @@ heads-up appeared. The user tried to stop it and could not. Findings:
 - [x] Ring notification is non-dismissible: `AlarmAudioService` holds it as its
       foreground notification (`NO_CLEAR|FOREGROUND_SERVICE` on device). When a
       second alarm takes over mid-ring, the first alarm's notification is
-      re-posted without its full-screen intent (audit F4). The superseded case is
-      compile-verified only.
+      kept as an ordinary notification without its full-screen intent (audit
+      F4; detached with `STOP_FOREGROUND_DETACH` — re-posting it raced Android's
+      cancel and lost). Ending a superseded alarm no longer silences the one
+      still ringing, which also closes a hole where one tap on an older normal
+      alarm could end a ringing critical one. Device-verified 2026-09-15 with
+      alarms at 17:04 and 17:05.
+- [x] Boot re-arm re-rang dismissed alarms: after a reboot or app update within
+      30 minutes, `rearmFromStore` treated an already-rung recurring alarm as
+      "missed" and rang it again, and each such ring re-stored itself. A dismiss
+      or the 15-minute timeout now removes the store entry
+      (`forgetEndedRing`). Seen twice on the Pixel with the 16:23 Nightshift
+      alarm; verified fixed: an update after the dismissal re-armed only future
+      alarms.
 - [x] Critical-shift hold fallback restored on Android. The create sheet
       promised "hold 3s as fallback" but the native `AlarmActivity` had lost it
       when it replaced the Flutter wake screen. Now, if a critical alarm is still

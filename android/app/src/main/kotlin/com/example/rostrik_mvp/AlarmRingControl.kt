@@ -130,10 +130,12 @@ object AlarmRingControl {
     fun dismiss(context: Context, ring: Ring, reason: String) {
         Log.d(TAG, "dismiss via '$reason' (id=${ring.alarmId})")
 
-        // 1. Stop the looping audio. stopService routes to the service's
-        //    onDestroy → AlarmAudioEngine.stop() (audio + haptics), and removes
-        //    the ring notification the service holds in the foreground.
-        context.stopService(Intent(context, AlarmAudioService::class.java))
+        // 1. Stop the looping audio — only if it is THIS alarm's. stopService
+        //    routes to the service's onDestroy → AlarmAudioEngine.stop() (audio
+        //    + haptics), and removes the ring notification the service holds in
+        //    the foreground.
+        val sounding = isSounding(ring)
+        if (sounding) context.stopService(Intent(context, AlarmAudioService::class.java))
 
         // 2. Cancel the ring notification too — it is not service-owned when
         //    another alarm superseded this one mid-ring.
@@ -152,8 +154,28 @@ object AlarmRingControl {
         //     before its next reconcile re-projects it into a daily cycle.
         recordPendingAlarmDelete(context, ring.appAlarmId)
 
-        // 4. Release the WakeLock AlarmReceiver took at fire time.
-        AlarmReceiver.releaseWakeLock()
+        // 3c. Take it out of the boot re-arm store, so a reboot or app update in
+        //     the next half hour does not ring it again as "missed".
+        NativeAlarmScheduling.forgetEndedRing(context, ring.notificationId)
+
+        // 4. Release the WakeLock AlarmReceiver took at fire time — it belongs
+        //    to the alarm that is ringing.
+        if (sounding) AlarmReceiver.releaseWakeLock()
+    }
+
+    /** Whether [ring] is the alarm whose audio is playing. Also true when that
+     *  cannot be told apart — nothing playing, or a ring without an id — so
+     *  those cases keep stopping everything, as before.
+     *
+     *  False for an alarm a newer one superseded mid-ring: its notification
+     *  stays in the shade (audit F4), and ending it from there must leave the
+     *  newer ring going. Found on a Pixel 2026-09-15 with two alarms 7 minutes
+     *  apart: dismissing the older one silenced the newer and dropped its
+     *  notification unrecorded — and had the newer been a critical shift, one
+     *  tap would have ended it without the shake. */
+    private fun isSounding(ring: Ring): Boolean {
+        val playing = AlarmAudioService.ringingNotificationId ?: return true
+        return playing < 0 || ring.notificationId < 0 || playing == ring.notificationId
     }
 
     /** Snooze: re-arm the SAME alarm at the configured offset, record it for
@@ -214,10 +236,12 @@ object AlarmRingControl {
 
         // 3. Stand down exactly like a dismiss — stop audio, cancel the
         //    notification, release the WakeLock. (stopService cancels the
-        //    15-min auto-timeout via the service's onDestroy.)
-        context.stopService(Intent(context, AlarmAudioService::class.java))
+        //    15-min auto-timeout via the service's onDestroy.) Snoozing an
+        //    alarm that a newer one superseded leaves the newer ring going.
+        val sounding = isSounding(ring)
+        if (sounding) context.stopService(Intent(context, AlarmAudioService::class.java))
         cancelNotification(context, ring)
-        AlarmReceiver.releaseWakeLock()
+        if (sounding) AlarmReceiver.releaseWakeLock()
     }
 
     /** Formats [millis] as a 12-hour `hh:mm AM/PM` clock string for the snooze

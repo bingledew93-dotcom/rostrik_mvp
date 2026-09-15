@@ -107,6 +107,16 @@ class AlarmAudioService : Service() {
         // MainActivity preview path). Silent + non-vibrating.
         private const val CHANNEL_ID = "rostrik_alarm_playback"
         private const val NOTIF_ID = 0x41554449 // "AUDI"
+
+        /** Notification id of the alarm whose audio is playing right now, or
+         *  null when nothing is. -1 means a ring without an id (the legacy
+         *  preview path). Lets [AlarmRingControl] tell the ringing alarm apart
+         *  from one it superseded: ending a superseded alarm must not silence
+         *  the one still ringing — least of all a critical one, which only a
+         *  shake or a hold may end. */
+        @Volatile
+        var ringingNotificationId: Int? = null
+            private set
     }
 
     private var engine: AlarmAudioEngine? = null
@@ -155,6 +165,7 @@ class AlarmAudioService : Service() {
                 appAlarmId = intent.getStringExtra(AlarmReceiver.EXTRA_APP_ALARM_ID)
                 fsiNotificationId =
                     intent.getIntExtra(AlarmReceiver.EXTRA_NOTIFICATION_ID, -1)
+                ringingNotificationId = fsiNotificationId
                 // Capture the notification copy BEFORE going foreground so the
                 // keep-alive notification is built with it (reading three extras
                 // is microseconds — still well within the 5s startForeground
@@ -199,6 +210,7 @@ class AlarmAudioService : Service() {
     }
 
     override fun onDestroy() {
+        ringingNotificationId = null
         // `stopService` from a deliberate Dismiss/Snooze routes here — cancel the
         // fail-safe timer (so it can't fire after the user already handled it)
         // and stop the audio. The FGS notification is removed automatically when
@@ -226,6 +238,7 @@ class AlarmAudioService : Service() {
     /** Fired when 15 minutes elapse with no user dismiss. Performs the full
      *  unattended teardown so a phone left in a drawer can't drain to zero. */
     private fun onAutoTimeout() {
+        ringingNotificationId = null
         Log.w(TAG, "alarm hit the 15-min auto-timeout — stopping to save battery")
         // 1. Record the dismissal so Dart still resolves this ring in Hive
         //    (same `<shiftId>|<appAlarmId>` contract as a manual dismiss — the
@@ -235,6 +248,8 @@ class AlarmAudioService : Service() {
         //     same cleanup the manual dismiss does, so an unattended one-shot
         //     can't re-project into a daily cycle.
         recordPendingAlarmDelete(appAlarmId)
+        // 1c. Take it out of the boot re-arm store, as a manual dismiss does.
+        NativeAlarmScheduling.forgetEndedRing(this, fsiNotificationId)
         // 2. Release the fire-time WakeLock AlarmReceiver took.
         AlarmReceiver.releaseWakeLock()
         // 3. Stop the audio + haptics.
@@ -335,6 +350,14 @@ class AlarmAudioService : Service() {
             NOTIF_ID to buildNotification()
         }
         val superseded = foregroundRing?.takeIf { it.first != id }
+        if (superseded != null) {
+            // Detach before moving the foreground to the new id. Moving it
+            // directly makes Android queue a cancel of the old notification, and
+            // re-posting it afterwards raced that cancel — on a Pixel the re-post
+            // lost ("Cannot find enqueued record") and the first alarm's
+            // notification vanished. Detached, it simply stays posted.
+            stopForeground(STOP_FOREGROUND_DETACH)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 id,
@@ -345,15 +368,14 @@ class AlarmAudioService : Service() {
             startForeground(id, notif)
         }
         foregroundRing = if (ring != null && fsiNotificationId >= 0) id to ring else null
-        if (superseded != null) repostSuperseded(superseded.first, superseded.second)
+        if (superseded != null) demoteSuperseded(superseded.first, superseded.second)
     }
 
-    /** Moving the foreground to a new notification id makes Android cancel the
-     *  old one. Put the superseded alarm's notification back as an ordinary one,
-     *  so it can still be snoozed, dismissed or opened (audit F4) — but without
-     *  its full-screen intent, which would otherwise pull the alarm screen onto
-     *  the alarm that is no longer ringing. */
-    private fun repostSuperseded(id: Int, notification: Notification) {
+    /** Updates the superseded alarm's notification — detached from the service
+     *  and still posted — into an ordinary one, so it can still be snoozed,
+     *  dismissed or opened (audit F4), but without its full-screen intent, which
+     *  would otherwise pull the alarm screen onto the alarm no longer ringing. */
+    private fun demoteSuperseded(id: Int, notification: Notification) {
         try {
             val stripped = Notification.Builder.recoverBuilder(this, notification)
                 .setFullScreenIntent(null, false)
@@ -361,7 +383,7 @@ class AlarmAudioService : Service() {
                 .build()
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(id, stripped)
         } catch (e: Exception) {
-            Log.w(TAG, "re-posting superseded alarm notification failed", e)
+            Log.w(TAG, "demoting superseded alarm notification failed", e)
         }
     }
 

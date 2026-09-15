@@ -395,6 +395,31 @@ object NativeAlarmScheduling {
         }
     }
 
+    /** Drops a stored alarm once the user has ended its ring (dismiss, or the
+     *  15-minute timeout), so a reboot or app update within
+     *  [BOOT_REARM_GRACE_MS] does not ring it again as "missed". Seen on a Pixel
+     *  2026-09-15: a Nightshift alarm dismissed at 16:35 rang again at 16:46,
+     *  seconds after an app update. A recurring alarm's entry was otherwise only
+     *  removed when Dart cancelled it, which never happens to a spent occurrence.
+     *
+     *  Not done at fire time: an alarm still ringing when the phone dies should
+     *  still ring after the reboot. An entry already moved to a later instant — a
+     *  snooze, or a reconcile re-arming the same id — is kept. */
+    fun forgetEndedRing(context: Context, id: Int) {
+        if (id < 0) return
+        try {
+            val prefs = storePrefs(context)
+            val raw = prefs.getString(id.toString(), null) ?: return
+            val at = JSONObject(raw).optLong("at", 0L)
+            if (at <= System.currentTimeMillis() + 60_000L) {
+                prefs.edit().remove(id.toString()).commit()
+                Log.d(TAG, "boot store: forgot ended ring id=$id")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "boot store: forget failed id=$id", e)
+        }
+    }
+
     private fun removeStoredAlarm(context: Context, id: Int) {
         try {
             storePrefs(context).edit().remove(id.toString()).commit()
