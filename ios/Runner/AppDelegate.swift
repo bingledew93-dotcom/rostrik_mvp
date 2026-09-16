@@ -77,6 +77,17 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Startup banner. On a device build the console is the ONLY channel that
+    // still talks (Dart's debugPrint is compiled out), and every iOS question
+    // starts with "which language, and did the bundle resolve". "Snooze"
+    // doubles as the probe: a missing or misnamed <lang>.lproj silently falls
+    // back to the key itself, so seeing "Snooze" where "Schlummern" belongs
+    // localises the fault to the bundle rather than the translation.
+    NSLog(
+      "[Rostrik] launch lang=\(Locale.preferredLanguages.first ?? "?") "
+        + "locale=\(Locale.current.identifier) "
+        + "snooze=\(NSLocalizedString("Snooze", comment: "AlarmKit snooze button"))")
+
     // Registration MUST happen before this method returns. iOS asserts
     // on late registration with `Launch handler for task with identifier
     // <id> was not registered before app finished launching`. The
