@@ -1,11 +1,14 @@
 package com.example.rostrik_mvp
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
@@ -38,6 +41,8 @@ object NativeAlarmScheduling {
     private const val METHOD_SET_EXACT_ALARM = "setExactAlarm"
     private const val METHOD_CANCEL_ALARM = "cancelAlarm"
     private const val METHOD_CAN_SCHEDULE_EXACT = "canScheduleExactAlarms"
+    private const val METHOD_CAN_USE_FULL_SCREEN = "canUseFullScreenIntent"
+    private const val METHOD_REQUEST_FULL_SCREEN = "requestFullScreenIntentAccess"
     private const val METHOD_GET_ALIVE_ALARM_IDS = "getAliveAlarmIds"
 
     // ---- Native boot re-arm store (Pixel 9 XL field bug #2) ----------------
@@ -144,6 +149,20 @@ object NativeAlarmScheduling {
                 // actually grants exactness there, never enters its lookup).
                 METHOD_CAN_SCHEDULE_EXACT -> {
                     result.success(canScheduleExactAlarms(appContext))
+                }
+                // Android 14 turned USE_FULL_SCREEN_INTENT into an app-op the
+                // user can revoke in Settings. Revoked, the ring notification
+                // still posts and still carries its Snooze/Dismiss buttons —
+                // but it never TAKES OVER the screen, so a locked phone shows
+                // a lock-screen notification instead of the alarm screen.
+                // Survivable now that the buttons exist; still worth telling
+                // the user, because the alarm screen is the whole point on a
+                // critical shift (the shake gate lives there).
+                METHOD_CAN_USE_FULL_SCREEN -> {
+                    result.success(canUseFullScreenIntent(appContext))
+                }
+                METHOD_REQUEST_FULL_SCREEN -> {
+                    result.success(openFullScreenIntentSettings(appContext))
                 }
                 // Ledger VALIDATION (Pixel 9 XL field bug): AlarmManager can't
                 // be enumerated, but the fire PendingIntents CAN be probed with
@@ -437,6 +456,42 @@ object NativeAlarmScheduling {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         return am.canScheduleExactAlarms()
+    }
+
+    /** Whether the OS will let a full-screen intent take over the screen right
+     *  now. True below UPSIDE_DOWN_CAKE (34), where holding the manifest
+     *  permission is the whole story; on 34+ defers to the app-op the user can
+     *  flip in Settings → Apps → Rostrik → Full-screen notifications.
+     *
+     *  Note it is granted by DEFAULT for an app whose use case is alarms (the
+     *  install-time grant Google keeps for calling/alarm apps), so a false here
+     *  means the user turned it OFF — never a missing request on our side. */
+    private fun canUseFullScreenIntent(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return nm.canUseFullScreenIntent()
+    }
+
+    /** Sends the user to the per-app full-screen-intent toggle. Returns whether
+     *  the hop actually launched, so Dart can stay quiet rather than claim a
+     *  fix path that went nowhere. NEW_TASK because this runs off the
+     *  application context (the same handler serves the headless engine). */
+    private fun openFullScreenIntentSettings(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+        return try {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    Uri.fromParts("package", context.packageName, null),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            true
+        } catch (e: Exception) {
+            // No such settings screen on this build (OEM skins have shipped
+            // without it). The caller falls back to the app's settings page.
+            Log.w(TAG, "full-screen intent settings unavailable", e)
+            false
+        }
     }
 
     /** Whether the fire PendingIntent for [id] still exists in the system —

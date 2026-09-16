@@ -676,6 +676,13 @@ class AppLocalizationsHi extends AppLocalizations {
       'सटीक अलार्म बंद हैं: कोई भी अलार्म शेड्यूल नहीं हो सकता।';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => 'अलार्म पूरी स्क्रीन नहीं लेंगे';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'फ़ुल-स्क्रीन अलार्म बंद हैं — फ़ोन लॉक होने पर अलार्म स्क्रीन के बजाय एक सूचना दिखेगी।';
+
+  @override
   String get dashAllow => 'अनुमति दें';
 
   @override

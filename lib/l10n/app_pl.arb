@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Powiadomienia są wyłączone – dzwoniący budzik nie pokaże ekranu budzenia i nie da się go wyłączyć.",
   "dashOpenSettings": "Otwórz ustawienia",
   "dashExactBlockedIssue": "Dokładne budziki są zablokowane – nie da się zaplanować żadnej pobudki.",
+  "dashAlarmsWontTakeOverScreen": "Alarmy nie przejmą ekranu",
+  "dashFullScreenBlockedIssue": "Alarmy pełnoekranowe są wyłączone — na zablokowanym telefonie zobaczysz powiadomienie zamiast ekranu alarmu.",
   "dashAllow": "Zezwól",
   "dashSlideToSkip": "Przesuń, aby pominąć ten budzik",
   "dashSlideToSkipAll": "{count, plural, one{Przesuń aby pominąć budzik} few{Przesuń aby pominąć {count} budziki} many{Przesuń aby pominąć {count} budzików} other{Przesuń aby pominąć {count} budzików}}",

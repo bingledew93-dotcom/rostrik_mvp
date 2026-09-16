@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Las notificaciones están desactivadas: una alarma que suena no puede mostrar su pantalla ni apagarse.",
   "dashOpenSettings": "Abrir ajustes",
   "dashExactBlockedIssue": "Las alarmas exactas están bloqueadas: no se puede programar ningún despertar.",
+  "dashAlarmsWontTakeOverScreen": "Las alarmas no ocuparán la pantalla",
+  "dashFullScreenBlockedIssue": "Las alarmas a pantalla completa están desactivadas: con el teléfono bloqueado verás una notificación en lugar de la pantalla de alarma.",
   "dashAllow": "Permitir",
   "dashSlideToSkip": "Desliza para omitir esta alarma",
   "dashSlideToSkipAll": "{count, plural, one{Desliza para omitir la alarma} other{Desliza para omitir las {count} alarmas}}",

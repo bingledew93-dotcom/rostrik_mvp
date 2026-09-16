@@ -192,7 +192,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   // Reliability warning first — an alarm app whose alarms
                   // cannot ring outranks everything else on this screen.
                   // Hidden while the probe is pending or everything is fine.
-                  if (_health case final health? when !health.ok)
+                  if (_health case final health? when !health.allClear)
                     _AlarmReliabilityBanner(
                       health: health,
                       onFixed: _refreshHealth,
@@ -520,7 +520,13 @@ class _AlarmReliabilityBanner extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.l10n.dashAlarmsCantRing,
+                    // Two severities under one banner. A missing full-screen
+                    // intent alone is a degradation — the alarm still rings —
+                    // so claiming "alarms can't ring" there would be a lie the
+                    // user can disprove by waiting for the next shift.
+                    health.ok
+                        ? context.l10n.dashAlarmsWontTakeOverScreen
+                        : context.l10n.dashAlarmsCantRing,
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: scheme.onErrorContainer,
                       fontWeight: FontWeight.w700,
@@ -556,6 +562,18 @@ class _AlarmReliabilityBanner extends StatelessWidget {
                 onPressed: () async {
                   // Same fire-and-forget rationale as the notifications row.
                   unawaited(requestExactAlarmPermission());
+                  await onFixed();
+                },
+              ),
+            if (!health.fullScreenIntentAllowed)
+              _issueRow(
+                theme,
+                context.l10n.dashFullScreenBlockedIssue,
+                buttonKey: const ValueKey('health-fix-full-screen'),
+                buttonLabel: context.l10n.dashAllow,
+                onPressed: () async {
+                  // Same fire-and-forget rationale as the notifications row.
+                  unawaited(requestFullScreenIntentAccess());
                   await onFixed();
                 },
               ),

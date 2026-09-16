@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Meldingen staan uit – een afgaande wekker kan geen wekscherm tonen en niet worden uitgezet.",
   "dashOpenSettings": "Instellingen openen",
   "dashExactBlockedIssue": "Exacte wekkers zijn geblokkeerd – er kunnen geen wekmomenten worden gepland.",
+  "dashAlarmsWontTakeOverScreen": "Alarmen nemen het scherm niet over",
+  "dashFullScreenBlockedIssue": "Schermvullende alarmen staan uit — op een vergrendelde telefoon zie je een melding in plaats van het alarmscherm.",
   "dashAllow": "Toestaan",
   "dashSlideToSkip": "Veeg om deze wekker over te slaan",
   "dashSlideToSkipAll": "{count, plural, one{Veeg om de wekker over te slaan} other{Veeg om alle {count} wekkers over te slaan}}",

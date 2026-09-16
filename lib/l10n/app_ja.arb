@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "通知がオフです。アラームが鳴っても起床画面が表示されず、止められません。",
   "dashOpenSettings": "設定を開く",
   "dashExactBlockedIssue": "正確なアラームがブロックされています。アラームを設定できません。",
+  "dashAlarmsWontTakeOverScreen": "アラームが画面全体に表示されません",
+  "dashFullScreenBlockedIssue": "全画面アラームがオフです。画面がロックされているときは、アラーム画面ではなく通知が表示されます。",
   "dashAllow": "許可",
   "dashSlideToSkip": "スライドしてこのアラームをスキップ",
   "dashSlideToSkipAll": "{count, plural, other{スライドして {count} 件のアラームをスキップ}}",

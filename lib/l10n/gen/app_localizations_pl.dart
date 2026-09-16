@@ -691,6 +691,13 @@ class AppLocalizationsPl extends AppLocalizations {
       'Dokładne budziki są zablokowane – nie da się zaplanować żadnej pobudki.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => 'Alarmy nie przejmą ekranu';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Alarmy pełnoekranowe są wyłączone — na zablokowanym telefonie zobaczysz powiadomienie zamiast ekranu alarmu.';
+
+  @override
   String get dashAllow => 'Zezwól';
 
   @override

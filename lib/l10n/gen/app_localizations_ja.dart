@@ -636,6 +636,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dashExactBlockedIssue => '正確なアラームがブロックされています。アラームを設定できません。';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => 'アラームが画面全体に表示されません';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      '全画面アラームがオフです。画面がロックされているときは、アラーム画面ではなく通知が表示されます。';
+
+  @override
   String get dashAllow => '許可';
 
   @override

@@ -24,12 +24,27 @@ class AlarmHealth {
   const AlarmHealth({
     required this.notificationsEnabled,
     required this.exactAlarmsAllowed,
+    this.fullScreenIntentAllowed = true,
   });
 
   final bool notificationsEnabled;
   final bool exactAlarmsAllowed;
 
+  /// Android 14+ only: whether a full-screen intent may take over the screen.
+  /// Unlike the two above this is a DEGRADATION, not a failure — the alarm
+  /// still rings and the notification still carries Snooze/Dismiss. What is
+  /// lost is the alarm screen taking over a locked phone, which on a critical
+  /// shift is where the shake-to-dismiss gate lives. Kept separate from [ok]
+  /// so the banner can say the milder, true thing.
+  final bool fullScreenIntentAllowed;
+
+  /// Whether alarms can ring at all. Deliberately excludes
+  /// [fullScreenIntentAllowed]: an alarm with no full-screen intent is worse,
+  /// not silent.
   bool get ok => notificationsEnabled && exactAlarmsAllowed;
+
+  /// Whether anything at all is worth telling the user about.
+  bool get allClear => ok && fullScreenIntentAllowed;
 
   /// The "everything fine" snapshot — also the defensive fallback when no
   /// platform is available (widget tests), so a probe failure can never
@@ -37,6 +52,7 @@ class AlarmHealth {
   static const AlarmHealth healthy = AlarmHealth(
     notificationsEnabled: true,
     exactAlarmsAllowed: true,
+    fullScreenIntentAllowed: true,
   );
 }
 
@@ -48,6 +64,14 @@ typedef AlarmHealthProbe = Future<AlarmHealth> Function();
 /// `AlarmManager.canScheduleExactAlarms()` — MUST match
 /// `NativeAlarmScheduling.METHOD_CAN_SCHEDULE_EXACT`.
 const String _methodCanScheduleExact = 'canScheduleExactAlarms';
+
+/// `NotificationManager.canUseFullScreenIntent()` — MUST match
+/// `NativeAlarmScheduling.METHOD_CAN_USE_FULL_SCREEN`.
+const String _methodCanUseFullScreen = 'canUseFullScreenIntent';
+
+/// Launches the per-app full-screen-intent toggle; answers whether the hop
+/// actually left — MUST match `NativeAlarmScheduling.METHOD_REQUEST_FULL_SCREEN`.
+const String _methodRequestFullScreen = 'requestFullScreenIntentAccess';
 
 /// Reads the live grant state. Per-check best-effort: a channel failure on
 /// either probe reads as healthy for THAT check rather than throwing — this
@@ -78,7 +102,39 @@ Future<AlarmHealth> probeAlarmHealth() async {
   return AlarmHealth(
     notificationsEnabled: notificationsEnabled,
     exactAlarmsAllowed: await exactAlarmsAllowedNow(),
+    fullScreenIntentAllowed: await fullScreenIntentAllowedNow(),
   );
+}
+
+/// The live OS answer for "will a full-screen intent take over the screen" —
+/// `NotificationManager.canUseFullScreenIntent()` via our native channel.
+/// Same best-effort contract as [exactAlarmsAllowedNow]: no handler (iOS /
+/// tests), an older Android, or a channel error all read as allowed, because a
+/// warning we cannot substantiate must never show. See that function's TESTING
+/// NOTE — it applies here identically.
+Future<bool> fullScreenIntentAllowedNow() async {
+  try {
+    return await const MethodChannel(NativeAlarmScheduler.channelName)
+            .invokeMethod<bool>(_methodCanUseFullScreen) ??
+        true;
+  } catch (_) {
+    return true;
+  }
+}
+
+/// Full-screen-intent fix path: the per-app toggle under Settings → Apps →
+/// Rostrik → Full-screen notifications. Falls back to the app's own settings
+/// page when that screen does not exist (some OEM builds ship without it), so
+/// the button always lands the user somewhere they can act.
+Future<void> requestFullScreenIntentAccess() async {
+  try {
+    final launched = await const MethodChannel(NativeAlarmScheduler.channelName)
+            .invokeMethod<bool>(_methodRequestFullScreen) ??
+        false;
+    if (!launched) await openAppSettings();
+  } catch (_) {
+    // No platform — nothing else to do.
+  }
 }
 
 /// The live OS answer for "can this app arm exact alarms right now" —

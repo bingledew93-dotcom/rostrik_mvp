@@ -681,6 +681,14 @@ class AppLocalizationsIt extends AppLocalizations {
       'Le sveglie esatte sono bloccate: nessuna sveglia può essere programmata.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen =>
+      'Le sveglie non occuperanno lo schermo';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Le sveglie a schermo intero sono disattivate: a telefono bloccato vedrai una notifica invece della schermata della sveglia.';
+
+  @override
   String get dashAllow => 'Consenti';
 
   @override

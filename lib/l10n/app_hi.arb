@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "सूचनाएँ बंद हैं: बजता हुआ अलार्म जगाने वाली स्क्रीन नहीं दिखा सकता और बंद भी नहीं हो सकता।",
   "dashOpenSettings": "सेटिंग खोलें",
   "dashExactBlockedIssue": "सटीक अलार्म बंद हैं: कोई भी अलार्म शेड्यूल नहीं हो सकता।",
+  "dashAlarmsWontTakeOverScreen": "अलार्म पूरी स्क्रीन नहीं लेंगे",
+  "dashFullScreenBlockedIssue": "फ़ुल-स्क्रीन अलार्म बंद हैं — फ़ोन लॉक होने पर अलार्म स्क्रीन के बजाय एक सूचना दिखेगी।",
   "dashAllow": "अनुमति दें",
   "dashSlideToSkip": "यह अलार्म छोड़ने के लिए खिसकाएँ",
   "dashSlideToSkipAll": "{count, plural, one{अलार्म छोड़ने के लिए खिसकाएँ} other{सभी {count} अलार्म छोड़ने के लिए खिसकाएँ}}",

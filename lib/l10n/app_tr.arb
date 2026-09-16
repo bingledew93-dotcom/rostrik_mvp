@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Bildirimler kapalı: Çalan bir alarm uyanma ekranını gösteremez ve kapatılamaz.",
   "dashOpenSettings": "Ayarları aç",
   "dashExactBlockedIssue": "Tam zamanlı alarmlar engelli: Hiçbir uyandırma planlanamaz.",
+  "dashAlarmsWontTakeOverScreen": "Alarmlar ekranı kaplamayacak",
+  "dashFullScreenBlockedIssue": "Tam ekran alarmlar kapalı — telefon kilitliyken alarm ekranı yerine bir bildirim görürsünüz.",
   "dashAllow": "İzin ver",
   "dashSlideToSkip": "Bu alarmı atlamak için kaydır",
   "dashSlideToSkipAll": "{count, plural, one{Alarmı atlamak için kaydır} other{{count} alarmın hepsini atlamak için kaydır}}",

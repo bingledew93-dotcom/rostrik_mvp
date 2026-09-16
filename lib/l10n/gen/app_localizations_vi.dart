@@ -670,6 +670,14 @@ class AppLocalizationsVi extends AppLocalizations {
       'Báo thức chính xác bị chặn: không thể hẹn giờ báo thức nào.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen =>
+      'Báo thức sẽ không chiếm toàn màn hình';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Báo thức toàn màn hình đang tắt — khi điện thoại bị khóa, bạn sẽ thấy một thông báo thay vì màn hình báo thức.';
+
+  @override
   String get dashAllow => 'Cho phép';
 
   @override

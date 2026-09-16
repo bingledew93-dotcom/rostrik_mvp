@@ -680,6 +680,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Os alarmes exatos estão bloqueados: nenhum despertar pode ser agendado.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => 'Os alarmes não vão ocupar a tela';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Os alarmes em tela cheia estão desativados: com o celular bloqueado você verá uma notificação em vez da tela do alarme.';
+
+  @override
   String get dashAllow => 'Permitir';
 
   @override

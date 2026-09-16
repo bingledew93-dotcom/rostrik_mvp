@@ -1252,6 +1252,18 @@ abstract class AppLocalizations {
   /// **'Exact alarms are blocked — wake-ups can\'t be scheduled at all.'**
   String get dashExactBlockedIssue;
 
+  /// No description provided for @dashAlarmsWontTakeOverScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarms won\'t take over the screen'**
+  String get dashAlarmsWontTakeOverScreen;
+
+  /// No description provided for @dashFullScreenBlockedIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Full-screen alarms are turned off — a locked phone shows a notification instead of the alarm screen.'**
+  String get dashFullScreenBlockedIssue;
+
   /// No description provided for @dashAllow.
   ///
   /// In en, this message translates to:

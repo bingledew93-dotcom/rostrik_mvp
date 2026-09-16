@@ -685,6 +685,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'المنبهات الدقيقة محظورة: لا يمكن جدولة أي منبه.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => 'لن تستحوذ المنبهات على الشاشة';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'منبهات ملء الشاشة معطّلة: عندما يكون الهاتف مقفلاً سيظهر إشعار بدلاً من شاشة المنبه.';
+
+  @override
   String get dashAllow => 'سماح';
 
   @override

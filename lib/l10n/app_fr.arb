@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Les notifications sont désactivées : une alarme qui sonne ne peut ni afficher son écran ni être arrêtée.",
   "dashOpenSettings": "Ouvrir les réglages",
   "dashExactBlockedIssue": "Les alarmes exactes sont bloquées : aucun réveil ne peut être programmé.",
+  "dashAlarmsWontTakeOverScreen": "Les alarmes ne prendront pas tout l'écran",
+  "dashFullScreenBlockedIssue": "Les alarmes en plein écran sont désactivées : téléphone verrouillé, vous verrez une notification au lieu de l'écran d'alarme.",
   "dashAllow": "Autoriser",
   "dashSlideToSkip": "Glissez pour ignorer cette alarme",
   "dashSlideToSkipAll": "{count, plural, one{Glissez pour ignorer l'alarme} other{Glissez pour ignorer les {count} alarmes}}",

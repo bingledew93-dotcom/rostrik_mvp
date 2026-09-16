@@ -682,6 +682,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'Las alarmas exactas están bloqueadas: no se puede programar ningún despertar.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen =>
+      'Las alarmas no ocuparán la pantalla';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Las alarmas a pantalla completa están desactivadas: con el teléfono bloqueado verás una notificación en lugar de la pantalla de alarma.';
+
+  @override
   String get dashAllow => 'Permitir';
 
   @override

@@ -673,6 +673,13 @@ class AppLocalizationsId extends AppLocalizations {
       'Alarm tepat waktu diblokir: tidak ada alarm bangun yang bisa dijadwalkan.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => 'Alarm tidak akan memenuhi layar';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Alarm layar penuh dimatikan — saat ponsel terkunci Anda akan melihat notifikasi, bukan layar alarm.';
+
+  @override
   String get dashAllow => 'Izinkan';
 
   @override

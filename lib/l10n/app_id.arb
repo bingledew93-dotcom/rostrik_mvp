@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Notifikasi mati: alarm yang berbunyi tidak bisa menampilkan layar bangun atau dimatikan.",
   "dashOpenSettings": "Buka pengaturan",
   "dashExactBlockedIssue": "Alarm tepat waktu diblokir: tidak ada alarm bangun yang bisa dijadwalkan.",
+  "dashAlarmsWontTakeOverScreen": "Alarm tidak akan memenuhi layar",
+  "dashFullScreenBlockedIssue": "Alarm layar penuh dimatikan — saat ponsel terkunci Anda akan melihat notifikasi, bukan layar alarm.",
   "dashAllow": "Izinkan",
   "dashSlideToSkip": "Geser untuk melewati alarm ini",
   "dashSlideToSkipAll": "{count, plural, other{Geser untuk melewati {count} alarm}}",

@@ -802,6 +802,53 @@ void main() {
       expect(find.byKey(const ValueKey('health-fix-exact')), findsOneWidget);
     });
 
+    testWidgets('full-screen intent revoked → its own fix row, and the banner '
+        'says the milder true thing', (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async => const AlarmHealth(
+          notificationsEnabled: true,
+          exactAlarmsAllowed: true,
+          fullScreenIntentAllowed: false,
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('alarm-health-banner')), findsOneWidget);
+      expect(find.byKey(const ValueKey('health-fix-full-screen')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('health-fix-notifications')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('health-fix-exact')), findsNothing);
+      // The alarm DOES still ring without a full-screen intent, so the harsher
+      // headline would be a claim the next shift disproves.
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.dashAlarmsWontTakeOverScreen), findsOneWidget);
+      expect(find.text(l10n.dashAlarmsCantRing), findsNothing);
+    });
+
+    testWidgets('a real failure outranks it: the headline reverts to '
+        "\"alarms can't ring\" when both are broken", (tester) async {
+      await pumpDashboard(
+        tester,
+        shifts: const [],
+        healthProbe: () async => const AlarmHealth(
+          notificationsEnabled: false,
+          exactAlarmsAllowed: true,
+          fullScreenIntentAllowed: false,
+        ),
+      );
+      await tester.pump();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.dashAlarmsCantRing), findsOneWidget);
+      expect(find.text(l10n.dashAlarmsWontTakeOverScreen), findsNothing);
+      expect(find.byKey(const ValueKey('health-fix-full-screen')),
+          findsOneWidget,
+          reason: 'both rows still listed');
+      expect(find.byKey(const ValueKey('health-fix-notifications')),
+          findsOneWidget);
+    });
+
     testWidgets('the fix affordance re-probes and clears the banner once the '
         'grant is restored', (tester) async {
       // First probe: broken. After the fix button runs, the next probe

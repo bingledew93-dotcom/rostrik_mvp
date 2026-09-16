@@ -680,6 +680,14 @@ class AppLocalizationsDe extends AppLocalizations {
       'Exakte Wecker sind blockiert – es können keine Weckrufe geplant werden.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen =>
+      'Wecker übernehmen den Bildschirm nicht';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Vollbild-Wecker sind deaktiviert – bei gesperrtem Handy erscheint eine Benachrichtigung statt des Weckbildschirms.';
+
+  @override
   String get dashAllow => 'Erlauben';
 
   @override

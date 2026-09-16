@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "As notificações estão desligadas: um alarme tocando não consegue mostrar a tela de despertar nem ser desligado.",
   "dashOpenSettings": "Abrir configurações",
   "dashExactBlockedIssue": "Os alarmes exatos estão bloqueados: nenhum despertar pode ser agendado.",
+  "dashAlarmsWontTakeOverScreen": "Os alarmes não vão ocupar a tela",
+  "dashFullScreenBlockedIssue": "Os alarmes em tela cheia estão desativados: com o celular bloqueado você verá uma notificação em vez da tela do alarme.",
   "dashAllow": "Permitir",
   "dashSlideToSkip": "Deslize para pular este alarme",
   "dashSlideToSkipAll": "{count, plural, one{Deslize para pular o alarme} other{Deslize para pular os {count} alarmes}}",

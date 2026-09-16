@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Benachrichtigungen sind aus – ein klingelnder Wecker kann keinen Weckbildschirm zeigen und nicht beendet werden.",
   "dashOpenSettings": "Einstellungen öffnen",
   "dashExactBlockedIssue": "Exakte Wecker sind blockiert – es können keine Weckrufe geplant werden.",
+  "dashAlarmsWontTakeOverScreen": "Wecker übernehmen den Bildschirm nicht",
+  "dashFullScreenBlockedIssue": "Vollbild-Wecker sind deaktiviert – bei gesperrtem Handy erscheint eine Benachrichtigung statt des Weckbildschirms.",
   "dashAllow": "Erlauben",
   "dashSlideToSkip": "Zum Überspringen dieses Weckers wischen",
   "dashSlideToSkipAll": "{count, plural, one{Zum Überspringen des Weckers wischen} other{Zum Überspringen aller {count} Wecker wischen}}",

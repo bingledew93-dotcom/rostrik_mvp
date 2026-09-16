@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "الإشعارات متوقفة: لا يستطيع المنبه عرض شاشة الاستيقاظ أو إيقافه.",
   "dashOpenSettings": "فتح الإعدادات",
   "dashExactBlockedIssue": "المنبهات الدقيقة محظورة: لا يمكن جدولة أي منبه.",
+  "dashAlarmsWontTakeOverScreen": "لن تستحوذ المنبهات على الشاشة",
+  "dashFullScreenBlockedIssue": "منبهات ملء الشاشة معطّلة: عندما يكون الهاتف مقفلاً سيظهر إشعار بدلاً من شاشة المنبه.",
   "dashAllow": "سماح",
   "dashSlideToSkip": "اسحب لتخطي هذا المنبه",
   "dashSlideToSkipAll": "{count, plural, zero{اسحب لتخطي المنبهات} one{اسحب لتخطي المنبه} two{اسحب لتخطي المنبهَين} few{اسحب لتخطي {count} منبهات} many{اسحب لتخطي {count} منبهًا} other{اسحب لتخطي {count} منبه}}",

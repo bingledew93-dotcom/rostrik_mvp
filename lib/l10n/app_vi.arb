@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Thông báo đang tắt: báo thức đang reo không thể hiện màn hình báo thức hay tắt được.",
   "dashOpenSettings": "Mở cài đặt",
   "dashExactBlockedIssue": "Báo thức chính xác bị chặn: không thể hẹn giờ báo thức nào.",
+  "dashAlarmsWontTakeOverScreen": "Báo thức sẽ không chiếm toàn màn hình",
+  "dashFullScreenBlockedIssue": "Báo thức toàn màn hình đang tắt — khi điện thoại bị khóa, bạn sẽ thấy một thông báo thay vì màn hình báo thức.",
   "dashAllow": "Cho phép",
   "dashSlideToSkip": "Trượt để bỏ qua báo thức này",
   "dashSlideToSkipAll": "{count, plural, other{Trượt để bỏ qua {count} báo thức}}",

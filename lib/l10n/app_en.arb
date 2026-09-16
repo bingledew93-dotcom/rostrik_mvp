@@ -315,6 +315,8 @@
   "dashNotifsOffIssue": "Notifications are off — a ringing alarm can't show its wake screen or be dismissed.",
   "dashOpenSettings": "Open settings",
   "dashExactBlockedIssue": "Exact alarms are blocked — wake-ups can't be scheduled at all.",
+  "dashAlarmsWontTakeOverScreen": "Alarms won't take over the screen",
+  "dashFullScreenBlockedIssue": "Full-screen alarms are turned off — a locked phone shows a notification instead of the alarm screen.",
   "dashAllow": "Allow",
   "dashSlideToSkip": "Slide to skip this alarm",
   "dashSlideToSkipAll": "{count, plural, one{Slide to skip the alarm} other{Slide to skip all {count} alarms}}",

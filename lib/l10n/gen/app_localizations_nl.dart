@@ -677,6 +677,14 @@ class AppLocalizationsNl extends AppLocalizations {
       'Exacte wekkers zijn geblokkeerd – er kunnen geen wekmomenten worden gepland.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen =>
+      'Alarmen nemen het scherm niet over';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Schermvullende alarmen staan uit — op een vergrendelde telefoon zie je een melding in plaats van het alarmscherm.';
+
+  @override
   String get dashAllow => 'Toestaan';
 
   @override

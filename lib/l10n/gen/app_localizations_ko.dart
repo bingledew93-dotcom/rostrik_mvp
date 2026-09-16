@@ -637,6 +637,13 @@ class AppLocalizationsKo extends AppLocalizations {
   String get dashExactBlockedIssue => '정확한 알람이 차단돼 있어요. 기상 알람을 예약할 수 없어요.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => '알람이 화면을 차지하지 않습니다';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      '전체 화면 알람이 꺼져 있습니다. 휴대폰이 잠겨 있으면 알람 화면 대신 알림이 표시됩니다.';
+
+  @override
   String get dashAllow => '허용';
 
   @override

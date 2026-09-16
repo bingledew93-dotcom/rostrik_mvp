@@ -674,6 +674,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Exact alarms are blocked — wake-ups can\'t be scheduled at all.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen =>
+      'Alarms won\'t take over the screen';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Full-screen alarms are turned off — a locked phone shows a notification instead of the alarm screen.';
+
+  @override
   String get dashAllow => 'Allow';
 
   @override

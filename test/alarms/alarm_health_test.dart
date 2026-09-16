@@ -22,6 +22,14 @@ void main() {
     });
   }
 
+  void mockCanUseFullScreen(Object? Function() answer) {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'canUseFullScreenIntent') return answer();
+      return null;
+    });
+  }
+
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
@@ -55,5 +63,41 @@ void main() {
     );
     final health = await probeAlarmHealth();
     expect(health.exactAlarmsAllowed, isTrue);
+  });
+
+  // Android 14's USE_FULL_SCREEN_INTENT app-op. Pre-granted for an alarm app,
+  // so a false always means the user turned it off in Settings.
+  group('full-screen intent', () {
+    test('a native false reads as blocked but NOT as "alarms can\'t ring" — '
+        'the alarm still sounds and the notification still has its buttons',
+        () async {
+      mockCanUseFullScreen(() => false);
+      final health = await probeAlarmHealth();
+      expect(health.fullScreenIntentAllowed, isFalse);
+      expect(health.ok, isTrue, reason: 'ringing is unaffected');
+      expect(health.allClear, isFalse, reason: 'but the user must be told');
+    });
+
+    test('granted reads all clear', () async {
+      mockCanUseFullScreen(() => true);
+      final health = await probeAlarmHealth();
+      expect(health.fullScreenIntentAllowed, isTrue);
+      expect(health.allClear, isTrue);
+    });
+
+    test('no handler (iOS, Android 13 and below, tests) degrades to allowed',
+        () async {
+      // Below API 34 the native side answers true outright; here nothing
+      // answers at all, which must read the same way rather than warn.
+      final health = await probeAlarmHealth();
+      expect(health.fullScreenIntentAllowed, isTrue);
+      expect(health.allClear, isTrue);
+    });
+
+    test('a channel error degrades to allowed', () async {
+      mockCanUseFullScreen(() => throw PlatformException(code: 'BOOM'));
+      final health = await probeAlarmHealth();
+      expect(health.fullScreenIntentAllowed, isTrue);
+    });
   });
 }

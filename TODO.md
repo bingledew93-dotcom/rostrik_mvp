@@ -359,11 +359,26 @@ heads-up appeared. The user tried to stop it and could not. Findings:
       ringing 3 s after its screen appears, the hint changes and a
       "Hold for 3 seconds to dismiss" button appears. Device-verified 2026-09-15:
       reveal after 3 s, a 1 s press does not dismiss, a full hold does.
-- [ ] Check `NotificationManager.canUseFullScreenIntent()` (API 34+). The
-      permission is app-op gated from Android 14 and is never verified — if it
-      is denied the full-screen alarm silently degrades even on the lock screen,
-      which is the one case that must not fail. Offer
-      `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT` when it is missing.
+- [x] Check `NotificationManager.canUseFullScreenIntent()` (API 34+) — done
+      2026-09-16. `NativeAlarmScheduling` answers `canUseFullScreenIntent` and
+      `requestFullScreenIntentAccess` (the latter returns whether the hop
+      launched, so Dart falls back to the app settings page on OEM builds
+      without that screen). `AlarmHealth.fullScreenIntentAllowed` feeds a third
+      row on the Dashboard banner.
+
+      Deliberately a SEPARATE severity from the other two: without a full-screen
+      intent the alarm still rings and its notification still carries
+      Snooze/Dismiss, so the banner says "Alarms won't take over the screen"
+      rather than "Alarms can't ring reliably" — a claim the next shift would
+      disprove. `AlarmHealth.ok` still means "can ring"; `allClear` is the new
+      "nothing to report" and gates the banner. What IS lost is the alarm screen
+      taking over a locked phone, which on a critical shift is where the shake
+      gate lives.
+
+      Device-verified on the Pixel 9 Pro XL: `appops set … deny` → the banner
+      appeared with the milder headline and no "can't ring" claim; Allow opened
+      Settings → Rostrik → Full-screen notifications; the real toggle cleared
+      the banner on return. App-op left at `default`.
 - [x] Volume keys during an alarm — `AlarmActivity` now sets
       `volumeControlStream = STREAM_ALARM`. Partial: only applies while the
       alarm screen is in front, so the notification actions above are the real

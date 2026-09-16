@@ -188,6 +188,8 @@
   "dashNotifsOffIssue": "Le notifiche sono disattivate: una sveglia che suona non può mostrare la sua schermata né essere spenta.",
   "dashOpenSettings": "Apri impostazioni",
   "dashExactBlockedIssue": "Le sveglie esatte sono bloccate: nessuna sveglia può essere programmata.",
+  "dashAlarmsWontTakeOverScreen": "Le sveglie non occuperanno lo schermo",
+  "dashFullScreenBlockedIssue": "Le sveglie a schermo intero sono disattivate: a telefono bloccato vedrai una notifica invece della schermata della sveglia.",
   "dashAllow": "Consenti",
   "dashSlideToSkip": "Scorri per saltare questa sveglia",
   "dashSlideToSkipAll": "{count, plural, one{Scorri per saltare la sveglia} other{Scorri per saltare tutte le {count} sveglie}}",

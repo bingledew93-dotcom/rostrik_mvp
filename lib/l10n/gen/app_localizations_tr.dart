@@ -675,6 +675,13 @@ class AppLocalizationsTr extends AppLocalizations {
       'Tam zamanlı alarmlar engelli: Hiçbir uyandırma planlanamaz.';
 
   @override
+  String get dashAlarmsWontTakeOverScreen => 'Alarmlar ekranı kaplamayacak';
+
+  @override
+  String get dashFullScreenBlockedIssue =>
+      'Tam ekran alarmlar kapalı — telefon kilitliyken alarm ekranı yerine bir bildirim görürsünüz.';
+
+  @override
   String get dashAllow => 'İzin ver';
 
   @override
