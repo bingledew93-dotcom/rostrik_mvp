@@ -37,13 +37,15 @@ For your own reference — not for the listing:
 | Overlapping alarms tearing each other down | **Yes** — could also bypass a critical shift's shake |
 | Background re-sync never ran on Android or iOS | **Yes** — alarms drifted out of step |
 | Hold-to-dismiss fallback restored on the critical alarm screen | Yes, small |
+| Warns when Android 14's full-screen-alarm permission is switched off | Only if they switched it off |
 | Live language change now repaints the whole app | Yes, cosmetic |
 | Arabic-Indic vs Western digits, Hindi letter spacing, calendar locale | Yes, cosmetic |
 
 Deliberately **not** mentioned in the notes: the hold-to-dismiss fallback (it
 only appears on critical alarms and needs explaining more than it needs
-announcing), and the i18n rendering fixes (invisible to anyone who wasn't
-already seeing them broken).
+announcing), the i18n rendering fixes (invisible to anyone who wasn't already
+seeing them broken), and the full-screen-permission warning (a diagnostic only
+the handful of users who turned that off will ever see).
 
 ---
 
