@@ -475,10 +475,19 @@ a non-rostrik.com.au host.
       Privacy policy, and the Data safety form) **and App Store Connect.**
       Changing the constants does NOT change those. Do it before the next
       submission — a dead privacy link is a rejection.
-- [ ] `kCurrentLegalVersion` was deliberately left at `2026-06-15`. Bumping it
-      re-gates EVERY existing user through the consent screen. Only bump it if
-      the wording of the documents materially changed, not because they moved.
-- [ ] Both pages are still English-only (carried over from §2.6).
+- [x] `kCurrentLegalVersion` bumped to `2026-09-18` — the documents did have
+      minor wording changes, so existing users must re-accept.
+
+      **They do NOT get the first-run screen.** `legalGateFor` now distinguishes
+      three states, and an existing user lands on `LegalGate.updated`: the app
+      opens as normal with `LegalUpdateDialog` over it — a short notice naming
+      what changed, links to both documents, one accept button. Still a hard
+      gate (no barrier dismiss, no back, no close), just one that reads as "we
+      changed something" rather than "start again". Only a user who has never
+      accepted anything (`LegalGate.firstRun`) sees the full consent screen.
+- [ ] Both pages are still English-only (carried over from §2.6) — and note the
+      update NOTICE is translated into all 15 languages, so a German user gets a
+      German dialog pointing at an English document. Worth closing together.
 
 **Store pricing is already per-country — nothing to fix.** The app never
 computes or converts a price: `EntitlementService.price` returns

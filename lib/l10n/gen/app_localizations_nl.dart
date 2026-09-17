@@ -39,6 +39,16 @@ class AppLocalizationsNl extends AppLocalizations {
   String get legalAgreeContinue => 'Akkoord en doorgaan';
 
   @override
+  String get legalUpdatedTitle => 'We hebben onze voorwaarden bijgewerkt';
+
+  @override
+  String get legalUpdatedBody =>
+      'Ons Privacybeleid en onze Gebruiksvoorwaarden zijn gewijzigd. Neem even de tijd om ze te bekijken voordat je verdergaat.';
+
+  @override
+  String get legalUpdatedAccept => 'Ik heb ze gelezen en ga akkoord';
+
+  @override
   String get commonSaving => 'Opslaan…';
 
   @override

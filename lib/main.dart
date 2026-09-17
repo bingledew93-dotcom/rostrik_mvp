@@ -36,6 +36,7 @@ import 'state/app_preferences.dart';
 import 'state/app_providers.dart';
 import 'ui/app_theme.dart';
 import 'ui/legal_consent_screen.dart';
+import 'ui/legal_update_dialog.dart';
 import 'ui/main_layout.dart';
 import 'ui/onboarding/onboarding_flow.dart';
 import 'util/clock.dart';
@@ -327,8 +328,8 @@ void main() async {
   // [LegalConsentScreen] before onboarding or the dashboard. Read here (async,
   // pre-runApp) so RostrikApp can decide its home synchronously.
   final sharedPrefs = await SharedPreferences.getInstance();
-  final legalAccepted =
-      sharedPrefs.getString(kAcceptedLegalVersionKey) == kCurrentLegalVersion;
+  final legalGate =
+      legalGateFor(sharedPrefs.getString(kAcceptedLegalVersionKey));
 
   // Must come after runApp: it posts to the first frame, which only exists
   // once there is a widget tree. See the function's own doc for why this
@@ -350,7 +351,7 @@ void main() async {
     widgetService: widgetService,
     deviceCalendarService: deviceCalendarService,
     sleepSoundController: sleepSoundController,
-    child: RostrikApp(legalAccepted: legalAccepted),
+    child: RostrikApp(legalGate: legalGate),
   ));
 
 }
@@ -546,11 +547,11 @@ void requestIosNotificationPermission() {
 }
 
 class RostrikApp extends StatelessWidget {
-  const RostrikApp({super.key, required this.legalAccepted});
+  const RostrikApp({super.key, required this.legalGate});
 
-  /// Whether the user has already accepted the current legal version. When
-  /// false the home is gated behind [LegalConsentScreen].
-  final bool legalAccepted;
+  /// What the user still owes on the legal documents: nothing, the full
+  /// first-run consent screen, or an update notice over the running app.
+  final LegalGate legalGate;
 
   @override
   Widget build(BuildContext context) {
@@ -599,33 +600,67 @@ class RostrikApp extends StatelessWidget {
       // gate). The firing alarm is no longer a Flutter route at all: the native
       // AlarmActivity draws over whatever is here when an alarm fires, in its
       // own task, so nothing in this widget tree needs to react to it.
-      home: _RootGate(legalAccepted: legalAccepted),
+      home: _RootGate(gate: legalGate),
     );
   }
 }
 
-/// The root routing gate. The LEGAL gate sits in front of the onboarding gate:
-/// until the current legal version is accepted, nothing else is reachable. On
-/// acceptance the consent screen has already persisted the version to
-/// shared_preferences, so [_legalAccepted] flips locally and the onboarding /
-/// dashboard gate takes over in place — no navigation needed.
+/// The root routing gate. The LEGAL gate sits in front of the onboarding gate,
+/// but HOW it sits there depends on who the user is:
+///
+///   * never accepted anything ([LegalGate.firstRun]) — the full
+///     [LegalConsentScreen] replaces everything. Nothing else is reachable.
+///   * accepted an older version ([LegalGate.updated]) — the app renders as
+///     normal and [LegalUpdateDialog] opens over it. Still a hard gate (no
+///     barrier dismiss, no back), but it shows what changed against the app
+///     they already know rather than reading as "start again".
+///
+/// Either way acceptance is persisted by the screen/dialog itself, so the
+/// local flag flips and the onboarding / dashboard gate takes over in place —
+/// no navigation needed.
 class _RootGate extends StatefulWidget {
-  const _RootGate({required this.legalAccepted});
+  const _RootGate({required this.gate});
 
-  final bool legalAccepted;
+  final LegalGate gate;
 
   @override
   State<_RootGate> createState() => _RootGateState();
 }
 
 class _RootGateState extends State<_RootGate> {
-  late bool _legalAccepted = widget.legalAccepted;
+  late LegalGate _gate = widget.gate;
+
+  /// Guards against a second dialog: `build` runs on every provider change,
+  /// and the notice stays open across several of them.
+  bool _updateNoticeShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeShowUpdateNotice();
+  }
+
+  /// Opens the update notice after the first frame — `showDialog` needs a
+  /// Navigator, which does not exist yet during [initState].
+  void _maybeShowUpdateNotice() {
+    if (_gate != LegalGate.updated || _updateNoticeShown) return;
+    _updateNoticeShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      LegalUpdateDialog.show(
+        context,
+        onAccepted: () {
+          if (mounted) setState(() => _gate = LegalGate.accepted);
+        },
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (!_legalAccepted) {
+    if (_gate == LegalGate.firstRun) {
       return LegalConsentScreen(
-        onAccepted: () => setState(() => _legalAccepted = true),
+        onAccepted: () => setState(() => _gate = LegalGate.accepted),
       );
     }
     // FEATURE #4 — full lock once the 14-day trial lapses without a purchase.

@@ -39,6 +39,16 @@ class AppLocalizationsVi extends AppLocalizations {
   String get legalAgreeContinue => 'Đồng ý và tiếp tục';
 
   @override
+  String get legalUpdatedTitle => 'Chúng tôi đã cập nhật điều khoản';
+
+  @override
+  String get legalUpdatedBody =>
+      'Chính sách quyền riêng tư và Điều khoản sử dụng của chúng tôi đã thay đổi. Vui lòng dành chút thời gian xem lại trước khi tiếp tục.';
+
+  @override
+  String get legalUpdatedAccept => 'Tôi đã xem và đồng ý';
+
+  @override
   String get commonSaving => 'Đang lưu…';
 
   @override

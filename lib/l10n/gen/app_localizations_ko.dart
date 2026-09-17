@@ -39,6 +39,15 @@ class AppLocalizationsKo extends AppLocalizations {
   String get legalAgreeContinue => '동의하고 계속';
 
   @override
+  String get legalUpdatedTitle => '약관이 업데이트되었습니다';
+
+  @override
+  String get legalUpdatedBody => '개인정보처리방침과 이용약관이 변경되었습니다. 계속하기 전에 잠시 살펴봐 주세요.';
+
+  @override
+  String get legalUpdatedAccept => '확인했으며 동의합니다';
+
+  @override
   String get commonSaving => '저장 중…';
 
   @override

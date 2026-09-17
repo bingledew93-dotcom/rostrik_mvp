@@ -39,6 +39,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get legalAgreeContinue => '同意して続ける';
 
   @override
+  String get legalUpdatedTitle => '規約を更新しました';
+
+  @override
+  String get legalUpdatedBody => 'プライバシーポリシーと利用規約が変更されました。続ける前にご確認ください。';
+
+  @override
+  String get legalUpdatedAccept => '確認して同意します';
+
+  @override
   String get commonSaving => '保存中…';
 
   @override

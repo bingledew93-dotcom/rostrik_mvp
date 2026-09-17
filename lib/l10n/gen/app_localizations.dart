@@ -178,6 +178,24 @@ abstract class AppLocalizations {
   /// **'Agree & Continue'**
   String get legalAgreeContinue;
 
+  /// No description provided for @legalUpdatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ve updated our terms'**
+  String get legalUpdatedTitle;
+
+  /// No description provided for @legalUpdatedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Our Privacy Policy and Terms of Use have changed. Please take a moment to review them before carrying on.'**
+  String get legalUpdatedBody;
+
+  /// No description provided for @legalUpdatedAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'ve reviewed and accept'**
+  String get legalUpdatedAccept;
+
   /// No description provided for @commonSaving.
   ///
   /// In en, this message translates to:

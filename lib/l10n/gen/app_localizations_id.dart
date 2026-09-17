@@ -39,6 +39,16 @@ class AppLocalizationsId extends AppLocalizations {
   String get legalAgreeContinue => 'Setuju & Lanjut';
 
   @override
+  String get legalUpdatedTitle => 'Kami memperbarui ketentuan kami';
+
+  @override
+  String get legalUpdatedBody =>
+      'Kebijakan Privasi dan Ketentuan Penggunaan kami telah berubah. Luangkan waktu sejenak untuk membacanya sebelum melanjutkan.';
+
+  @override
+  String get legalUpdatedAccept => 'Saya sudah membaca dan menyetujui';
+
+  @override
   String get commonSaving => 'Menyimpan…';
 
   @override

@@ -39,6 +39,16 @@ class AppLocalizationsTr extends AppLocalizations {
   String get legalAgreeContinue => 'Kabul et ve devam et';
 
   @override
+  String get legalUpdatedTitle => 'Koşullarımızı güncelledik';
+
+  @override
+  String get legalUpdatedBody =>
+      'Gizlilik Politikamız ve Kullanım Koşullarımız değişti. Devam etmeden önce bunları gözden geçirmek için bir dakikanızı ayırın.';
+
+  @override
+  String get legalUpdatedAccept => 'İnceledim ve kabul ediyorum';
+
+  @override
   String get commonSaving => 'Kaydediliyor…';
 
   @override

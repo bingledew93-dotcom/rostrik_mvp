@@ -39,6 +39,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get legalAgreeContinue => 'Zustimmen und weiter';
 
   @override
+  String get legalUpdatedTitle => 'Wir haben unsere Bedingungen aktualisiert';
+
+  @override
+  String get legalUpdatedBody =>
+      'Unsere Datenschutzerklärung und Nutzungsbedingungen haben sich geändert. Bitte sieh sie dir kurz an, bevor es weitergeht.';
+
+  @override
+  String get legalUpdatedAccept => 'Ich habe sie gelesen und stimme zu';
+
+  @override
   String get commonSaving => 'Wird gespeichert…';
 
   @override

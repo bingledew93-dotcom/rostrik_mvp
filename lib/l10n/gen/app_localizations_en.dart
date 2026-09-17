@@ -39,6 +39,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get legalAgreeContinue => 'Agree & Continue';
 
   @override
+  String get legalUpdatedTitle => 'We\'ve updated our terms';
+
+  @override
+  String get legalUpdatedBody =>
+      'Our Privacy Policy and Terms of Use have changed. Please take a moment to review them before carrying on.';
+
+  @override
+  String get legalUpdatedAccept => 'I\'ve reviewed and accept';
+
+  @override
   String get commonSaving => 'Saving…';
 
   @override

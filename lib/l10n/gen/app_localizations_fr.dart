@@ -39,6 +39,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get legalAgreeContinue => 'Accepter et continuer';
 
   @override
+  String get legalUpdatedTitle => 'Nous avons mis à jour nos conditions';
+
+  @override
+  String get legalUpdatedBody =>
+      'Notre Politique de confidentialité et nos Conditions d\'utilisation ont changé. Prenez un instant pour les consulter avant de continuer.';
+
+  @override
+  String get legalUpdatedAccept => 'J\'ai lu et j\'accepte';
+
+  @override
   String get commonSaving => 'Enregistrement…';
 
   @override

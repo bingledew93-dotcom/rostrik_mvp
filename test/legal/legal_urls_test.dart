@@ -41,4 +41,28 @@ void main() {
         reason: 'kCurrentLegalVersion must be YYYY-MM-DD');
     expect(DateTime.tryParse(kCurrentLegalVersion), isNotNull);
   });
+
+  group('legalGateFor', () {
+    test('the current version is accepted', () {
+      expect(legalGateFor(kCurrentLegalVersion), LegalGate.accepted);
+    });
+
+    test('never accepted → the full first-run screen', () {
+      expect(legalGateFor(null), LegalGate.firstRun);
+      expect(legalGateFor(''), LegalGate.firstRun);
+    });
+
+    test('an older version → the update notice, NOT the first-run screen', () {
+      // The whole point: an existing user must not be dragged back through
+      // onboarding's front door just because the documents changed.
+      expect(legalGateFor('2026-06-15'), LegalGate.updated);
+    });
+
+    test('an unrecognised or newer version also re-asks', () {
+      // A downgrade can leave a NEWER version stored. Re-asking is harmless;
+      // treating it as accepted would not be.
+      expect(legalGateFor('2099-01-01'), LegalGate.updated);
+      expect(legalGateFor('nonsense'), LegalGate.updated);
+    });
+  });
 }

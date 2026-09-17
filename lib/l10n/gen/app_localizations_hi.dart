@@ -39,6 +39,16 @@ class AppLocalizationsHi extends AppLocalizations {
   String get legalAgreeContinue => 'सहमत हूँ, आगे बढ़ें';
 
   @override
+  String get legalUpdatedTitle => 'हमने अपनी शर्तें अपडेट की हैं';
+
+  @override
+  String get legalUpdatedBody =>
+      'हमारी गोपनीयता नीति और उपयोग की शर्तें बदल गई हैं। आगे बढ़ने से पहले कृपया इन्हें एक बार देख लें।';
+
+  @override
+  String get legalUpdatedAccept => 'मैंने पढ़ लिया है और सहमत हूँ';
+
+  @override
   String get commonSaving => 'सेव हो रहा है…';
 
   @override

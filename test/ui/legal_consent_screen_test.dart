@@ -62,7 +62,10 @@ void main() {
     // onAccepted advanced the gate, and the consent is recorded for the router.
     expect(accepted, isTrue);
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString(kAcceptedLegalVersionKey), '2026-06-15');
+    // Against the constant, not a literal: the screen's contract is "persists
+    // whatever version is in force", and a hardcoded date here just fails on
+    // the next legal bump without saying anything useful.
+    expect(prefs.getString(kAcceptedLegalVersionKey), kCurrentLegalVersion);
     expect(prefs.getString(kAcceptedLegalAtKey), isNotNull);
   });
 }
