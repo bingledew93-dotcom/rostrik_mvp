@@ -17,6 +17,9 @@ class _FakeIap extends Fake implements InAppPurchase {
   bool throwOnIsAvailable = false;
   int restoreCalls = 0;
   int queryCalls = 0;
+  /// What the store answers with. Empty (the default) keeps every existing
+  /// test on the "product not found" path they were written against.
+  List<ProductDetails> products = const [];
   final List<PurchaseDetails> completed = [];
   bool streamListened = false;
 
@@ -39,8 +42,8 @@ class _FakeIap extends Fake implements InAppPurchase {
       Set<String> identifiers) async {
     queryCalls++;
     return ProductDetailsResponse(
-      productDetails: const [],
-      notFoundIDs: identifiers.toList(),
+      productDetails: products,
+      notFoundIDs: products.isEmpty ? identifiers.toList() : const [],
     );
   }
 
@@ -177,5 +180,102 @@ void main() {
     final launched = await service.buy();
     expect(launched, isFalse);
     expect(iap.queryCalls, greaterThan(0));
+  });
+
+  group('the price always comes from the store', () {
+    // Ben's question, pinned: a user in another country must see THEIR price.
+    // The app never computes, converts or formats it — Play and Apple hand
+    // back a string already in the buyer's currency for the buyer's country,
+    // and the app's only job is not to mangle it on the way to the screen.
+    ProductDetails product(String formatted, String currency, double raw) =>
+        ProductDetails(
+          id: kFullAccessProductId,
+          title: 'Rostrik full access',
+          description: 'One-time unlock',
+          price: formatted,
+          rawPrice: raw,
+          currencyCode: currency,
+        );
+
+    test('the store\'s formatted string is surfaced verbatim', () async {
+      iap.products = [product('R\$ 27,90', 'BRL', 27.90)];
+      await service.init();
+      await service.startBilling();
+      // Not "27.90", not converted from AUD, not re-formatted by intl —
+      // exactly what the store said, comma decimal separator and all.
+      expect(service.price, 'R\$ 27,90');
+    });
+
+    test('a different country simply yields a different string', () async {
+      iap.products = [product('¥800', 'JPY', 800)];
+      await service.init();
+      await service.startBilling();
+      expect(service.price, '¥800');
+    });
+
+    test('no product yet means no price, never a guess', () async {
+      await service.init();
+      await service.startBilling();
+      expect(service.price, isNull,
+          reason: 'the gate shows an unpriced button rather than invent one');
+    });
+  });
+
+  group('refreshPriceIfMissing', () {
+    test('re-asks when the launch-time query came up empty', () async {
+      // Offline at launch: no product, no price.
+      iap.available = false;
+      await service.init();
+      await service.startBilling();
+      final atLaunch = iap.queryCalls;
+      expect(service.price, isNull);
+
+      // Connectivity returns and the user reaches the paywall.
+      iap.available = true;
+      iap.products = [
+        ProductDetails(
+          id: kFullAccessProductId,
+          title: 'Rostrik full access',
+          description: 'One-time unlock',
+          price: '\u00a34.99',
+          rawPrice: 4.99,
+          currencyCode: 'GBP',
+        )
+      ];
+      await service.refreshPriceIfMissing();
+      expect(iap.queryCalls, greaterThan(atLaunch));
+      expect(service.price, '\u00a34.99');
+    });
+
+    test('does nothing once a price is held', () async {
+      iap.products = [
+        ProductDetails(
+          id: kFullAccessProductId,
+          title: 'Rostrik full access',
+          description: 'One-time unlock',
+          price: '\u00a34.99',
+          rawPrice: 4.99,
+          currencyCode: 'GBP',
+        )
+      ];
+      await service.init();
+      await service.startBilling();
+      final settled = iap.queryCalls;
+
+      await service.refreshPriceIfMissing();
+      await service.refreshPriceIfMissing();
+      expect(iap.queryCalls, settled,
+          reason: 'opening the gate repeatedly must not re-query');
+    });
+
+    test('stays quiet while billing is unavailable', () async {
+      iap.available = false;
+      await service.init();
+      await service.startBilling();
+      final settled = iap.queryCalls;
+      await service.refreshPriceIfMissing();
+      expect(iap.queryCalls, settled);
+      expect(service.price, isNull);
+    });
   });
 }

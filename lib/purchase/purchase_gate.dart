@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -20,6 +22,15 @@ class PurchaseGate extends StatefulWidget {
 
 class _PurchaseGateState extends State<PurchaseGate> {
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ask the store for the price again if launch-time billing came up empty.
+    // Fire-and-forget: the service notifies on success and `main`'s
+    // `context.watch` rebuilds this screen with the price filled in.
+    unawaited(widget.service.refreshPriceIfMissing());
+  }
 
   Future<void> _buy() async {
     setState(() => _busy = true);

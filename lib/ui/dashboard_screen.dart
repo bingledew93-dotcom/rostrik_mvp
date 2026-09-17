@@ -14,6 +14,8 @@ import '../data/models/shift_type.dart';
 import '../data/repositories/app_alarm_repository.dart';
 import '../data/repositories/shift_repository.dart';
 import '../logic/cycle_resolver.dart';
+import '../purchase/entitlement_service.dart';
+import '../review/review_prompt.dart';
 import '../services/widget_service.dart';
 import '../state/app_preferences.dart';
 import '../l10n/l10n.dart';
@@ -35,7 +37,12 @@ import 'slide_to_confirm.dart';
 /// countdown stays fresh; cancelled in `dispose()` so the timer never
 /// outlives the widget.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, this.onOpenTab, this.healthProbe});
+  const DashboardScreen({
+    super.key,
+    this.onOpenTab,
+    this.healthProbe,
+    this.reviewPrompt,
+  });
 
   /// Switches the MainLayout bottom-nav tab. Supplied in production so the
   /// "My Rotation" tile's "View full roster" affordance jumps to the Roster
@@ -47,6 +54,11 @@ class DashboardScreen extends StatefulWidget {
   /// [probeAlarmHealth] (which itself degrades to healthy when no platform
   /// is available, so existing tests never see a false banner).
   final AlarmHealthProbe? healthProbe;
+
+  /// Store-review prompt override for tests. Null → the real one, which is
+  /// inert off a store build and behind the guards in [ReviewPrompt.maybeAsk]
+  /// everywhere else, so existing tests never reach a store call.
+  final ReviewPrompt? reviewPrompt;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -60,6 +72,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   /// banner while unknown — never warn on a guess).
   AlarmHealth? _health;
   late final AlarmHealthProbe _probe;
+  late final ReviewPrompt _reviewPrompt;
 
   @override
   void initState() {
@@ -76,6 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       _pushWidgetUpdate();
     });
     _probe = widget.healthProbe ?? probeAlarmHealth;
+    _reviewPrompt = widget.reviewPrompt ?? ReviewPrompt();
     _refreshHealth();
     // Re-probe on every resume: the warning's whole job is catching a grant
     // the user just revoked in Settings — and clearing the moment they come
@@ -107,6 +121,27 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _refreshHealth() async {
     final health = await _probe();
     if (mounted) setState(() => _health = health);
+    _maybeAskForReview(health);
+  }
+
+  /// Ten days in, on a Dashboard that is showing no warnings, ask for a store
+  /// review. Deliberately here rather than anywhere earlier in the app: this
+  /// runs once the health probe has landed, so the "are alarms actually
+  /// working" answer is real rather than assumed, and the user is at rest on
+  /// the home screen rather than part-way through a task.
+  ///
+  /// Fire-and-forget on purpose — `maybeAsk` never throws and the stores
+  /// report nothing back, so there is nothing to await or show.
+  void _maybeAskForReview(AlarmHealth health) {
+    if (!mounted) return;
+    final entitlement = context.read<EntitlementService?>();
+    unawaited(_reviewPrompt.maybeAsk(
+      installedAt: entitlement?.installedAt,
+      // A null service (widget tests, standalone pump) reads as locked, so a
+      // test that forgets to provide one can never fire a real store request.
+      locked: entitlement?.locked ?? true,
+      alarmsHealthy: health.allClear,
+    ));
   }
 
   @override

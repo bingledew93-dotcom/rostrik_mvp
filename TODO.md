@@ -463,6 +463,53 @@ headers stack (JULI / AUGUST / SEPTEMBER 2026) and cover the first card.
 
 ---
 
+## 2.7 Legal links, store pricing and the review prompt — 2026-09-18
+
+**Legal URLs moved off Google Sites.** `lib/legal/legal.dart` now points at
+`https://rostrik.com.au/privacy/` and `https://rostrik.com.au/terms/` (both
+verified live; `/terms-of-use/` also resolves but `/privacy/`+`/terms/` is the
+consistent pair). Guarded by `test/legal/legal_urls_test.dart`, which fails on
+a non-rostrik.com.au host.
+
+- [ ] **The same URLs are entered separately in Play Console** (Store listing →
+      Privacy policy, and the Data safety form) **and App Store Connect.**
+      Changing the constants does NOT change those. Do it before the next
+      submission — a dead privacy link is a rejection.
+- [ ] `kCurrentLegalVersion` was deliberately left at `2026-06-15`. Bumping it
+      re-gates EVERY existing user through the consent screen. Only bump it if
+      the wording of the documents materially changed, not because they moved.
+- [ ] Both pages are still English-only (carried over from §2.6).
+
+**Store pricing is already per-country — nothing to fix.** The app never
+computes or converts a price: `EntitlementService.price` returns
+`ProductDetails.price`, the formatted string Play and Apple hand back in the
+buyer's own currency for the buyer's country. Pinned by "the price always comes
+from the store" in `test/purchase/entitlement_service_test.dart` (a Brazilian
+comma-decimal and a yen price, surfaced verbatim).
+
+- [x] Closed a real gap found while checking: the launch-time product query
+      fails quietly when offline, which left the paywall showing an UNPRICED
+      "Unlock full access" until the next cold start. `PurchaseGate` now calls
+      `refreshPriceIfMissing()` on the way in.
+- [ ] Verify in Play Console → Monetise → Products that the in-app product has
+      prices for every country the app ships to. Play auto-converts by default,
+      but a country added later can be left unpriced, and an unpriced country
+      cannot buy at all.
+
+**Store review prompt — ships in this release.** `lib/review/review_prompt.dart`,
+asked from the Dashboard once the health probe has landed. 10 days after first
+launch (the trial origin doubles as the install date), once ever.
+
+Guarded against bad moments, which matters more than the timing: it never asks
+a user whose trial has just lapsed (they are looking at a paywall) or whose
+alarms are unhealthy — both hand a star rating to someone with a reason to use
+it. Both stores silently throttle and report nothing back, so nothing may
+depend on the outcome.
+
+- [ ] Cannot be verified on a sideloaded build: Play's In-App Review API only
+      does anything for an app installed from Play, and even then may show
+      nothing. Check it on an internal-testing track install, not over adb.
+
 ## 3. Tech debt worth clearing
 
 - [ ] **Reclaim ~3.9 MB from the Android bundle** (IOS_SETUP.md §4.1). Move the

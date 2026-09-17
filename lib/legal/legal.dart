@@ -17,7 +17,13 @@ const String kAcceptedLegalVersionKey = 'acceptedLegalVersion';
 const String kAcceptedLegalAtKey = 'acceptedLegalAt';
 
 /// External legal documents (opened via `url_launcher`).
-const String kPrivacyPolicyUrl =
-    'https://sites.google.com/view/rostrik-privacy-policy/home';
-const String kTermsOfUseUrl =
-    'https://sites.google.com/view/rostrik-terms-of-use/home';
+///
+/// Moved off Google Sites onto the real domain 2026-09-18. Both pages are
+/// served from rostrik.com.au; `/terms-of-use/` also resolves, but `/terms/` is
+/// the canonical spelling and matches `/privacy/`.
+///
+/// These are ALSO entered separately in Play Console (Store listing → Privacy
+/// policy) and App Store Connect — changing them here does not change them
+/// there.
+const String kPrivacyPolicyUrl = 'https://rostrik.com.au/privacy/';
+const String kTermsOfUseUrl = 'https://rostrik.com.au/terms/';

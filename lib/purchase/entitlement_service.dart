@@ -65,6 +65,12 @@ class EntitlementService extends ChangeNotifier with WidgetsBindingObserver {
   Entitlement get entitlement => _entitlement;
   bool get locked => _entitlement.locked;
 
+  /// First-launch instant — the trial clock's origin, which is also the
+  /// closest thing the app has to an install date. Null before [init] has
+  /// written it. Read by the store-review prompt, which asks nothing of a
+  /// user who has not had the app for long.
+  DateTime? get installedAt => _entitlement.trialStartedAt;
+
   ProductDetails? _product;
   bool _billingAvailable = false;
 
@@ -185,6 +191,23 @@ class EntitlementService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('[Entitlement] queryProduct failed: $e');
     }
+  }
+
+  /// Re-asks the store for the product when we have no price to show.
+  ///
+  /// [startBilling]'s query runs once, early, and gives up quietly when the
+  /// device is offline or the store is slow — which left the paywall showing a
+  /// bare "Unlock full access" with no price until the next cold start. The
+  /// price is the single most important thing on that screen and it can only
+  /// come from the store (it is the user's own currency, at Play's or Apple's
+  /// rate for their country), so it is worth one more ask on the way in.
+  ///
+  /// No-ops once a product is held, so opening the gate repeatedly costs
+  /// nothing. Best-effort, like every other billing call here.
+  Future<void> refreshPriceIfMissing() async {
+    if (_product != null) return;
+    if (!await _ensureBillingAvailable()) return;
+    await _queryProduct();
   }
 
   /// Re-probes store availability when the startup snapshot said no — billing
