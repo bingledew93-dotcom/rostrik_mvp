@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../legal/legal.dart';
+
 /// Asks for a store review once the user has had Rostrik long enough to have
 /// an opinion of it — 10 days after first launch.
 ///
@@ -46,6 +48,7 @@ class ReviewPrompt {
   static const String skippedAlreadyAsked = 'already asked';
   static const String skippedLocked = 'trial lapsed — bad moment to ask';
   static const String skippedUnhealthy = 'alarms are broken — bad moment to ask';
+  static const String skippedLegalPending = 'legal consent outstanding';
   static const String skippedUnavailable = 'store review not available';
   static const String asked = 'asked';
 
@@ -71,6 +74,14 @@ class ReviewPrompt {
     if (locked) return skippedLocked;
     if (!alarmsHealthy) return skippedUnhealthy;
 
+    // Found on a Pixel 2026-09-18: the legal update notice shows OVER the
+    // running app, so the Dashboard builds and probes underneath it — and the
+    // Play review sheet opened on top of the consent the user had not given
+    // yet. Two prompts stacked, and the one asking for five stars was in
+    // front. Anything that asks the user for something unprompted has to give
+    // way to a gate that is still open.
+    if (await _legalConsentOutstanding()) return skippedLegalPending;
+
     if (await _alreadyAsked()) return skippedAlreadyAsked;
 
     try {
@@ -84,6 +95,22 @@ class ReviewPrompt {
     } catch (e) {
       debugPrint('[ReviewPrompt] request failed: $e');
       return skippedUnavailable;
+    }
+  }
+
+  /// Whether the user still owes us a legal acceptance — first run or a docs
+  /// update. Read straight from the same preference the router reads, rather
+  /// than threaded down through the widget tree, so the guard holds for any
+  /// future caller too.
+  Future<bool> _legalConsentOutstanding() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return legalGateFor(prefs.getString(kAcceptedLegalVersionKey)) !=
+          LegalGate.accepted;
+    } catch (_) {
+      // Unreadable preferences: assume a gate is open. Same fail-closed
+      // reasoning as [_alreadyAsked] — silence is the safe answer.
+      return true;
     }
   }
 

@@ -515,9 +515,22 @@ alarms are unhealthy — both hand a star rating to someone with a reason to use
 it. Both stores silently throttle and report nothing back, so nothing may
 depend on the outcome.
 
-- [ ] Cannot be verified on a sideloaded build: Play's In-App Review API only
-      does anything for an app installed from Play, and even then may show
-      nothing. Check it on an internal-testing track install, not over adb.
+- [x] **It DOES fire on a sideloaded build** — Play recognises `com.rostrik.app`
+      as a published package, so the real review sheet appears over adb. The
+      earlier note here said otherwise and was wrong.
+- [x] **Ordering bug found on device 2026-09-18 and fixed.** The Play review
+      sheet opened ON TOP of the legal update notice — five stars in front of a
+      consent the user had not given, with the gate unreachable underneath.
+      `maybeAsk` now refuses while `legalGateFor` reports anything but
+      `accepted`, reading the same preference the router reads rather than
+      taking it threaded down the tree, so the guard holds for any future
+      caller. Device-verified: notice first, review request only after the
+      accept.
+
+      The general lesson, worth applying to anything added later: the update
+      notice renders OVER the running app, so the Dashboard builds and probes
+      underneath it. Nothing that prompts the user unbidden may assume it has
+      the screen to itself.
 
 ## 3. Tech debt worth clearing
 

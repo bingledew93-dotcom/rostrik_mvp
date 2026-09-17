@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rostrik_mvp/legal/legal.dart';
 import 'package:rostrik_mvp/review/review_prompt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -26,7 +27,11 @@ void main() {
 
   setUp(() {
     requests = 0;
-    SharedPreferences.setMockInitialValues({});
+    // Legal consent up to date in the default fixture: the prompt refuses to
+    // speak over an open gate, so without this every test below would skip.
+    SharedPreferences.setMockInitialValues({
+      'flutter.$kAcceptedLegalVersionKey': kCurrentLegalVersion,
+    });
   });
 
   Future<String> ask(
@@ -135,5 +140,40 @@ void main() {
 
   test('ten days is the documented threshold', () {
     expect(ReviewPrompt.minimumAge, const Duration(days: 10));
+  });
+
+  group('never speaks over an open legal gate', () {
+    // Found on a Pixel 2026-09-18. The legal update notice renders OVER the
+    // running app, so the Dashboard built and probed underneath it and fired
+    // this — the Play review sheet landed on top of a consent the user had not
+    // given. Two stacked prompts, five stars in front.
+    test('a pending legal UPDATE silences it', () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.$kAcceptedLegalVersionKey': '2026-06-15',
+      });
+      expect(await ask(build()), ReviewPrompt.skippedLegalPending);
+      expect(requests, 0);
+    });
+
+    test('a first-run user with no consent yet silences it', () async {
+      SharedPreferences.setMockInitialValues({});
+      expect(await ask(build()), ReviewPrompt.skippedLegalPending);
+      expect(requests, 0);
+    });
+
+    test('and it does not burn the one prompt — it asks once accepted',
+        () async {
+      SharedPreferences.setMockInitialValues({
+        'flutter.$kAcceptedLegalVersionKey': '2026-06-15',
+      });
+      expect(await ask(build()), ReviewPrompt.skippedLegalPending);
+
+      // The user accepts; the gate closes.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(kAcceptedLegalVersionKey, kCurrentLegalVersion);
+
+      expect(await ask(build()), ReviewPrompt.asked);
+      expect(requests, 1);
+    });
   });
 }
