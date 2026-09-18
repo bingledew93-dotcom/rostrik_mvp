@@ -532,6 +532,75 @@ depend on the outcome.
       underneath it. Nothing that prompts the user unbidden may assume it has
       the screen to itself.
 
+## 2.8 Play Store requirements — get ahead of them
+
+Audited against the 1.3.0+11 bundle on 2026-09-18. Deadlines below are NOT
+asserted from memory: Play Console → Policy → **App content** and the target-API
+banner carry the live countdowns, and those are the authority. What is recorded
+here is the app's measured state, which is the part that is expensive to
+rediscover.
+
+### Already clear — verified, not assumed
+
+- **16 KB page size.** Every 64-bit native library in the bundle is aligned to
+  16 KB or better (checked ELF `PT_LOAD` `p_align` on all 5 libs in both
+  arm64-v8a and x86_64: `libapp`/`libflutter` at 64 KB, `libdartjni`,
+  `libdatastore_shared_counter` and `libmlkit_google_ocr_pipeline` at 16 KB).
+  This was the one most likely to bite — ML Kit ships prebuilt `.so`s we do not
+  control — and it is already satisfied. Re-check after ANY native dependency
+  bump, with the ELF scan rather than by trusting the changelog.
+- **Target API 36**, minSdk 24. Current as of this release.
+- **Foreground service type** declared (`mediaPlayback`, with
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK`) on both services.
+- **Account deletion policy** does not apply: Rostrik has no accounts and no
+  server. Worth stating explicitly so a future reviewer does not go looking.
+
+### The one with real work behind it
+
+- [ ] **targetSdk 37 drops the large-screen opt-out.** The `<property>` block in
+      `AndroidManifest.xml` that restores portrait/resizability locks on
+      sw600dp+ screens is documented as a stopgap that the framework STOPS
+      HONOURING at API 37. So the day the target bumps, every roster, alarm and
+      review screen must already be landscape- and tablet-safe, or tablet users
+      get broken layouts on upgrade.
+
+      This is weeks of layout work, not a flag flip, and it is gated on a date
+      Play sets rather than one we choose. Treat the API 37 bump and the
+      landscape work as ONE task, and start the layouts well before the
+      deadline. Related: the Kotlin 2.2.20 → 2.3.20 bump in §2.5, which a newer
+      AGP/SDK will force anyway.
+
+### Console-side, needs a human
+
+- [ ] **Data safety form** — re-check it now the privacy policy has moved and
+      changed (2026-09-18). It is a separate declaration from the policy URL and
+      does not update itself.
+- [ ] **Foreground service declaration** — Play asks for a justification and
+      often a demo video for FGS use. Confirm the current one still matches what
+      the alarm audio service actually does.
+- [ ] **Exact alarm** (`USE_EXACT_ALARM`) is granted on the basis that the app's
+      core function IS an alarm clock. Keep the store listing consistent with
+      that claim; it is the justification if it is ever questioned.
+- [ ] **Photo/media permissions** — the app declares `READ_MEDIA_AUDIO` (custom
+      ringtones) and a maxSdk-capped `READ_EXTERNAL_STORAGE`. Confirm the
+      Console declaration matches, and that the OCR import path uses the photo
+      picker rather than a broad media grant.
+- [ ] Content rating, target audience and ads declarations — re-affirm at each
+      release; Play expires some of them.
+
+### Country rollout
+
+Rolling out to more countries progressively (started 2026-09-18). Two things
+follow from that and are easy to miss:
+
+- [ ] Every new country needs a **price** on the in-app product, or users there
+      cannot buy at all — Play auto-converts by default but a country added
+      later can land unpriced. §2.7 has the check.
+- [ ] Listing languages and app languages are still different sets (§2.7):
+      Russian has a listing and no UI; Vietnamese, Hindi and Arabic have a UI
+      and no listing. More translations are planned AFTER 1.3.0 is out and the
+      current 15 have been proven in the wild.
+
 ## 3. Tech debt worth clearing
 
 - [ ] **Reclaim ~3.9 MB from the Android bundle** (IOS_SETUP.md §4.1). Move the
