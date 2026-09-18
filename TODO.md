@@ -589,6 +589,29 @@ rediscover.
       UX gain, not only a compliance chore — which is a better way to scope it
       than "make the deadline".
 
+      **Baseline measured 2026-09-18, and it is far better than feared.**
+      `test/layout/large_screen_layout_test.dart` renders all 11 high-traffic
+      screens at tablet landscape (1280×800), tablet portrait (800×1280) and
+      phone landscape (760×360). Of 33 cases only THREE failed, all vertical
+      overflow, and both screens are now fixed:
+
+      - `roster type` — the 2-column grid is `childAspectRatio: 1.0`, so card
+        size tracks WIDTH: unconstrained on a 1280dp tablet each card became a
+        ~630dp square and the grid alone was taller than the screen. Fixed with
+        a 560dp max-width cap (wider than any phone, so phone layout is
+        untouched) plus a scrollable content area with the CTA pinned.
+      - `purchase gate` — `Spacer`s centre the content and cannot shrink.
+        Fixed with the LayoutBuilder + minHeight + IntrinsicHeight pattern, so
+        a tall screen lays out exactly as before with the Spacer ratios intact
+        and only a short one scrolls.
+
+      So the remaining work is NOT "weeks of layout" — the other 9 screens
+      already cope. What is left is polish (using the width well on a tablet
+      rather than merely not breaking) plus the toolchain bump, and this test
+      is the guard that keeps it that way. Re-add the language axis here only
+      once tablet polish lands; breakage at these sizes is structural, not
+      linguistic.
+
 ### Play Console optimisation tips — triaged 2026-09-18
 
 - [x] **"Optimised resource shrinking isn't enabled"** — enabled via

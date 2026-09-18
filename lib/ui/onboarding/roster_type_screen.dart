@@ -49,101 +49,126 @@ class RosterTypeScreen extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                child: Text(
-                  context.l10n.rosterTypeQuestion,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.0,
+          // Centred and capped so the cards stay card-sized on a large screen.
+          // The grid is 2 columns at aspect 1.0, so card size tracks WIDTH:
+          // unconstrained on a 1280dp tablet each card became a ~630dp square
+          // and the grid alone was taller than the screen (overflowed by 112px
+          // in landscape). 560 is wider than any phone, so phone layout is
+          // byte-for-byte unchanged; it only bites once there is room to spare.
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Cards are colour-coded by shift type so a user can ID a
-                  // roster at a glance — the same palette the calendar and
-                  // timeline use (`visualFor`): Day = amber, Night = indigo.
-                  _RosterTypeCard(
-                    icon: Icons.wb_sunny_outlined,
-                    label: context.l10n.rosterTypeDay,
-                    enabled: true,
-                    accent: visualFor(ShiftType.day).color,
-                    selected: selected == RosterType.day,
-                    onTap: () => onSelect(RosterType.day),
+                  // Scrolls instead of overflowing when the viewport is SHORT —
+                  // a phone in landscape has ~360dp of height, less than the grid
+                  // needs on its own. The button below stays pinned either way,
+                  // which is why this is Expanded+scroll rather than wrapping the
+                  // whole Column in a scroll view.
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                            child: Text(
+                              context.l10n.rosterTypeQuestion,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          GridView.count(
+                            crossAxisCount: 2,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1.0,
+                            children: [
+                              // Cards are colour-coded by shift type so a user can ID a
+                              // roster at a glance — the same palette the calendar and
+                              // timeline use (`visualFor`): Day = amber, Night = indigo.
+                              _RosterTypeCard(
+                                icon: Icons.wb_sunny_outlined,
+                                label: context.l10n.rosterTypeDay,
+                                enabled: true,
+                                accent: visualFor(ShiftType.day).color,
+                                selected: selected == RosterType.day,
+                                onTap: () => onSelect(RosterType.day),
+                              ),
+                              _RosterTypeCard(
+                                icon: Icons.nightlight_outlined,
+                                label: context.l10n.rosterTypeNight,
+                                enabled: true,
+                                accent: visualFor(ShiftType.night).color,
+                                selected: selected == RosterType.night,
+                                onTap: () => onSelect(RosterType.night),
+                              ),
+                              _RosterTypeCard(
+                                icon: Icons.sync_outlined,
+                                label: context.l10n.rosterTypeRotating,
+                                enabled: true,
+                                // Rotating mixes Day + Night, so its accent alternates the
+                                // two via a gradient.
+                                accent: visualFor(ShiftType.day).color,
+                                accentGradient: [
+                                  visualFor(ShiftType.day).color,
+                                  visualFor(ShiftType.night).color,
+                                ],
+                                selected: selected == RosterType.rotating,
+                                onTap: () => onSelect(RosterType.rotating),
+                              ),
+                              _RosterTypeCard(
+                                icon: Icons.tune_outlined,
+                                label: context.l10n.rosterTypeCustom,
+                                enabled: true,
+                                // Custom isn't a shift type — keep the brand accent.
+                                accent: theme.colorScheme.primary,
+                                // Custom is action-on-tap, not selection. It never
+                                // sets `selected = RosterType.custom`; tapping
+                                // pushes the builder via the flow controller.
+                                selected: false,
+                                onTap: onCustomTap,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  _RosterTypeCard(
-                    icon: Icons.nightlight_outlined,
-                    label: context.l10n.rosterTypeNight,
-                    enabled: true,
-                    accent: visualFor(ShiftType.night).color,
-                    selected: selected == RosterType.night,
-                    onTap: () => onSelect(RosterType.night),
+                  SizedBox(
+                    height: 56,
+                    child: FilledButton(
+                      // Continue gates on having picked one of the three
+                      // preset-driven types. Custom is its own
+                      // immediate-action path (see `onCustomTap`) and
+                      // never sets `selected`, so it can't satisfy this
+                      // gate — that's intentional.
+                      onPressed:
+                          (selected == RosterType.day ||
+                              selected == RosterType.night ||
+                              selected == RosterType.rotating)
+                          ? onContinue
+                          : null,
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Text(context.l10n.commonContinue),
+                    ),
                   ),
-                  _RosterTypeCard(
-                    icon: Icons.sync_outlined,
-                    label: context.l10n.rosterTypeRotating,
-                    enabled: true,
-                    // Rotating mixes Day + Night, so its accent alternates the
-                    // two via a gradient.
-                    accent: visualFor(ShiftType.day).color,
-                    accentGradient: [
-                      visualFor(ShiftType.day).color,
-                      visualFor(ShiftType.night).color,
-                    ],
-                    selected: selected == RosterType.rotating,
-                    onTap: () => onSelect(RosterType.rotating),
-                  ),
-                  _RosterTypeCard(
-                    icon: Icons.tune_outlined,
-                    label: context.l10n.rosterTypeCustom,
-                    enabled: true,
-                    // Custom isn't a shift type — keep the brand accent.
-                    accent: theme.colorScheme.primary,
-                    // Custom is action-on-tap, not selection. It never
-                    // sets `selected = RosterType.custom`; tapping
-                    // pushes the builder via the flow controller.
-                    selected: false,
-                    onTap: onCustomTap,
-                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
-              const Spacer(),
-              SizedBox(
-                height: 56,
-                child: FilledButton(
-                  // Continue gates on having picked one of the three
-                  // preset-driven types. Custom is its own
-                  // immediate-action path (see `onCustomTap`) and
-                  // never sets `selected`, so it can't satisfy this
-                  // gate — that's intentional.
-                  onPressed: (selected == RosterType.day ||
-                          selected == RosterType.night ||
-                          selected == RosterType.rotating)
-                      ? onContinue
-                      : null,
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  child: Text(context.l10n.commonContinue),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
         ),
       ),
@@ -178,8 +203,7 @@ class _RosterTypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final borderColour =
-        selected ? accent : theme.colorScheme.outlineVariant;
+    final borderColour = selected ? accent : theme.colorScheme.outlineVariant;
     final borderWidth = selected ? 2.5 : 1.0;
     final gradient = accentGradient;
     final iconWidget = gradient == null
