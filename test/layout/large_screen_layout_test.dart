@@ -47,12 +47,13 @@ class _NoIap extends Fake implements InAppPurchase {}
 /// On that day every screen here has to cope, or tablet users get broken
 /// layouts on upgrade.
 ///
-/// Deliberately English-only. Landscape breakage is STRUCTURAL — a Column that
-/// assumes a tall viewport fails identically in all 15 languages — so adding
-/// the locale axis would multiply the run time without finding anything new.
-/// `locale_layout_smoke_test.dart` keeps the language axis at phone portrait,
-/// where long translations are the actual risk. Re-add languages here only
-/// once these pass.
+/// Runs EVERY supported language, not just English. The first cut of this file
+/// was English-only on the argument that landscape breakage is structural — a
+/// Column assuming a tall viewport fails the same way in all 15 languages —
+/// but that argument does not survive the fixes: capping `roster type` at
+/// 560dp means a wide screen now gives labels LESS width than the raw
+/// viewport, which is exactly where a long German or Polish string bites and
+/// English does not. Cheap to check, expensive to be wrong about.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tempDir;
@@ -62,14 +63,15 @@ void main() {
   setUpAll(() async {
     // Real Roboto: the default test font draws every glyph as a 1em square,
     // roughly double real text width, and would flag overflows no device shows.
-    final fonts = '${Platform.environment['FLUTTER_ROOT']}'
+    final fonts =
+        '${Platform.environment['FLUTTER_ROOT']}'
         '/bin/cache/artifacts/material_fonts';
     final roboto = FontLoader('Roboto');
     for (final w in ['Regular', 'Medium', 'Bold', 'Black']) {
       roboto.addFont(
-        File('$fonts/Roboto-$w.ttf')
-            .readAsBytes()
-            .then((b) => ByteData.sublistView(b)),
+        File(
+          '$fonts/Roboto-$w.ttf',
+        ).readAsBytes().then((b) => ByteData.sublistView(b)),
       );
     }
     await roboto.load();
@@ -128,28 +130,27 @@ void main() {
     'legal consent': () => LegalConsentScreen(onAccepted: () {}),
     'welcome': () => WelcomeScreen(onContinue: () {}, onSkip: () {}),
     'roster type': () => RosterTypeScreen(
-          selected: null,
-          onSelect: (_) {},
-          onCustomTap: () {},
-          onBack: () {},
-          onContinue: () {},
-        ),
+      selected: null,
+      onSelect: (_) {},
+      onCustomTap: () {},
+      onBack: () {},
+      onContinue: () {},
+    ),
     'walkthrough': () => WalkthroughFlow(onFinish: () {}),
-    'dashboard': () => DashboardScreen(
-          healthProbe: () async => AlarmHealth.healthy,
-        ),
+    'dashboard': () =>
+        DashboardScreen(healthProbe: () async => AlarmHealth.healthy),
     'alarms': () => const AlarmsScreen(),
     'create alarm': () => const Scaffold(body: CreateAlarmSheet()),
     'sleep': () => const SleepScreen(),
     'manage': () => const ManageScreen(),
     'settings': () => const SettingsScreen(),
     'purchase gate': () => PurchaseGate(
-          service: EntitlementService(
-            settingsBox: settingsBox,
-            reminderScheduler: FakeActivityReminderScheduler(),
-            iap: _NoIap(),
-          ),
-        ),
+      service: EntitlementService(
+        settingsBox: settingsBox,
+        reminderScheduler: FakeActivityReminderScheduler(),
+        iap: _NoIap(),
+      ),
+    ),
   };
 
   /// Logical sizes, with the device pixel ratio each one is measured at.
@@ -167,51 +168,55 @@ void main() {
 
   for (final vp in viewports.entries) {
     group('[${vp.key}]', () {
-      for (final entry in screens.entries) {
-        testWidgets('${entry.key} lays out', (tester) async {
-          tester.view.physicalSize = vp.value.$1;
-          tester.view.devicePixelRatio = vp.value.$2;
-          addTearDown(tester.view.resetPhysicalSize);
-          addTearDown(tester.view.resetDevicePixelRatio);
+      for (final locale in AppLocalizations.supportedLocales) {
+        for (final entry in screens.entries) {
+          testWidgets('${entry.key} lays out [${locale.languageCode}]', (
+            tester,
+          ) async {
+            tester.view.physicalSize = vp.value.$1;
+            tester.view.devicePixelRatio = vp.value.$2;
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
 
-          final shiftRepo = FakeShiftRepository();
-          final alarmRepo = FakeAppAlarmRepository();
-          addTearDown(shiftRepo.dispose);
-          addTearDown(alarmRepo.dispose);
+            final shiftRepo = FakeShiftRepository();
+            final alarmRepo = FakeAppAlarmRepository();
+            addTearDown(shiftRepo.dispose);
+            addTearDown(alarmRepo.dispose);
 
-          await tester.pumpWidget(
-            MultiProvider(
-              providers: [
-                Provider<List<Shift>>.value(value: shifts),
-                Provider<List<ShiftCycle>>.value(value: const []),
-                Provider<List<AppAlarm>>.value(value: alarms),
-                Provider<AlarmSettings>.value(value: AlarmSettings.defaults),
-                Provider<ShiftRepository>.value(value: shiftRepo),
-                Provider<AppAlarmRepository>.value(value: alarmRepo),
-                ChangeNotifierProvider<AppPreferences>.value(value: prefs),
-              ],
-              child: MaterialApp(
-                locale: const Locale('en'),
-                theme: _withRoboto(rostrikDarkTheme()),
-                localizationsDelegates:
-                    AppLocalizations.localizationsDelegates,
-                supportedLocales: AppLocalizations.supportedLocales,
-                builder: syncL10nFromContext,
-                home: entry.value(),
+            await tester.pumpWidget(
+              MultiProvider(
+                providers: [
+                  Provider<List<Shift>>.value(value: shifts),
+                  Provider<List<ShiftCycle>>.value(value: const []),
+                  Provider<List<AppAlarm>>.value(value: alarms),
+                  Provider<AlarmSettings>.value(value: AlarmSettings.defaults),
+                  Provider<ShiftRepository>.value(value: shiftRepo),
+                  Provider<AppAlarmRepository>.value(value: alarmRepo),
+                  ChangeNotifierProvider<AppPreferences>.value(value: prefs),
+                ],
+                child: MaterialApp(
+                  locale: locale,
+                  theme: _withRoboto(rostrikDarkTheme()),
+                  localizationsDelegates:
+                      AppLocalizations.localizationsDelegates,
+                  supportedLocales: AppLocalizations.supportedLocales,
+                  builder: syncL10nFromContext,
+                  home: entry.value(),
+                ),
               ),
-            ),
-          );
-          await tester.pump();
-          await tester.pump(const Duration(milliseconds: 100));
+            );
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 100));
 
-          expect(tester.takeException(), isNull);
-        });
+            expect(tester.takeException(), isNull);
+          });
+        }
       }
     });
   }
 }
 
 ThemeData _withRoboto(ThemeData t) => t.copyWith(
-      textTheme: t.textTheme.apply(fontFamily: 'Roboto'),
-      primaryTextTheme: t.primaryTextTheme.apply(fontFamily: 'Roboto'),
-    );
+  textTheme: t.textTheme.apply(fontFamily: 'Roboto'),
+  primaryTextTheme: t.primaryTextTheme.apply(fontFamily: 'Roboto'),
+);
