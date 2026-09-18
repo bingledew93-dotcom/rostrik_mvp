@@ -568,7 +568,26 @@ rediscover.
       Play sets rather than one we choose. Treat the API 37 bump and the
       landscape work as ONE task, and start the layouts well before the
       deadline. Related: the Kotlin 2.2.20 → 2.3.20 bump in §2.5, which a newer
-      AGP/SDK will force anyway.
+      AGP/SDK will force anyway, and the AGP 9 tip above.
+
+      **Test device (2026-09-18): Samsung Galaxy Tab A9+, SM-X210, serial
+      `R92Y60F4PBM`, Android 16 / API 36, 1200×1920 @ density 240 = 800×1280 dp,
+      so smallestWidth 800dp** — comfortably past the sw600dp threshold where
+      Android 16 starts ignoring orientation locks. adb needs Samsung's Auto
+      Blocker turned OFF or the device never enumerates over USB.
+
+      **The opt-out is confirmed WORKING on that hardware**, not assumed: with
+      the live Play build (1.2.1+10) open, forcing `user_rotation=1` leaves
+      `mCurrentRotation=ROTATION_0`; the same command on the HOME screen gives
+      ROTATION_90, and reopening Rostrik snaps it straight back to ROTATION_0.
+      So the app is holding portrait and the property is doing its job — which
+      is precisely what stops happening at API 37.
+
+      Worth knowing before the work starts: portrait on an 800dp tablet ALREADY
+      wastes most of the screen (the hero sits in a large empty band with the
+      rotation cards floating mid-screen). So landscape/tablet layout is a real
+      UX gain, not only a compliance chore — which is a better way to scope it
+      than "make the deadline".
 
 ### Play Console optimisation tips — triaged 2026-09-18
 
