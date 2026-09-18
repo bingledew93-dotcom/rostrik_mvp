@@ -570,6 +570,35 @@ rediscover.
       deadline. Related: the Kotlin 2.2.20 → 2.3.20 bump in §2.5, which a newer
       AGP/SDK will force anyway.
 
+### Play Console optimisation tips — triaged 2026-09-18
+
+- [x] **"Optimised resource shrinking isn't enabled"** — enabled via
+      `android.r8.optimizedResourceShrinking=true`. Separate flag from
+      `isShrinkResources`, which Flutter already sets. Off by default in AGP 8,
+      ON by default in AGP 9, so this adopts the future default early.
+      Verified after enabling: all 448 native strings across 17 locale folders
+      still in `resources.pb`. Worth ~0 bytes here (the bundle is native libs
+      and ML Kit models, not resources) — do it to satisfy the check and to
+      de-risk the AGP 9 move, not for the size.
+- [x] **"BitmapFactory without downsampling"** — NOT our code, nothing to fix.
+      The obfuscated name Play quoted (`n2.h.b`) does not exist in our mapping,
+      because R8 renames differently per build; resolving it needs the mapping
+      from the EXACT uploaded bundle. Going the other way instead — dexdump for
+      `BitmapFactory.decode` call sites, then mapping those back — gives two
+      callers, both third-party:
+        * `io.flutter.embedding.engine.image.ImageDecoderHeifApi36Impl` (the
+          Flutter engine itself)
+        * `com.google.android.gms.common.wrappers.PackageManagerWrapper` (Play
+          Services)
+      Our own Kotlin never touches BitmapFactory, and image_picker's
+      `ImageResizer` already downsamples via `calculateSampleSize`. Re-triage
+      the same way if it reappears rather than trusting the obfuscated name.
+- [ ] **"Upgrade AGP to 9.0 or higher"** — Play and Flutter are asking for the
+      same thing: Flutter's build already warns it wants AGP 9.0.1, Gradle 9.1.0
+      and Kotlin 2.3.20. Treat it as ONE toolchain bump, and do it alongside the
+      targetSdk 37 work below rather than separately — both touch every native
+      alarm path, and a device is needed to trust either.
+
 ### Console-side, needs a human
 
 - [ ] **Data safety form** — re-check it now the privacy policy has moved and
